@@ -172,13 +172,19 @@ its queue pins fail on the pre-fix source. Independent QA and live browser
 validation remain pending; this is not a merge or deployment claim.
 
 Issue [#201](https://github.com/barryrwilson/Rimward/issues/201) is implemented
-on `codex/issue-201-arrival-dock`: queued arrivals take the dock helm on the
-existing deadline, clear the arrival bore at creep before cruise, and keep
-that gate's outer rim in their private transit plan. Ordinary route and
-unqueued dock policies are unchanged. The focused arrival-dock runner covers
-Veridian and Freehold, natural and bore-edge poses, and cancellation cleanup.
-Independent QA and live verification remain pending; this is not a merge or
-deployment claim. Zero-damage contact handling belongs to #200.
+on `codex/issue-201-arrival-dock`. Only queued handovers that would start a
+cruise leg enter the gate-departure guard: align while stopped, then clear the
+bore at creep when necessary. Outbound courses release the guard after safe
+plane clearance and alignment; return courses first clear the padded ring and
+retain its outer rim in their private transit plan. Short-range stage handovers
+and ordinary dock approaches keep their existing behavior and #183 timing.
+Build, full boot (including the checked #201 child), the #183 regression, and
+the declared-seed-7 bore-edge browser round trip pass. The browser run reaches
+both berths with no body hits or console errors. Unseeded downstream asteroid
+and traffic encounters remain outside this departure fix; #200 contact policy
+is unchanged. [PR #211](https://github.com/barryrwilson/Rimward/pull/211) is the
+authoritative record for final independent review and natural-arrival browser
+verification. This is not a merge or deployment claim.
 Issue [#185](https://github.com/barryrwilson/Rimward/issues/185) is implemented
 on `codex/issue-185-dock-receipts`: successful docking no longer produces an
 in-range `dock-range` miss or the helm's own already-docked refusal. Manual
