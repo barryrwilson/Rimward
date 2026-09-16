@@ -27,6 +27,23 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#200](https://github.com/barryrwilson/Rimward/issues/200) is implemented
+on `codex/issue-200-harmless-dock-touch`: the dock autopilot's zero-damage touch
+rule, added for the station berth in #184, now reads `damage` and `speed` alone.
+A `bodyHit` row with `damage === 0` and a finite `|speed|` under 1 u/s keeps the
+dock helm for every body kind and in every dock phase, so a cruise brush against
+traffic or a rock no longer stops the hull in open space. Damage, a speed at or
+above the floor, and any malformed or non-finite `speed`/`damage` still cancel as
+`impact`, and every `bodyHit` row in the frame is still judged, so a harmless
+touch cannot mask a real impact. Route helm behavior, the #173 cancellation full
+stop and weapon-hit separation are unchanged; no key, event, tuning value or
+persisted field is added. Focused regression is `npm run test:dock-corridor`
+(250 issue-200 pins) plus a new `issue200` block in `npm run test:boot` covering
+the playtest's ship and asteroid cruise touches; both fail on the pre-fix source.
+`npm run build` and `npm run test:boot` pass. See
+[evidence](playtests/2026-09-15-issue-200-harmless-touch.md). Independent QA and
+live browser validation remain pending; this is not a merge or deployment claim.
+
 Issue [#186](https://github.com/barryrwilson/Rimward/issues/186), owner decision
 2, is implemented on `codex/issue-186-trader-shipyard`: the larger cargo hull
 the yard already sells is made visible once the outfitter's two hold racks are
