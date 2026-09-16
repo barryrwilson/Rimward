@@ -14,7 +14,17 @@ await runLive(edge ? 'bore-edge' : 'natural', async ({ c, result, act, wait, che
     : 'Natural queued routes Freehold to Veridian and back; no pose or traffic writes.';
   for (const dest of ['veridian', 'freehold']) {
     const before = await c.eval('window.rimward.observe().flags.docked');
-    if (before) await act('undock');
+    if (before) {
+      // Launch can legitimately wait on local traffic. Retry only that
+      // refusal, under wait's 30s simulation / 120s wall-clock bounds.
+      // The route and approachDock commands below are still sent once.
+      await wait(s => !s.flags.docked, 30, 'departure lane clears', async s => {
+        if (!s.flags.docked) return;
+        const receipt = await act('undock', {}, false);
+        assert.ok(receipt.ok || receipt.token === 'blocked',
+          'unexpected undock refusal: ' + JSON.stringify(receipt));
+      });
+    }
     await c.eval(`(async () => {
       const { SYSTEMS } = await import('/src/game/state.js');
       const ctx = window.__ctx, dest = ${JSON.stringify(dest)}, edge = ${edge};
