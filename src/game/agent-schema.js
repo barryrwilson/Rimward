@@ -805,7 +805,7 @@ export const COMMAND_SPECS = freeze({
   ping: cmd({}, ['session']),
   disable: cmd({}, ['session']),
   startGame: cmd({}, ['session']),
-  chooseOrigin: cmd({ id: 'origin id string' }, ['session']),
+  chooseOrigin: cmd({ id: 'origin id string; read the live ids from observe().session.origins[].id while session.phase is "origin"' }, ['session']),
   recover: cmd({}, ['session']),
   plotRoute: cmd({ dest: 'system id string' }, ['pilot', 'explorer']),
   clearRoute: cmd({}, ['pilot']),

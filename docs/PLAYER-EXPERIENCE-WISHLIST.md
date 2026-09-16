@@ -583,6 +583,19 @@ raw bearing controllers negate their outgoing pitch under the documented
 sign contract. [API contract](AgentApiDesign.md)
 and [focused evidence](AgentApiFixes20260914.md) retain test boundaries.
 
+### Agent API origin discovery — 2026-09-15
+
+- [#204](https://github.com/barryrwilson/Rimward/issues/204): the origin choice
+  is readable before it is made. The 2026-09-15 trader playtest started a run,
+  saw `session: { phase: 'origin' }`, and had to guess an id because the five
+  rows the overlay paints existed only on screen; a wrong guess answered a bare
+  `unknown`. Now `observe().session.origins` lists `{ id, title, digit }` for
+  the live rows while the overlay is open, an `unknown` refusal names those ids,
+  and the `chooseOrigin` argument spec says where to read them. The overlay,
+  the Digit keys, the choices themselves and every effect are unchanged — this
+  only lets a player without eyes read the same menu. Implementation is
+  pending review; independent QA and a live browser pass are still outstanding.
+
 ### Playtest capture — 2026-08-27 (Claude Fable Agent API live play)
 
 External agent play on the live `window.rimward` handle (`?agent=1`). Fear 5
