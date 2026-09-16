@@ -1359,7 +1359,10 @@ if (!Object.values(w5bioVisualChecks).every(Boolean)) { console.log('WAVE5 BIO V
 // ---- Hotfix: itemized repair pricing + save boundary heal ----
 // 1. Priced repair via the real dock → service-key → button path. Damage is
 //    set explicitly so the itemized total is deterministic:
-//    hull 60×0.9=54, screen 30×0.3=9, shell 60×0.5=30, engine 50×0.6=30 ⇒ 123.
+//    hull 60×0.9=54, screen 30×0.3=9, shell 60×0.5=30, engine 50×0.6=30 ⇒ 123
+//    at 1×, times the issue #208 hull-class multiplier the desk now applies
+//    before each channel's ceil (light 3 ⇒ 162+27+90+90 = 369).
+const { repairClassMultiplier: repairClassMult208 } = await import('../src/game/state.js');
 dockAtCurrentStation('dock (repair pricing)');
 const rp = ctx.player;
 rp.hullMax = 100; rp.screenMax = 40; rp.shellMax = 60; rp.engineMax = 100; // class maxes (hull was pinned huge above)
@@ -1374,7 +1377,9 @@ let repairBtn = null;
     if (n.tagName === 'BUTTON' && typeof n.textContent === 'string' && n.textContent.startsWith('1 — Repair all')) { repairBtn = n; break; }
   }
 }
-const expectedRepairCost = Math.ceil(60 * 0.9) + Math.ceil(30 * 0.3) + Math.ceil(60 * 0.5) + Math.ceil(50 * 0.6);
+const repairClassMultHotfix = repairClassMult208(rp.classKey);
+const expectedRepairCost = Math.ceil(60 * 0.9 * repairClassMultHotfix) + Math.ceil(30 * 0.3 * repairClassMultHotfix)
+  + Math.ceil(60 * 0.5 * repairClassMultHotfix) + Math.ceil(50 * 0.6 * repairClassMultHotfix);
 const labelCost = repairBtn ? Number((repairBtn.textContent.match(/\((\d+) UU\)/) ?? [])[1]) : NaN;
 repairBtn?.click();
 const repairChecks = {
@@ -4976,11 +4981,14 @@ const w24Damage = () => { // the hotfix repair-pricing setup: a deterministic it
   p.hull = 40; p.screen = 10; p.shell = 0; p.engine = 50;
 };
 const w24RepinHull = () => { ctx.player.hullMax = 1e9; ctx.player.hull = 1e9; }; // the wave-6 re-pin
-// station.js repairCost: per part Math.ceil(lack × REPAIR_RATES[key] × mult),
-// summed; rates hull 0.9 / screen 0.3 / shell 0.5 / engine 0.6 (the hotfix
-// section's itemization), mult = epic × faction composed epic-first.
-const w24RepairExpected = (mult) =>
-  Math.ceil(60 * 0.9 * mult) + Math.ceil(30 * 0.3 * mult) + Math.ceil(60 * 0.5 * mult) + Math.ceil(50 * 0.6 * mult);
+// station.js repairCost: per part Math.ceil(lack × REPAIR_RATES[key] × mult ×
+// class), summed; rates hull 0.9 / screen 0.3 / shell 0.5 / engine 0.6 (the
+// hotfix section's itemization), mult = epic × faction composed epic-first and
+// class = the issue #208 hull-class multiplier, read live off the flown hull.
+const w24RepairExpected = (mult) => {
+  const m = mult * repairClassMult208(ctx.player.classKey);
+  return Math.ceil(60 * 0.9 * m) + Math.ceil(30 * 0.3 * m) + Math.ceil(60 * 0.5 * m) + Math.ceil(50 * 0.6 * m);
+};
 const w24RepairScreen = (label) => { // open the repair service, return button/overlay/label cost
   dispatchKey('Digit5'); // repair service (DOCK_KEY_SERVICES[4])
   tick(2, `${label} repair screen`);

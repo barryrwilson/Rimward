@@ -61,6 +61,33 @@ export function cargoHoldMax(classKey) {
   return cargoHoldFor(classKey) + HOLD_RACK_STEP * HOLD_RACK_MAX;
 }
 
+// ---------- Yard repair pricing (§12 repair bays) ----------
+// UU per integrity point restored, per channel. Hull is structural and dear;
+// screens are cheap laminate; shell and engine sit between. Cost scales
+// strictly and linearly with the integrity missing, so damage severity IS the
+// amount down — there is no separate surcharge band above it.
+export const REPAIR_RATES = Object.freeze({ hull: 0.9, screen: 0.3, shell: 0.5, engine: 0.6 });
+
+// Issue #208 owner decision: repair scales with hull class and damage taken,
+// never with cargo value. A bigger hull is dearer to make whole than its larger
+// maxima alone would price it. station.js applies this BEFORE the per-channel
+// ceil, composed with the existing epic and faction repair multipliers.
+export const REPAIR_CLASS_MULT = Object.freeze({
+  light: 3, cutter: 3, heavy: 4, ace: 5, freighter: 6, frigate: 8,
+});
+
+/**
+ * Authored class repair multiplier. Unknown, unauthored or non-finite
+ * classKey → light, the same own-property discipline as cargoHoldFor. Hull kind
+ * is not consulted: a living hull of a class pays its class rate.
+ */
+export function repairClassMultiplier(classKey) {
+  const m = Object.prototype.hasOwnProperty.call(REPAIR_CLASS_MULT, classKey)
+    ? REPAIR_CLASS_MULT[classKey]
+    : REPAIR_CLASS_MULT.light;
+  return typeof m === 'number' && Number.isFinite(m) && m > 0 ? m : REPAIR_CLASS_MULT.light;
+}
+
 // Seat counts are the mass law. Do not persist. Unknown classKey → light at
 // weapon-fit.js call sites — never by mutating this table.
 export const MOUNT_TABLE = Object.freeze({

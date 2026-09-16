@@ -1,5 +1,17 @@
 # RIMWARD Player-Experience Wishlist
 
+## Repair cost scales with hull class — #208
+
+Implemented on an isolated candidate, pending independent QA. The playtest
+complaint was that piracy damage cost a trader almost nothing. Repair still
+scales strictly with the integrity missing, but an authored hull-class factor
+now multiplies that bill before rounding, so a scrape stays cheap and a stripped
+hull is a real loss. The owner ruled the scale is hull class and damage taken,
+not cargo value. A measured live leg on the starter purse cleared 59 UU net
+against a 294 UU strip bill; a capitalised leg cleared 1,420 UU against the
+same bill. Two legs on one seed is an order of magnitude, not a validated
+economy. See [the decision, arithmetic and evidence](Issue208RepairBalanceRecommendations.md).
+
 ## Ordinary job abandonment — #207
 
 Implemented on an isolated candidate, pending independent QA: accepted mining,
