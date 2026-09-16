@@ -552,3 +552,21 @@ keeps that supply quote across its synchronous ordinary-order chunks. Separate
 confirmations reprice, while bulk checks for changed external quotes and actual
 stock remain active. No new save fields are required. Focused coverage:
 `scripts/issue-218-market-pricing-test.mjs`, market liquidity, spread and bulk tests.
+
+## Trader income curve — #220 (decision recorded; balance unvalidated)
+
+The chosen target is a fresh, careful Freehold Greenhand affording the existing
+freighter in **45–60 simulation minutes**, followed by larger cargo commitments
+and diversified routes as markets saturate. [Decision, current-source evidence,
+reproducible arithmetic and measurement contract](Issue220TraderIncomeCurve.md).
+This closes the requested decision, not a claim that current tuning reaches it.
+The historical 10:42 purchase predates merged #218/#219; it already included
+#208 repair scaling. No replacement campaign time has been measured.
+
+Priority: measure current baseline; if it misses the target, tune existing
+job distance/return-work pay before considering a shared per-berth cap or further
+saturation changes. Hauls already require player-sourced cargo; no second
+buy-in, artificial repair burden, hull-price increase or new progression sink
+is selected. Generated haul cost disclosure remains a separate UX candidate.
+Any runtime balancing needs a bounded follow-up and independent campaign QA;
+the selected decision adds no source changes or external issue automatically.
