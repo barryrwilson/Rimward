@@ -10,7 +10,7 @@ import { isBeautiful } from './organic.js';
 import {
   initNavGuidance, readNavGuidance, formatNavDist,
 } from './nav-guidance.js';
-import { disengage, guardAutopilotSpace, apDestName, apNextName } from '../game/autopilot.js';
+import { disengage, guardAutopilotSpace, apDestName, apNextName, DOCK_APPROACH_LINES } from '../game/autopilot.js';
 import {
   tryEngageAutomine, disengageAutomine, amRefuseToken, amLine, guardAutomineSpace,
 } from '../game/automine.js';
@@ -1396,6 +1396,9 @@ export function initHud(ctx) {
   // only Escape takes it back. One line, textContent, no gauge.
   const agentHelmChip = el('div', 'rw-agent-helm is-hidden', chipStack, 'AGENT HAS THE HELM · Esc to take over');
   agentHelmChip.setAttribute('role', 'status');
+  const dockFailureChip = el('div', 'rw-agent-helm is-hidden', chipStack);
+  dockFailureChip.setAttribute('role', 'status');
+  dockFailureChip.dataset.dockFailure = 'true';
 
   // ---------- scratch (no per-frame allocation) ----------
   const proj = new THREE.Vector3(); // projected target NDC
@@ -2170,6 +2173,14 @@ export function initHud(ctx) {
           amChipState.textContent = amState;
         }
       }
+
+      // Keep an unexpected handback legible after its transient comm toast.
+      const dockFailed = ctx.autopilot?.mode === 'dock' && ctx.autopilot.phase === 'failed'
+        && !ctx.autopilot.engaged && !ctx.flags.docked
+        && ['blocked', 'impact', 'stale', 'lost-station', 'dock-refused', 'jumping'].includes(ctx.autopilot.reason);
+      dockFailureChip.classList.toggle('is-hidden', !dockFailed);
+      const dockFailureText = dockFailed ? DOCK_APPROACH_LINES[ctx.autopilot.reason] : '';
+      if (dockFailureChip.textContent !== dockFailureText) dockFailureChip.textContent = dockFailureText;
 
       // Issue #163: the takeover notice clears on handoff (Escape) or release.
       let agentHelmOn = false;
