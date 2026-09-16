@@ -16,6 +16,7 @@ import { losCloseRate } from './los-close.js';
 import { agentControlStatus, agentFrameClock } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
 import { queuedDockDest } from './dock-queue.js';
+import { originChoices } from './origins.js';
 import { recoveryObjective } from './recovery.js';
 import { escapeStatus } from './npc-escape.js';
 import { podUnits } from './pods.js';
@@ -870,6 +871,38 @@ function sessionPhase(ctx) {
 }
 
 /**
+ * Issue #204: the session block. While the origin overlay owns the screen the
+ * agent cannot read the rows a player sees, and chooseOrigin wants an id — so
+ * the live menu rides the observation as {id,title,digit} in Digit order.
+ * Authored fields into a fresh array every call: no overlay object escapes,
+ * and a malformed row is dropped rather than published. Outside the origin
+ * phase the key is absent, so a flying or docked session is unchanged.
+ */
+function sessionBlock(phase) {
+  const out = { phase };
+  if (phase !== 'origin') return out;
+  let rows = null;
+  try {
+    rows = originChoices();
+  } catch {
+    rows = null;
+  }
+  const origins = [];
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      const id = str(row.id);
+      const title = str(row.title);
+      const digit = num(row.digit, 0);
+      if (!id || !title || !Number.isInteger(digit) || digit < 1) continue;
+      origins.push({ id, title, digit });
+    }
+  }
+  out.origins = origins;
+  return out;
+}
+
+/**
  * Dynamic per-command availability (v2 discovery): phase, dock/service,
  * overlay, and helm ownership reasons. Cheap flag-level gating only — the
  * authoritative validation still happens inside act().
@@ -1044,7 +1077,7 @@ export function buildObservation(ctx) {
       agentOptIn: agent ? agent.optIn === true : false,
       capabilities: capabilityManifest(),
       availability: availabilityBlock(ctx, phase, control),
-      session: { phase },
+      session: sessionBlock(phase),
       control,
       ship: shipSnap,
       hazards: { sun: solarHazard(ctx, origin) },

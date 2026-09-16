@@ -9,6 +9,7 @@ import { COMMODITIES } from '../game/state.js';
 import { tradeQty } from '../game/trade-order.js';
 import { plotRoute, clearRoute, sanitizeSystemId } from '../game/nav.js';
 import { clearQueuedDock } from '../game/dock-queue.js';
+import { originChoices } from '../game/origins.js';
 import {
   tryEngage,
   tryApproachDock,
@@ -382,6 +383,31 @@ function actStartGame(ctx, name) {
   return ok(ctx, name);
 }
 
+/**
+ * Issue #204: an `unknown` origin refusal names the live ids. The overlay is
+ * the only place a player reads them, and the observation now carries the same
+ * list, so the refusal points there rather than inviting another guess. Reads
+ * fail closed: a menu that cannot be listed says so instead of naming nothing.
+ */
+function originIdDetail() {
+  let rows = null;
+  try {
+    rows = originChoices();
+  } catch {
+    rows = null;
+  }
+  const ids = [];
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      const id = str(row.id);
+      if (id) ids.push(id);
+    }
+  }
+  if (!ids.length) return 'no origin is selectable; see observe().session.origins';
+  return `valid origin ids: ${ids.join(', ')} — see observe().session.origins`;
+}
+
 function actChooseOrigin(ctx, name, args) {
   const api = ctx && ctx.originsApi;
   if (!api || typeof api.choose !== 'function' || typeof api.isOpen !== 'function') {
@@ -396,7 +422,7 @@ function actChooseOrigin(ctx, name, args) {
   if (!open) return fail(ctx, name, 'no-service');
   const id = Object.hasOwn(args, 'id') ? args.id : '';
   if (typeof id !== 'string' || !id || reservedName(id)) {
-    return fail(ctx, name, 'unknown');
+    return fail(ctx, name, 'unknown', undefined, originIdDetail());
   }
   let token = '';
   try {
@@ -404,7 +430,9 @@ function actChooseOrigin(ctx, name, args) {
   } catch {
     return fail(ctx, name, 'no-service');
   }
-  if (typeof token === 'string' && token) return fail(ctx, name, token);
+  if (typeof token === 'string' && token) {
+    return fail(ctx, name, token, undefined, token === 'unknown' ? originIdDetail() : '');
+  }
   return ok(ctx, name);
 }
 

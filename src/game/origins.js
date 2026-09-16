@@ -60,6 +60,23 @@ function isChoosableOrigin(id) {
   return isValidOriginRecord(ORIGINS[id]);
 }
 
+/**
+ * Issue #204: the origin menu as data. Same ids, same Digit numbers and same
+ * titles the overlay paints, from the one predicate the Digit keys and the
+ * click rows already obey — so observe() and a refused chooseOrigin can name
+ * the live choices instead of leaving an agent to guess them. A skipped origin
+ * does not reindex the rest, exactly as the overlay does not.
+ */
+export function originChoices() {
+  const out = [];
+  for (let i = 0; i < ORIGIN_DIGIT_IDS.length; i++) {
+    const id = ORIGIN_DIGIT_IDS[i];
+    if (!isChoosableOrigin(id)) continue;
+    out.push({ id, title: ORIGINS[id].name, digit: i + 1 });
+  }
+  return out;
+}
+
 /** Baseline price table for a system — replicates market.js buildTable. */
 function buildBaselineTable(sys) {
   const table = {};
