@@ -50,8 +50,16 @@ function step(count = 1) {
   }
 }
 
+let fixtureCargoSeeded = false;
 function dock(system = ctx.world.currentSystem) {
   if (ctx.flags.docked) ctx.stationDesk.undock();
+  // Issue 219: newly seeded cargo represents a new run, not local stock that
+  // can qualify by redocking. Give that fixture an actual system transition.
+  if (fixtureCargoSeeded && ctx.world.currentSystem === system) {
+    ctx.world.currentSystem = system === 'freehold' ? 'veridian' : 'freehold';
+    step(1);
+  }
+  fixtureCargoSeeded = false;
   // Fixture: place the hull at the safe berth. The real dock path, the real
   // board refresh and the real delivery tick still own every mutation.
   ctx.world.currentSystem = system;
@@ -76,6 +84,7 @@ const settledHere = (id) => stateOf(id) !== 'accepted';
 const holdOf = (commodity) => ctx.cargo
   .filter((r) => r.commodity === commodity).reduce((n, r) => n + r.units, 0);
 const setHold = (rows) => {
+  fixtureCargoSeeded = true;
   ctx.cargo.length = 0;
   for (const [commodity, units] of rows) ctx.cargo.push({ commodity, units });
 };

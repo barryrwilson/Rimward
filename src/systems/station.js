@@ -2091,26 +2091,18 @@ export function addCargo(ctx, commodity, units) {
 // agreement or the unique `haul-provisions` consignment on the spot, so the
 // berth paid a delivery margin on goods that never crossed a gate.
 //
-// `arrivalHold` is what the hold actually carried the moment the hull berthed —
-// the dock snapshot the issue allows, in the narrow per-berth shape the
-// coordinator selected. It is module-scoped session state: no save field, no
-// world field, no stamp on any commodity row. Every unit that leaves the hold
-// while docked — a delivery, a consignment, a market sale, a reclaim — spends
-// the arrival manifest down through `removeCargo`, so a sold-and-rebought unit
-// and two competing agreements can never claim the same entitlement twice.
-// Anything bought at the dock adds to the hold and NOT to the manifest.
-//
-// Limitation of this bounded shape, stated plainly: the manifest lives only for
-// the berth visit. It is taken at dock, dropped at launch, and re-taken fresh on
-// the next dock — so a redock always re-reads the hold as it then stands. A save
-// reloaded while docked never ran `dock()`, so the delivery tick takes a fresh
-// manifest from the restored hold the same way. A player who buys at the dock,
-// saves and reloads inside that berth therefore still settles the run. Carrying
-// the fact across a launch or a reload would need broader persisted provenance
-// tracking, which is outside this issue's selected scope.
+// Issue 219: one manifest per SYSTEM visit. Launching and docking again never
+// turns local purchases into a haul. removeCargo spends the shared entitlement
+// as goods leave; purchases never add to it. A genuine system change refreshes
+// it from the goods carried through the gate.
+// Session-only limitation: boot/restore starts from the restored hold. Saved
+// cargo provenance is not persisted, so reloading can still qualify local stock.
 let arrivalHold = null;
+let arrivalOwner = null;
+let arrivalSystem = null;
+let arrivalBanks = null;
 
-/** Snapshot the hold as the arrival manifest for THIS berth visit. */
+/** Snapshot a new system visit or restored session, never a new berth. */
 function captureArrivalHold(ctx) {
   const snap = new Map();
   const rows = Array.isArray(ctx?.cargo) ? ctx.cargo : [];
@@ -2121,26 +2113,32 @@ function captureArrivalHold(ctx) {
     snap.set(c.commodity, (snap.get(c.commodity) ?? 0) + n);
   }
   arrivalHold = snap;
+  arrivalOwner = ctx;
+  arrivalSystem = ctx.world.currentSystem;
+  arrivalBanks = ctx.world.recordBanks;
 }
 
-function clearArrivalHold() {
-  arrivalHold = null;
+function ensureArrivalHold(ctx) {
+  // world.js uses this bank ownership change to detect same-system restores.
+  // Ordinary gate travel changes bank entries, not the owning map.
+  if (!arrivalHold || arrivalOwner !== ctx || arrivalSystem !== ctx.world.currentSystem
+    || arrivalBanks !== ctx.world.recordBanks) captureArrivalHold(ctx);
 }
 
 /** Units of `commodity` that are BOTH still aboard and arrived with the ship.
  * Clamped to the live hold, so a wholesale hold swap (hangar, restore, rewind)
- * can never leave the manifest promising more than the ship is carrying. With
- * no manifest (in flight) this is just the hold. */
+ * can never leave the manifest promising more than the ship is carrying. */
 function arrivedUnits(ctx, commodity) {
+  ensureArrivalHold(ctx);
   const have = holdUnits(ctx, commodity);
-  if (!arrivalHold) return have;
   const n = arrivalHold.get(commodity);
   return Math.min(have, Number.isFinite(n) && n > 0 ? n : 0);
 }
 
 /** Spend the arrival manifest as goods leave the hold, whatever took them. */
-function spendArrivedUnits(commodity, units) {
-  if (!arrivalHold || !(units > 0)) return;
+function spendArrivedUnits(ctx, commodity, units) {
+  ensureArrivalHold(ctx);
+  if (!(units > 0)) return;
   const have = arrivalHold.get(commodity);
   if (!Number.isFinite(have) || have <= 0) return;
   const left = have - units;
@@ -2150,7 +2148,7 @@ function spendArrivedUnits(commodity, units) {
 
 export function removeCargo(ctx, commodity, units) {
   if (commodity === 'survivor') return;
-  spendArrivedUnits(commodity, units);
+  spendArrivedUnits(ctx, commodity, units);
   for (let i = 0; i < ctx.cargo.length; i++) {
     const c = ctx.cargo[i];
     if (isSurvivorCargo(c) || c.commodity !== commodity) continue;
@@ -3147,7 +3145,7 @@ function passengerRunBase(job) {
 
 /** Trade card copy. Every card names its destination AND its distance. */
 function tradeRunDetail(need, name, destName, hops) {
-  return `Buy or hold ${need} ${name} and deliver to ${destName} — ${hopsLabel(hops)} out.`;
+  return `Buy at another station or hold ${need} ${name} before the jump; deliver to ${destName} — ${hopsLabel(hops)} out.`;
 }
 
 /** The posted jump count a passenger card should print. */
@@ -4346,13 +4344,7 @@ function tickDeliveryJobs(ctx, ui, render) {
   let settled = false;
   const huntPaidNames = new Set();
   arrivalNoticePending = false;
-  // Issue 182: the arrival manifest is normally taken by dock() itself. A berth
-  // the berth code never opened (a restored session that comes up docked) has
-  // none, so take a fresh manifest from the hold as it stands — before the first
-  // settlement of this pass measures it. Out of the berth there is no manifest
-  // at all; `undock` drops it and this is the belt-and-braces for any other way
-  // the hull leaves.
-  if (ctx.flags.docked) { if (!arrivalHold) captureArrivalHold(ctx); } else clearArrivalHold();
+  ensureArrivalHold(ctx);
   // Issue 181: the unique consignment settles BEFORE any ordinary delivery in
   // this pass, whatever its index. Its five Provisions leave the hold first, so
   // a trade row for the same commodity is measured against what is actually
@@ -6509,8 +6501,11 @@ export function initStation(ctx) {
           const destId = postingHopsOk(originId, job.destSystem) ? job.destSystem : otherSystemId(ctx, originId);
           const destName = tradeStationName(destId) ?? 'the far station';
           const have = commodity ? holdUnits(ctx, commodity) : 0;
+          const atDestination = ctx.world.currentSystem === destId;
+          const eligible = commodity ? Math.max(0, deliverableUnits(ctx, ctx.world.jobs, commodity)) : 0;
+          const cargoLine = atDestination ? `eligible ${eligible} of ${have} aboard` : `have ${have} before the jump`;
           const left = miningTimeLeftLabel(ctx, job);
-          stateLine = `ACCEPTED — deliver ${HAUL_UNITS} ${name} to ${destName} (have ${have})`;
+          stateLine = `ACCEPTED — deliver ${HAUL_UNITS} ${name} to ${destName} (${cargoLine})`;
           if (left) stateLine += ` · ${left}`;
           // Issue 181: the units are aboard but spoken for. Say so on the row,
           // instead of leaving an eligible-looking delivery silently unpaid.
@@ -7469,10 +7464,7 @@ export function initStation(ctx) {
     applyBerthFlight(ctx, null);
     applyBerthInput(ctx, 'dock');
     ctx.flags.docked = true;
-    // Issue 182: the arrival manifest for THIS berth visit, taken the moment the
-    // hull berths and before any settlement tick or market action can run. A
-    // redock always starts a fresh one; nothing about it is persisted.
-    captureArrivalHold(ctx);
+    ensureArrivalHold(ctx);
     displayedHaulQuotes.clear(); // no quote from an earlier berth visit
     ui.open = true;
     ui.bulk = null;
@@ -7596,7 +7588,7 @@ export function initStation(ctx) {
     if (!applyBerthFlight(ctx, plan)) return hold('no-service', '');
 
     ctx.flags.docked = false;
-    clearArrivalHold(); // issue 182: the manifest belongs to the berth we just left
+    // Issue 219: launching keeps the system-arrival manifest.
     displayedHaulQuotes.clear();
     ui.open = false;
     ui.service = null;
@@ -8001,6 +7993,9 @@ export function initStation(ctx) {
         && ctx.world.currentSystem !== currentId) {
         ctx.world.currentSystem = currentId;
       }
+
+      if (ctx.lastEvents.some((ev) => ev.type === 'recovered')) captureArrivalHold(ctx);
+      else ensureArrivalHold(ctx);
 
       // Dock before mesh animation so a sculpt throw cannot skip the berth.
       const liveSysId = ctx.world.currentSystem;
