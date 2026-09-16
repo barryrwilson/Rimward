@@ -937,9 +937,9 @@ function availabilityBlock(ctx, phase, control) {
       reason = 'held';
     } else if (name === 'dock') {
       if (!(ctx.station && ctx.station.inZone === true)) reason = 'range';
-    } else if (name === 'undock' || name === 'openService' || name === 'acceptJob'
+    } else if (name === 'undock' || name === 'openService' || name === 'acceptJob' || name === 'abandonJob'
       || name === 'trade' || name === 'repairAll' || name === 'feed' || name === 'stationAction') {
-      if (!docked) reason = 'no-service';
+      if (!docked || (name === 'abandonJob' && stationService(ctx) !== 'jobs')) reason = 'no-service';
     } else if (combat && ['engageAutopilot', 'engageAutomine', 'afterburner', 'approachDock'].includes(name)) {
       reason = 'helm';
     } else if (name === 'selectTarget' || name === 'setWeaponGroup' || name === 'afterburner' || name === 'approachDock') {

@@ -1,5 +1,18 @@
 # RIMWARD Wave 126 — Agent API (AI play surface)
 
+## Ordinary job abandonment — #207
+
+`abandonJob { id }` is a Jobs service command for accepted mining, trade, hunt,
+passenger, explore, espionage and war jobs. Dock and open Jobs first. It works
+at any dock, charges exactly -1 standing to the posting faction, returns the
+named faction/cost notice, and records one `jobState` outcome `abandoned`.
+It grants no completion rewards and leaves player cargo unchanged. Ferry,
+legacy haul, recovery, chain, bounty and patrol explicitly refuse. Unknown IDs,
+non-accepted rows and invalid origins refuse without world mutation. Observe
+live IDs after reload; cached IDs are only stable within a loaded session.
+The visible board action uses the same station owner and displays the cost.
+
+
 | Field | Value |
 |---|---|
 | **Title** | RIMWARD AGENT API (AI play surface) |
