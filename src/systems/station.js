@@ -5,7 +5,7 @@ import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, cr
 import { claimedHullsOf } from '../game/derelict.js';
 import { dockFactionOf, yardStockFor } from '../game/shipyard.js'; // issue #186: the outfitter names the yard that sells a bigger hold
 import * as pods from '../game/pods.js';
-import { marketSupplyAt, commitMarketSupply } from '../game/market-supply.js';
+import { marketSupplyAt, commitMarketSupply, marketSupplyMultiplier } from '../game/market-supply.js';
 import { marketEventAt } from '../game/market.js'; // issue #179: name the event behind a transient quote
 import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
 import { cargoSplit, consignedHoldUnits, splitLabel, FERRY_UNITS } from '../game/consignment.js'; // issue #177: fronted ferry units are not the player's stock
@@ -5242,10 +5242,11 @@ export function initStation(ctx) {
     return currentDef.hermit && keeperTrustHere() < KEEPER_COMP_TRUST ? HERMIT.buyMult : 1;
   }
   /** Qty-1 BUY fill in UU, before the issue-53 cap (which never moves buys). */
-  function tradeBuyUnit(key) {
+  function tradeBuyUnit(key, stock = marketSupplyAt(ctx.world, currentId, key)) {
     const fx = epicEffects(ctx, currentDef.faction);
     return Math.round(priceOf(ctx, key)
-      * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult());
+      * (fx.buyMult ?? 1) * (currentService?.buyMult ?? 1) * hermitBuyMult()
+      * marketSupplyMultiplier(stock, true));
   }
   /** Qty-1 SELL fill in UU with every modifier applied, BEFORE the cap. */
   function tradeSellUnitRaw(key) {
@@ -5276,10 +5277,13 @@ export function initStation(ctx) {
    * The clamp compares quotes at the SAME dock, so a price difference
    * between markets still pays.
    */
-  function tradeFillUnit(key, buying) {
-    if (buying) return tradeBuyUnit(key);
-    const sellCap = Math.floor(tradeBuyUnit(key) * ECON.counterSellPercent / 100);
-    return Math.min(tradeSellUnitRaw(key), sellCap);
+  function tradeFillUnit(key, buying, stock = marketSupplyAt(ctx.world, currentId, key)) {
+    if (buying) return tradeBuyUnit(key, stock);
+    // Anchor bids to the neutral ask: draining stock must not pump resale value.
+    const neutralBuy = tradeBuyUnit(key, { units: stock.capacity, capacity: stock.capacity });
+    const sellCap = Math.floor(neutralBuy * ECON.counterSellPercent / 100);
+    return Math.floor(Math.min(tradeSellUnitRaw(key), sellCap)
+      * marketSupplyMultiplier(stock, false));
   }
   function lockerAllowed() {
     if (ui.fenceUnlocked) return true;
@@ -5287,7 +5291,7 @@ export function initStation(ctx) {
     return ctx.world.fear >= ECON.fear.tributeOpensAt
       || ctx.world.reputation.freehold < RESTRICTED_REP_GATE;
   }
-  function tryTrade(key, qty, buying) {
+  function tryTrade(key, qty, buying, quoteStock) {
     if (!ctx.flags.docked || !ui.open || ctx.world.currentSystem !== currentId) {
       ui.notice = 'Dock first at the market.';
       return false;
@@ -5310,7 +5314,7 @@ export function initStation(ctx) {
       return false;
     }
     const stock = marketSupplyAt(ctx.world, currentId, key);
-    const unit = tradeFillUnit(key, buying);
+    const unit = tradeFillUnit(key, buying, quoteStock);
     const total = unit * qty;
     const after = ctx.world.credits + (buying ? -total : total);
     if (!Number.isSafeInteger(unit) || unit < 0 || !Number.isSafeInteger(total)
@@ -5361,7 +5365,7 @@ export function initStation(ctx) {
 
   /** A read-only quote, including every resource that a displayed intent used. */
   const BULK_ORDER_CAP = 1024; // Bound synchronous autosaves even for oversized imported cargo.
-  function previewBulkTrade(key, qty, buying) {
+  function previewBulkTrade(key, qty, buying, quoteStock) {
     const allowed = isMarketCommodity(key) && (COMMODITIES[key].legal || lockerAllowed());
     const stock = marketSupplyAt(ctx.world, currentId, key);
     const held = holdUnits(ctx, key);
@@ -5372,8 +5376,8 @@ export function initStation(ctx) {
     const used = cargoUsed(ctx);
     const capacity = ctx.cargoCapacity;
     const credits = ctx.world.credits;
-    const unit = isMarketCommodity(key) ? tradeFillUnit(key, buying) : NaN;
-    const buyUnit = isMarketCommodity(key) ? tradeFillUnit(key, true) : NaN;
+    const unit = isMarketCommodity(key) ? tradeFillUnit(key, buying, quoteStock) : NaN;
+    const buyUnit = isMarketCommodity(key) ? tradeFillUnit(key, true, quoteStock) : NaN;
     const room = Math.max(0, Math.floor(capacity - used));
     const cash = buyUnit === 0 ? room : Math.max(0, Math.floor(credits / buyUnit));
     const validUnit = Number.isSafeInteger(unit) && unit >= 0;
@@ -5452,6 +5456,9 @@ export function initStation(ctx) {
     // Consume BOTH side confirmations before entering ordinary trade effects.
     order.ready = false;
     order.busy = true;
+    // One confirmed bulk intent keeps its displayed supply quote across chunks.
+    // Live availability and non-supply price modifiers are still checked per order.
+    const quoteStock = marketSupplyAt(ctx.world, currentId, intent.key);
     let completed = 0;
     let paid = 0;
     let count = 0;
@@ -5460,10 +5467,10 @@ export function initStation(ctx) {
       while (completed < intent.qty) {
         if (!bulkContext(intent) || ui.bulk !== order) { reason = 'market context changed'; break; }
         const qty = Math.min(intent.qty - completed, intent.orderLimit);
-        const next = previewBulkTrade(intent.key, qty, intent.buying);
+        const next = previewBulkTrade(intent.key, qty, intent.buying, quoteStock);
         if (next.unit !== intent.unit) { reason = 'quote changed'; break; }
         if (!next.ok || next.orderLimit !== intent.orderLimit) { reason = next.reason || 'order limit changed'; break; }
-        if (!tryTrade(intent.key, qty, intent.buying)) { reason = ui.notice || 'order refused'; break; }
+        if (!tryTrade(intent.key, qty, intent.buying, quoteStock)) { reason = ui.notice || 'order refused'; break; }
         order.fills.push(Object.freeze({ qty, unit: next.unit, total: next.total }));
         completed += qty;
         paid += next.total;

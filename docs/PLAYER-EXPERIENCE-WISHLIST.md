@@ -2772,3 +2772,18 @@ this document, preserve the desired outcome and update the assumed mechanism.
   not fronted either and have never stated a buy-in, so the player outcome #179
   wanted here is currently unmet and needs its own issue. `haulBuyInFor` is kept
   intact in `station.js` as the working copy for it.
+
+### Issue #218 — supply-sensitive market fills (implemented; pending independent QA)
+
+Sales now retain surplus above the nominal stock target and lower the next sell
+quote. Both surplus and depletion recover toward nominal stock at the existing
+saved-simulation-time rate. A linear pressure curve raises buy quotes by up to
+50% from full to empty, and lowers sell quotes by up to 50% from nominal to twice
+nominal stock. Each side stays anchored at its neutral quote to prevent pumping
+resale prices by first draining the dock. The same-dock spread remains intact.
+
+Each confirmed order settles at its displayed unit quote; a human bulk intent
+keeps that supply quote across its synchronous ordinary-order chunks. Separate
+confirmations reprice, while bulk checks for changed external quotes and actual
+stock remain active. No new save fields are required. Focused coverage:
+`scripts/issue-218-market-pricing-test.mjs`, market liquidity, spread and bulk tests.

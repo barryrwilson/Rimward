@@ -64,7 +64,7 @@ check('malformed containers and rows fail closed; bounded own keys and future ti
     assert.equal(Object.keys(clean).length,Object.keys(SYSTEMS).length);
     assert.deepEqual(clean.freehold.provisions,{ units:0, updatedAt:100 });
   }
-  for (const bad of [null, [], 'bad', {units:-1,updatedAt:0}, {units:161,updatedAt:0},
+  for (const bad of [null, [], 'bad', {units:-1,updatedAt:0}, {units:Number.MAX_SAFE_INTEGER+1,updatedAt:0},
     {units:NaN,updatedAt:0}, {units:1,updatedAt:Infinity}, {units:1,updatedAt:-1}, {units:'1',updatedAt:0}]) {
     assert.deepEqual(normalizeMarketSupply({freehold:{provisions:bad}},100).freehold.provisions,{ units:0, updatedAt:100 });
   }
@@ -150,17 +150,17 @@ check('public observations are read-only and expose executable stock/hold/cash l
   ctx.cargoCapacity = 2;
   assert.equal(row().buyMax,2);
 });
-check('1/5/99/160 partitions have identical fixed-time flat totals and stock', () => {
+check('separate orders reprice while all partitions conserve stock and settle quoted totals', () => {
   const results = [];
   for (const parts of [[99,61],Array(32).fill(5),Array(160).fill(1)]) {
     fixture();
-    const q = row();
-    for (const n of parts) assert.equal(act('provisions',n).ok,true);
-    assert.equal(ctx.world.credits,1_000_000-q.fillBuy*160);
+    let cost = 0;
+    for (const n of parts) { cost += row().fillBuy * n; assert.equal(act('provisions',n).ok,true); }
+    assert.equal(ctx.world.credits,1_000_000-cost);
     assert.equal(row().available,0);
     assert.equal(row().hold,160);
     assert.equal(row().buyMax,0);
-    results.push(state());
+    results.push(cost);
     assert.equal(saved().world.marketSupply.freehold.provisions.units,0);
     assert.equal(saved().world.credits,ctx.world.credits);
     assert.deepEqual(saved().cargo,ctx.cargo);
@@ -171,8 +171,8 @@ check('1/5/99/160 partitions have identical fixed-time flat totals and stock', (
     assert.equal(row().hold,0);
     assert.ok(ctx.world.credits<=1_000_000);
   }
-  assert.deepEqual(results[0],results[1]);
-  assert.deepEqual(results[1],results[2]);
+  assert.ok(results[0] < results[1]);
+  assert.ok(results[1] <= results[2]);
 });
 check('cash, hold, illegal goods, unknown keys and API quantities refuse atomically', () => {
   fixture();
@@ -197,7 +197,8 @@ check('sells beyond capacity pay in full; sell/buy reversal never increases cash
   const q = row('wakeglass');
   assert.equal(act('wakeglass',99,'sell').ok,true);
   assert.equal(ctx.world.credits-before,q.fillSell*99);
-  assert.equal(row('wakeglass').available,20);
+  assert.equal(row('wakeglass').available,119);
+  assert.ok(row('wakeglass').fillSell < q.fillSell);
   assert.equal(row('wakeglass').hold,0);
   fixture();
   ctx.cargo.push({commodity:'provisions',units:160});
