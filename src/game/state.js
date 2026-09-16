@@ -806,6 +806,20 @@ export const ESCAPE = {
   maxSpeed: 400, // sanity clamp for a restored/persisted speed
   maxCoord: 1e6, // sanity clamp for restored positions
 };
+// Yard papers give each purchased hull a name in its banner's idiom.
+export const YARD_HULL_NAMES = Object.freeze({
+  freehold: Object.freeze(['Kestrel Mercy', 'Slow Orison', 'Innisfree']),
+  veridian: Object.freeze(['Patient Sorrow', 'Tessellate', 'Low Meridian']),
+  redledger: Object.freeze(['Ninth Tooth', 'Sable Ilex', 'Copper Vane']),
+  ferrous: Object.freeze(['Iron Warrant', 'Steadfast Anvil', 'Last Bastion']),
+  gilded: Object.freeze(['Golden Promise', 'Silken Bond', 'Precious Debt']),
+  assembly: Object.freeze(['Common Purpose', 'Quiet Consensus', 'Shared Horizon']),
+  congregation: Object.freeze(['Further Dawn', 'Patient Pilgrim', 'Shoreward Hymn']),
+  lamplighter: Object.freeze(['Kindled Hope', 'Night Lantern', 'Guiding Ember']),
+  beautiful: Object.freeze(['Soft Awakening', 'Petal in Moonlight', 'Dreaming Tide']),
+  unknowables: Object.freeze(['Between Stars', 'Unspoken Answer', 'Beyond Silence']),
+});
+
 export const FACTIONS = {
   freehold: { name: 'Freehold Compact', color: 0xb0703a, doctrine: 0.4 },
   redledger: { name: 'Red Ledger', color: 0xa03434, doctrine: 0.7 },

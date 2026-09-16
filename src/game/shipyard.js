@@ -1,4 +1,4 @@
-import { createShipState, SHIP_CLASSES, rankFor, cargoHoldFor, ECON, HULL_RESALE } from './state.js';
+import { createShipState, SHIP_CLASSES, rankFor, cargoHoldFor, ECON, HULL_RESALE, YARD_HULL_NAMES } from './state.js';
 import { requestAutosave } from './save.js';
 import {
   HANGAR_CAP,
@@ -169,13 +169,18 @@ function buildStockRow(ctx, classKey, faction, hullKind) {
   const hangar = ctx.world?.hangar;
   const id = nextHullId(hangar, classKey);
   if (!id) return null;
-  const fresh = createShipState(classKey, { name: classKey, faction });
+  const names = YARD_HULL_NAMES[faction];
+  const baseName = names[Math.floor(Math.random() * names.length)];
+  const usedNames = new Set(hangar.hulls.map((row) => row.name));
+  let name = baseName;
+  for (let suffix = 2; usedNames.has(name); suffix++) name = `${baseName} ${suffix}`;
+  const fresh = createShipState(classKey, { name, faction });
   const raw = {
     id,
     hullKind,
     faction,
     classKey,
-    name: classKey,
+    name,
     scanner: 0,
     miningLaser: 0,
     concealedMounts: false,
