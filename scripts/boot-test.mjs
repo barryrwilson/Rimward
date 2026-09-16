@@ -15552,6 +15552,11 @@ removeLiveShip(w42indyCtx, w42indy);
     && ctx.input.targetPressed === true;
 
   const sentinel74 = { id: 'w74-keep-lock' };
+  // Issue #224: the preceding KeyV may already have emitted this miss line.
+  // Test the text-safe miss after its cooldown; the focused comm pins cover
+  // suppression inside that window without weakening these safety assertions.
+  const { COMM_REPEAT_SECONDS: commRepeat74 } = await import('../src/game/state.js');
+  ctx.world.time += commRepeat74;
   ctx.targets.current = sentinel74;
   ctx.flags.docked = true;
   if (ctx.gate) ctx.gate.jumping = false;
