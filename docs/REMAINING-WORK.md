@@ -27,6 +27,26 @@ or deployment evidence.
 
 ## Active outcomes
 
+Issue [#204](https://github.com/barryrwilson/Rimward/issues/204) is implemented
+on `codex/issue-204-origin-discovery`: origin ids are discoverable instead of
+guessed. While `observe().session.phase === 'origin'` the block carries
+`origins: [{ id, title, digit }]` in Digit order, built from the one
+choosability predicate the overlay's Digit keys and click rows already obey
+(`originChoices()` in `src/game/origins.js`), so the agent reads exactly the
+rows a player sees. An `unknown` `chooseOrigin` refusal now carries `detail`
+naming those live ids and pointing at the observation, and
+`COMMAND_SPECS.chooseOrigin.args.id` says where the ids come from. The detail
+never echoes the rejected id. Outside the origin phase the session block is
+`{ phase }` exactly as before; the refusal tokens, the fail-closed argument
+validation and every other observe field are unchanged, and no key, event,
+tuning value or persisted field is added. Focused regression is
+`scripts/issue-204-origin-discovery-test.mjs` (12 checks: live-list/overlay-row
+parity, unknown/reserved/malformed ids leaving state untouched, detail
+contents, JSON round trip and per-call copy isolation, absence outside the
+origin phase, and each listed id accepted in its own clean boot). Evidence:
+`out/issue-204/`. Build, `npm run test:boot`, independent QA and live browser
+validation remain pending; this is not a merge or deployment claim.
+
 Issue [#202](https://github.com/barryrwilson/Rimward/issues/202) is implemented
 on `codex/issue-202-helm-events`: `autopilotDisengaged` and
 `automineDisengaged` are KEEP_RING helm shutdown receipts, so a hull parked
