@@ -1,5 +1,14 @@
 # RIMWARD remaining work
 
+## Predictable freighter docking — #221
+
+Implemented on `codex/issue-221-freighter-docking`, pending independent QA.
+Explicit and queued dock approaches share arrival-gate clearance. The freighter
+uses its available class-limited steering and a bounded outer-stage speed;
+transient stalls get one same-helm replan, while persistent obstruction stops
+safely with a lasting HUD reason. Mounted-freighter corridor and arrival pins
+cover real ship physics. See [acceptance and evidence](Issue221FreighterDocking.md).
+
 ## Purchased hull identity — #225
 
 Implemented on the `codex/issues-223-225` candidate, pending independent QA:

@@ -69,6 +69,8 @@
     "test:agent-hardening": "node scripts/agent-api-hardening-test.mjs",
     "test:agent-playtest-fixes": "node scripts/agent-api-playtest-fixes-test.mjs",
     "test:agent-cruise": "node --import ./scripts/with-css-stub.mjs scripts/issue-168-cruise-test.mjs",
+    "test:freighter-dock": "node --import ./scripts/with-css-stub.mjs scripts/issue-221-freighter-dock-test.mjs",
+    "test:freighter-dock-live": "node scripts/issue-221-freighter-dock-live-probe.mjs",
     "test:arrival-dock": "node --import ./scripts/with-css-stub.mjs scripts/issue-201-arrival-dock-test.mjs",
     "test:arrival-dock-live": "node scripts/issue-201-arrival-dock-live-probe.mjs",
     "test:route-dock": "node --import ./scripts/with-css-stub.mjs scripts/issue-183-route-dock-test.mjs",

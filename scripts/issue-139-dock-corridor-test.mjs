@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const testRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeRoot = resolve(process.env.DOCK_RUNTIME || testRoot);
 const caseName = process.argv[2];
-const cases = ['old', 'new', 'fresh', 'repeat', 'cancel'];
+const cases = ['old', 'new', 'fresh', 'repeat', 'cancel', 'freighter'];
 if (!caseName) {
   const outcomes = [];
   for (const name of cases) {
@@ -102,6 +102,22 @@ const station = ctx.station.position;
 const stage = { x: station.x + 135, y: station.y, z: station.z };
 pin('fixture: fresh Greenhand in Freehold', ctx.world.origin === 'greenhand' && ctx.world.currentSystem === 'freehold');
 
+if (caseName === 'freighter') {
+  // Disclosed dock fixture for a real Yard purchase/mount; subsequent flight
+  // uses authored hull, hold, propulsion, turn, collision and live traffic.
+  const { purchaseYardHull } = await runtimeImport('src/game/shipyard.js');
+  const { switchTo } = await runtimeImport('src/game/hangar.js');
+  ctx.flags.docked = true;
+  ctx.world.credits = 100000;
+  const bought = purchaseYardHull(ctx, 'freighter');
+  assert.equal(bought.ok, true, JSON.stringify(bought));
+  assert.equal(switchTo(ctx, bought.row.id).ok, true);
+  assert.equal(ctx.player.classKey, 'freighter');
+  assert.equal(ctx.player.hullMax, 220);
+  assert.equal(ctx.cargoCapacity, 160);
+  ctx.flags.docked = false;
+}
+
 if (caseName === 'cancel') {
   const apSystem = systems.find(([name]) => name === 'autopilot')[1];
   const shipSystem = systems.find(([name]) => name === 'ship')[1];
@@ -126,7 +142,10 @@ if (caseName === 'cancel') {
     for (let i = 0; i < 240; i++) { ctx.world.time += DT; shipSystem.update(DT); }
     pin(`${reason} real ship update stops below creep`, initialSpeed > 1 && ctx.ship.speed < 0.1, ctx.ship.speed);
   };
+  const { COMM_REPEAT_SECONDS } = await runtimeImport('src/game/state.js');
   for (const kind of ['asteroid', 'station', 'ship']) {
+    // Independent receipt episodes must be outside the authored comm cooldown.
+    ctx.world.time += COMM_REPEAT_SECONDS;
     begin();
     ctx.lastEvents = [{ type: 'bodyHit', kind, speed: 30, t: ctx.world.time }];
     apSystem.update(DT);
@@ -380,7 +399,11 @@ if(caseName==='repeat'){
   checkApproach('new');
   reset();
   checkApproach(null);
-}else checkApproach(caseName==='fresh'?null:caseName);
+}else checkApproach(['fresh','freighter'].includes(caseName)?null:caseName);
+if (caseName === 'freighter') {
+  pin('freighter docks within 65 sim seconds on the corridor fixture', journeys[0].elapsed <= 65, journeys[0].elapsed);
+  console.log('FREIGHTER elapsed', journeys[0].elapsed);
+}
 
 // Preserve the real spawn-path geometry contract in each independent process.
 reset();
