@@ -28164,6 +28164,140 @@ removeLiveShip(w42indyCtx, w42indy);
   }
 }
 
+// ---- Issue #200: a zero-damage cruise touch never cancels the dock helm ----
+// A trader session lost approachDock four times to `bodyHit` rows carrying
+// speed 0 and damage 0 from passing traffic and a rock, each time stopping the
+// hull in open space while a pirate worked it over. The touch rule now reads
+// damage and speed alone, so the production dock controller is driven here
+// with real rows in the `cruise` phase.
+{
+  const { tryApproachDock: dock200, disengage: cancel200 } = await import('../src/game/autopilot.js');
+  const apSys200 = (systems.find((s) => s[0] === 'autopilot') || [])[1];
+  const st200 = ctx.station && ctx.station.position;
+
+  const saved200 = {
+    docked: ctx.flags.docked === true,
+    paused: ctx.flags.paused === true,
+    match: ctx.flags.matchSpeed === true,
+    hold: ctx.flags.berthHold === true,
+    chart: ctx.flags.chartOpen === true,
+    hail: ctx.flags.hailOpen === true,
+    inZone: ctx.station && ctx.station.inZone === true,
+    pos: ctx.ship.object.position.clone(),
+    quat: ctx.ship.object.quaternion.clone(),
+    vel: ctx.ship.velocity.clone(),
+    speed: ctx.ship.speed,
+    throttle: ctx.input.throttle,
+    fullStop: ctx.input.fullStop === true,
+    navAp: ctx.world.nav ? ctx.world.nav.autopilot === true : null,
+  };
+
+  const begin200 = () => {
+    cancel200(ctx, 'test');
+    ctx.flags.docked = false;
+    ctx.flags.paused = false;
+    ctx.flags.matchSpeed = false;
+    ctx.flags.berthHold = false;
+    ctx.flags.chartOpen = false;
+    ctx.flags.hailOpen = false;
+    if (ctx.gate) ctx.gate.jumping = false;
+    if (ctx.automine) ctx.automine.engaged = false;
+    if (ctx.flee) ctx.flee.engaged = false;
+    ctx.ship.driftActive = false;
+    if (ctx.station) ctx.station.inZone = false;
+    ctx.ship.object.position.set(st200.x + 600, st200.y, st200.z);
+    ctx.ship.object.quaternion.identity();
+    ctx.ship.velocity.set(0, 0, -30);
+    ctx.ship.speed = 30;
+    ctx.input.throttle = 0.8;
+    ctx.input.fullStop = false;
+    ctx.input.strafeX = 0;
+    ctx.input.strafeY = 0;
+    ctx.input.roll = 0;
+    ctx.input.steerX = 0;
+    ctx.input.steerY = 0;
+    ctx.input.throttleHeld = false;
+    ctx.input.driftHeld = false;
+    ctx.input.afterburnerPressed = false;
+    ctx.lastEvents = [];
+    return dock200(ctx);
+  };
+
+  // One frame of the real autopilot system, with the rows published exactly as
+  // ship.js publishes a bounce (see src/systems/ship.js emit('bodyHit', ...)).
+  const watch200 = (phase, ...rows) => {
+    const token = begin200();
+    if (token !== '') return { token, engaged: false, reason: 'refused' };
+    ctx.autopilot.phase = phase;
+    ctx.lastEvents = rows.map((r) => ({ type: 'bodyHit', t: ctx.world.time, ...r }));
+    apSys200.update(dt, ctx);
+    return {
+      token,
+      engaged: ctx.autopilot.engaged === true,
+      reason: ctx.autopilot.reason,
+      phase: ctx.autopilot.phase,
+    };
+  };
+  const keeps200 = (r) => r.token === '' && r.engaged === true && r.reason !== 'impact';
+  const cancels200 = (r) => r.token === '' && r.engaged === false && r.reason === 'impact';
+
+  let threw200 = false;
+  const w200 = { fixture: !!(st200 && apSys200 && typeof dock200 === 'function') };
+  try {
+    // The exact rows from the playtest: ship traffic and a rock, both at rest
+    // against the hull with no damage, during cruise.
+    w200.shipTouchCruise = keeps200(watch200('cruise', { kind: 'ship', speed: 0, damage: 0, count: 4 }));
+    w200.asteroidTouchCruise = keeps200(watch200('cruise', { kind: 'asteroid', speed: 0, damage: 0 }));
+    w200.shipCreepCruise = keeps200(watch200('cruise', { kind: 'ship', speed: 0.9, damage: 0 }));
+    w200.asteroidCreepBack = keeps200(watch200('cruise', { kind: 'asteroid', speed: -0.9, damage: 0 }));
+    w200.batchOfTouches = keeps200(watch200('cruise',
+      { kind: 'ship', speed: 0, damage: 0 },
+      { kind: 'asteroid', speed: 0.2, damage: 0 }));
+    // Damage or speed at the floor still cancels, whatever the kind.
+    w200.shipDamageCancels = cancels200(watch200('cruise', { kind: 'ship', speed: 0, damage: 3 }));
+    w200.asteroidDamageCancels = cancels200(watch200('cruise', { kind: 'asteroid', speed: 0, damage: 0.5 }));
+    w200.shipFastCancels = cancels200(watch200('cruise', { kind: 'ship', speed: 30, damage: 0 }));
+    w200.asteroidFloorCancels = cancels200(watch200('cruise', { kind: 'asteroid', speed: 1, damage: 0 }));
+    // Malformed physics rows are never harmless.
+    w200.malformedSpeedCancels = [undefined, NaN, Infinity, '0.1', null]
+      .every((speed) => cancels200(watch200('cruise', { kind: 'ship', speed, damage: 0 })));
+    w200.malformedDamageCancels = [undefined, NaN, null, '0', -1]
+      .every((damage) => cancels200(watch200('cruise', { kind: 'asteroid', speed: 0, damage })));
+    // A harmless row batched with a real impact can never hide it.
+    w200.mixedTouchThenImpact = cancels200(watch200('cruise',
+      { kind: 'ship', speed: 0, damage: 0 },
+      { kind: 'asteroid', speed: 30, damage: 12 }));
+    w200.mixedImpactThenTouch = cancels200(watch200('cruise',
+      { kind: 'asteroid', speed: 30, damage: 12 },
+      { kind: 'ship', speed: 0, damage: 0 }));
+    // The berth phases #184 already forgave keep their behavior.
+    w200.stationTouchStage = keeps200(watch200('stage', { kind: 'station', speed: 0.1, damage: 0 }));
+  } catch (e) {
+    threw200 = true;
+    console.log(`issue200 threw: ${e.message}`);
+  }
+  w200.noThrow = threw200 === false;
+
+  cancel200(ctx, 'test');
+  ctx.flags.docked = saved200.docked;
+  ctx.flags.paused = saved200.paused;
+  ctx.flags.matchSpeed = saved200.match;
+  ctx.flags.berthHold = saved200.hold;
+  ctx.flags.chartOpen = saved200.chart;
+  ctx.flags.hailOpen = saved200.hail;
+  if (ctx.station) ctx.station.inZone = saved200.inZone;
+  ctx.ship.object.position.copy(saved200.pos);
+  ctx.ship.object.quaternion.copy(saved200.quat);
+  ctx.ship.velocity.copy(saved200.vel);
+  ctx.ship.speed = saved200.speed;
+  ctx.input.throttle = saved200.throttle;
+  ctx.input.fullStop = saved200.fullStop;
+  if (ctx.world.nav && saved200.navAp !== null) ctx.world.nav.autopilot = saved200.navAp;
+
+  console.log('issue200 harmless dock touch:', JSON.stringify(w200));
+  if (!Object.values(w200).every(Boolean)) { console.log('ISSUE200 HARMLESS DOCK TOUCH FAIL'); errors++; }
+}
+
 // ---- Issue #183: approachDock queued behind a plotted route ---------------
 // The queued intent must fly the REAL system loop end to end — route helm,
 // intermediate hop, and the production dock controller taking the destination
