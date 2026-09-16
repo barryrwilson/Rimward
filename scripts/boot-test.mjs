@@ -15936,13 +15936,19 @@ removeLiveShip(w42indyCtx, w42indy);
     again76.commodity = 'refinedMetals';
     again76.need = 5;
     again76.deadline = ctx.world.time + 600;
-    ctx.cargo.push({ commodity: 'refinedMetals', units: 5 });
-    // Issue 182: a delivery pays for goods that ARRIVED with the ship, so the
-    // replacement row is run in from a berth that carries them, not filled from
-    // the hold mid-berth. What this pin asserts — the slot is replaced again on
-    // a SECOND completion — is unchanged.
+    // Issue 219: the second shipment must cross systems, not merely redock.
+    // This explicit transit fixture leaves for the origin, loads its five
+    // units there, then returns to the delivery system. The SECOND completion
+    // must still replace the slot; the assertion below is unchanged.
     if (ctx.flags.docked) undockStation();
-    dockAtCurrentStation('wave76 redock deliver again');
+    ctx.world.currentSystem = 'freehold';
+    ctx.emit('systemLoaded', { to: 'freehold' });
+    tick(2, 'wave76 second shipment origin');
+    ctx.cargo.push({ commodity: 'refinedMetals', units: 5 });
+    ctx.world.currentSystem = destId76 || 'veridian';
+    ctx.emit('systemLoaded', { to: destId76 || 'veridian' });
+    tick(2, 'wave76 second shipment arrival');
+    dockAtCurrentStation('wave76 dock deliver again');
   }
   tick(40, 'wave76 deliver again');
   const againReplaced76 = !!(againId76
