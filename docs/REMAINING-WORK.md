@@ -1,5 +1,15 @@
 # RIMWARD remaining work
 
+## Pirate demand comms at berth — #224
+
+Implemented on `codex/issue-224-pirate-comms`, pending independent QA:
+pirate demand lines stay silent while docked or in the berth hold. Identical
+sender/text comm lines enter the shared event queue at most once per five
+simulation seconds; distinct lines and senders remain independent. Debounce
+state is session-only and resets on system load or clock rewind. The boot
+command includes the docked/held demand regression and in-flight controls;
+`npm run test:pirate-comms-live` runs the same fixtures in disposable Chromium.
+
 ## Repair cost scales with hull class — #208
 
 Implemented on an isolated candidate, pending independent QA: the yard bill

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { DEFAULT_BINDINGS } from '../systems/bindings.js';
+import { COMM_REPEAT_SECONDS } from '../game/state.js';
 
 /**
  * RIMWARD web — shared context, THE cross-system contract. v2.
@@ -58,6 +59,11 @@ import { DEFAULT_BINDINGS } from '../systems/bindings.js';
  * - combat.js emits playerFire { weapon } when a player cannon/disruptor/missile/turret/psionic shot actually spawns.
  */
 export function createCtx({ scene, camera, renderer }) {
+  // Session-only: filter before either HUD or agent consumers see the queue.
+  // Expire from the last accepted line, so a noisy sender cannot slide the
+  // cooldown forever. A restored clock/system starts a fresh conversation.
+  const recentComms = new Map();
+  let commClock = -Infinity;
   const ctx = {
     // --- three.js core ---
     scene,
@@ -377,6 +383,17 @@ export function createCtx({ scene, camera, renderer }) {
     events: [],
     lastEvents: [], // previous frame's queue (main.js rotates at frame end)
     emit(type, data = {}) {
+      const now = ctx.world.time;
+      if (type === 'systemLoaded' || now < commClock) recentComms.clear();
+      commClock = now;
+      if (type === 'commLine' && typeof data.text === 'string') {
+        for (const [key, at] of recentComms) {
+          if (now - at >= COMM_REPEAT_SECONDS) recentComms.delete(key);
+        }
+        const key = JSON.stringify([data.from ?? '', data.text]);
+        if (recentComms.has(key)) return;
+        recentComms.set(key, now);
+      }
       ctx.events.push({ type, t: ctx.world.time, ...data,
         ...(['playerHit', 'npcFire', 'hostileEnter'].includes(type) ? { wallMs: performance.now() } : {}) });
     },

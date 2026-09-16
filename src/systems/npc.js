@@ -61,7 +61,7 @@ import { tickPoliceLeave } from '../game/police-leave.js';
 import { tickPoliceCover, findCoveringWork } from '../game/police-cover.js';
 import { markDerelict, applyDerelictLive, tickDerelictLive, syncDerelictLive } from '../game/derelict.js';
 import { canSeat } from '../game/weapon-fit.js';
-import { canShowHail } from './overlay-policy.js';
+import { berthHeld, canShowHail } from './overlay-policy.js';
 import { takeScareDamage, awardFirstScare } from '../game/first-scare.js';
 
 /**
@@ -551,11 +551,11 @@ function suppressPirateHeaveTo(ctx, live) {
   try {
     const ai = live && live.ai;
     if (!ai || ai.role !== 'pirate') return false;
+    if (ctx.flags?.docked === true || berthHeld(ctx)) return true;
     if (ai.demanding === true || ai.demandSent === true) return true;
     if (ai.role === 'pirate' && ai.target === 'player') return true;
     const pObj = ctx && ctx.ship && ctx.ship.object;
     if (!pObj || !live.object) return false;
-    if (ctx.flags && ctx.flags.docked === true) return false;
     return live.object.position.distanceTo(pObj.position) < U.ENCOUNTER_BUBBLE;
   } catch {
     return false;
@@ -3314,6 +3314,7 @@ function updateHunt(ctx, live, dt, now, reducedMotion) {
   if (
     ai.target === 'player' &&
     ai.role === 'pirate' &&
+    !ctx.flags.docked && !berthHeld(ctx) &&
     !ai.demandSent &&
     now >= hopGraceUntilNow(ctx.world, now) &&
     !starterGraceBlocksAcquire(ctx, live, now) &&

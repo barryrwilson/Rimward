@@ -349,6 +349,9 @@ export function resolveBand(resolve) {
 }
 
 // ---------- Economy (§7.7/§7.8, §9) ----------
+// Issue #224: identical sender/text comms reach the player at most once per window.
+export const COMM_REPEAT_SECONDS = 5;
+
 export const ECON = {
   counterSellPercent: 95, // issue #175: sell cap as a percent of the rounded buy fill
   destroyedCargoYield: [0.1, 0.4], // fraction of manifest recoverable from a kill
