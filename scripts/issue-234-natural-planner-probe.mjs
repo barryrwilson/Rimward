@@ -1,0 +1,751 @@
+/**
+ * Issue #234 — NATURAL live-browser light-hull docking probe, ENRICHED.
+ * Diagnosis only. No product source is edited by this script.
+ *
+ * What is different from scripts/issue-234-light-dock-live-probe.mjs:
+ *
+ * 1. The NPC sampler uses the ACTUAL live-ship shape read from
+ *    src/systems/npc.js:L458-L465 — `live = { id, record, object, state, role,
+ *    ai }` — so `record.id`, `record.name` and `ai.velocity` are read instead
+ *    of the guessed `s.name` / `s.velocity` fields that came back null in the
+ *    earlier run. `ai.velocity` is the same field the dock planner itself
+ *    consumes (src/game/dock-cruise.js:L26 `ship?.ai?.velocity`), so a null
+ *    here is now a real null for the planner too, not a probe artifact.
+ *
+ * 2. Planner branch, selected waypoint, clearance guards and watchdog progress
+ *    are captured with CDP logpoints — conditional breakpoints whose condition
+ *    records the paused frame's own locals and then returns false, so the page
+ *    never actually pauses and no product source is modified. The runtime
+ *    source hash is verified unchanged by the shared harness at both ends.
+ *
+ * 3. The capture FAILS CLOSED. A debugger pause, a page instrumentation error,
+ *    a dropped decision sample, a flown phase whose logpoint captured nothing,
+ *    or traffic within 300 u whose speed could not be read all set
+ *    `summary.captureVerdict = 'FAIL'` and raise after the artifacts are
+ *    written. A run that cannot prove it captured cleanly is not evidence.
+ *
+ * Instrumentation is read-only throughout: a sampler, a pass-through ctx.emit
+ * tap, and breakpoint conditions that read the paused frame and push. Two
+ * conditions also CALL a product predicate — `dockCruiseShouldBrake` and
+ * `dockShouldBrake` — to record the cruise hold's separate terms. Both are
+ * pure: they read position, velocity and the body bag and return a boolean
+ * (src/game/dock-cruise.js:L117-L146). Nothing else is invoked. No
+ * teleporting, no clock change, no timer relaxation, no traffic disabling, no
+ * damage suppression, no solar bypass, no automatic reacquisition. Retries are
+ * explicit public `approachDock` commands.
+ *
+ * Known limit, stated rather than hidden: the sun pose is read best-effort and
+ * recorded as `not-found` when no known field matches, so solar chord geometry
+ * may be absent. No solar cause may be inferred from a run that records that.
+ *
+ * Ports: Vite on loopback 5236 (this issue's reserved port, kept clear of the
+ * other probes). CDP takes an ephemeral loopback port from the shared issue-74
+ * harness, which is outside this issue's write set.
+ *
+ * Usage: node scripts/issue-234-natural-planner-probe.mjs
+ */
+
+import { resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
+
+process.env.ISSUE74_OUT ||= resolve('out/issue-234/live');
+process.env.ISSUE74_PORT ||= '5236';
+
+const VITE_PORT = Number(process.env.ISSUE74_PORT);
+const WALL_BUDGET_MS = Number(process.env.ISSUE234_BUDGET_MS || 11 * 60 * 1000);
+
+const { runLive } = await import('./issue-74-live-harness.mjs');
+
+const sysKey = (v) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const sameSystem = (a, b) => sysKey(a) !== '' && sysKey(a) === sysKey(b);
+
+/**
+ * Read-only page instrumentation: event tap, NPC sampler with the real live
+ * shape, and the sink the breakpoint conditions push into.
+ */
+const INSTALL = `(() => {
+  const ctx = window.__ctx;
+  if (!ctx) throw Error('no ctx');
+  if (window.__i234) return window.__i234.installed;
+  const ev = {
+    trace: [], events: [], dec: [], off: [], shapes: {}, hot: {},
+    dropped: 0, errors: [], start: ctx.world.time,
+  };
+  window.__i234 = ev;
+
+  const scalars = (data) => {
+    const o = {};
+    if (!data || typeof data !== 'object') return typeof data === 'undefined' ? o : { data: String(data).slice(0, 120) };
+    for (const k of Object.keys(data)) {
+      const v = data[k];
+      const t = typeof v;
+      if (v === null || t === 'number' || t === 'boolean') o[k] = v;
+      else if (t === 'string') o[k] = v.slice(0, 160);
+    }
+    return o;
+  };
+  const emit = ctx.emit;
+  ctx.emit = function (type, data) {
+    try {
+      if (ev.events.length < 20000) ev.events.push({ t: ctx.world.time, type: String(type), ...scalars(data) });
+    } catch {}
+    return emit.apply(this, arguments);
+  };
+
+  // ---- actual live-ship shape (src/systems/npc.js:L458-L465) ----
+  const fleet = () => (Array.isArray(ctx.ships) ? ctx.ships : []);
+  const r3 = (v) => (v && Number.isFinite(v.x) ? [+v.x.toFixed(1), +v.y.toFixed(1), +v.z.toFixed(1)] : null);
+  const r3v = (v) => (v && Number.isFinite(v.x) ? [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)] : null);
+  const stationPos = () => (ctx.station && ctx.station.position) || null;
+
+  // Best-effort sun pose. Recorded as found so a null is auditable rather
+  // than silently treated as "no solar body".
+  const sunPos = () => {
+    const tries = [
+      ['ctx.sun.object.position', ctx.sun && ctx.sun.object && ctx.sun.object.position],
+      ['ctx.sun.position', ctx.sun && ctx.sun.position],
+      ['ctx.solar.sun.position', ctx.solar && ctx.solar.sun && ctx.solar.sun.position],
+      ['ctx.solarSystem.sun.position', ctx.solarSystem && ctx.solarSystem.sun && ctx.solarSystem.sun.position],
+    ];
+    for (const [k, v] of tries) if (v && Number.isFinite(v.x)) { ev.shapes.sun = k; return v; }
+    ev.shapes.sun = ev.shapes.sun || 'not-found';
+    return null;
+  };
+
+  // One nearby-ship row with the fields the dock planner actually consumes.
+  const shipRow = (s, p) => {
+    const q = s && s.object && s.object.position;
+    if (!q || !p || !Number.isFinite(q.x)) return null;
+    const dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z;
+    const r = Math.hypot(dx, dy, dz);
+    if (!Number.isFinite(r)) return null;
+    const v = s.ai && s.ai.velocity;
+    const hasV = !!(v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z));
+    const sp = hasV ? Math.hypot(v.x, v.y, v.z) : null;
+    const st = stationPos();
+    return {
+      id: s.id ?? null,
+      recId: (s.record && s.record.id) ?? null,
+      name: (s.record && s.record.name) ?? null,
+      cls: (s.record && s.record.classKey) ?? null,
+      fac: (s.record && s.record.faction) ?? null,
+      role: s.role ?? (s.record && s.record.role) ?? null,
+      mode: (s.ai && s.ai.mode) ?? null,
+      state: (s.record && s.record.state) ?? null,
+      r: +r.toFixed(1),
+      pos: r3(q),
+      vel: r3v(v),
+      // null means the planner also sees no velocity for this hull.
+      sp: sp === null ? null : +sp.toFixed(3),
+      moving: sp === null ? null : sp >= 1e-3,
+      stR: st ? +Math.hypot(q.x - st.x, q.y - st.y, q.z - st.z).toFixed(1) : null,
+    };
+  };
+
+  const nearby = (limit, maxRange) => {
+    const p = ctx.ship && ctx.ship.object && ctx.ship.object.position;
+    if (!p) return [];
+    const rows = [];
+    for (const s of fleet()) {
+      const row = shipRow(s, p);
+      if (row && row.r <= maxRange) rows.push(row);
+    }
+    rows.sort((a, b) => a.r - b.r);
+    return rows.slice(0, limit);
+  };
+
+  // Full traffic snapshot for one instant; called from the cancellation logpoint.
+  ev.snapNear = () => {
+    try {
+      const p = ctx.ship && ctx.ship.object && ctx.ship.object.position;
+      const st = stationPos();
+      const sn = sunPos();
+      return {
+        t: ctx.world.time,
+        pos: r3(p),
+        vel: r3v(ctx.ship && ctx.ship.velocity),
+        speed: Number.isFinite(ctx.ship && ctx.ship.speed) ? +ctx.ship.speed.toFixed(3) : null,
+        station: r3(st),
+        sun: r3(sn),
+        fleetCount: fleet().length,
+        withVelocity: fleet().filter((s) => s.ai && s.ai.velocity && Number.isFinite(s.ai.velocity.x)).length,
+        asteroids: (ctx.asteroids && ctx.asteroids.list && ctx.asteroids.list.length) || 0,
+        near: nearby(10, 2000),
+      };
+    } catch (e) { return { error: String(e).slice(0, 200) }; }
+  };
+
+  // Sink for the CDP logpoints. \`hot\` rows are throttled to 10 Hz; edge rows
+  // (cancellations) are always kept.
+  ev.rec = (tag, o, hot) => {
+    try {
+      const now = ctx.world.time;
+      if (hot) {
+        const last = ev.hot[tag];
+        if (last !== undefined && now - last < 0.1) return;
+        ev.hot[tag] = now;
+      }
+      if (ev.dec.length >= 40000) { ev.dropped++; return; }
+      o.tag = tag;
+      o.t = +now.toFixed(3);
+      if (hot) o.near = nearby(4, 400);
+      ev.dec.push(o);
+    } catch (e) { if (ev.errors.length < 40) ev.errors.push(String(e).slice(0, 200)); }
+  };
+  ev.recOff = (o) => {
+    try {
+      o.t = +ctx.world.time.toFixed(3);
+      o.snap = ev.snapNear();
+      ev.off.push(o);
+      ev.dec.push({ tag: 'off', t: o.t, reason: o.reason, phase: o.phase, site: o.site });
+    } catch (e) { if (ev.errors.length < 40) ev.errors.push(String(e).slice(0, 200)); }
+  };
+
+  const sample = () => {
+    if (window.__i234 !== ev) return;
+    const now = ctx.world.time;
+    const last = ev.trace.length ? ev.trace[ev.trace.length - 1].t : -Infinity;
+    if (now - last >= 0.25) {
+      const a = ctx.autopilot || {};
+      const p = ctx.ship && ctx.ship.object && ctx.ship.object.position;
+      const st = stationPos();
+      const near = nearby(6, 1200);
+      const within300 = near.filter((n) => n.r <= 300);
+      ev.trace.push({
+        t: +now.toFixed(3),
+        sys: ctx.world.currentSystem,
+        mode: a.mode || '', phase: a.phase || '', reason: a.reason || '',
+        engaged: a.engaged === true, idle: a.idle === true,
+        apR: Number.isFinite(a.range) ? +a.range.toFixed(1) : null,
+        prog: Number.isFinite(a.progress) ? +a.progress.toFixed(3) : null,
+        thr: Number.isFinite(a.throttle) ? +a.throttle.toFixed(2) : null,
+        spd: Number.isFinite(ctx.ship && ctx.ship.speed) ? +ctx.ship.speed.toFixed(2) : null,
+        pos: r3(p),
+        stR: st && p ? +Math.hypot(p.x - st.x, p.y - st.y, p.z - st.z).toFixed(1) : null,
+        inZone: ctx.station && ctx.station.inZone === true,
+        docked: ctx.flags && ctx.flags.docked === true,
+        hull: (ctx.player && ctx.player.hull) ?? null,
+        fleetN: fleet().length,
+        nearN: near.length,
+        nearWithin300: within300.length,
+        // With the real \`ai.velocity\` field these counts are measurements,
+        // not the earlier run's missing-field nulls.
+        nearSpeedUnknownWithin300: within300.filter((n) => n.sp === null).length,
+        nearMovingWithin300: within300.filter((n) => n.moving === true).length,
+        nearParkedWithin300: within300.filter((n) => n.moving === false).length,
+        near,
+      });
+    }
+    requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
+  const probe = ev.snapNear();
+  ev.installed = {
+    start: ev.start,
+    classKey: ctx.player && ctx.player.classKey,
+    system: ctx.world.currentSystem,
+    shipsIsArray: Array.isArray(ctx.ships),
+    fleetCount: probe.fleetCount,
+    fleetWithVelocity: probe.withVelocity,
+    sunField: ev.shapes.sun,
+    sampleRow: probe.near[0] || null,
+  };
+  return ev.installed;
+})()`;
+
+const DRAIN = `(() => {
+  const ev = window.__i234;
+  const out = { trace: ev.trace, events: ev.events, dec: ev.dec, off: ev.off,
+    shapes: ev.shapes, errors: ev.errors, dropped: ev.dropped, start: ev.start };
+  ev.trace = []; ev.events = []; ev.dec = []; ev.off = [];
+  return out;
+})()`;
+
+/** Guard every logpoint body: a throw inside a breakpoint condition would
+ * really pause the page, so each condition can only read, push and return false. */
+const cond = (body) => `(function(){try{${body}}catch(e){try{window.__i234.errors.push(String(e).slice(0,200))}catch(_){}}return false})()`;
+
+const N = (n, d = 1) => `(Number.isFinite(${n})?+(${n}).toFixed(${d}):String(${n}))`;
+const V = (v) => `(${v}&&Number.isFinite(${v}.x)?[+(${v}.x).toFixed(1),+(${v}.y).toFixed(1),+(${v}.z).toFixed(1)]:null)`;
+
+/**
+ * Logpoints. Each anchor is matched against the SERVED module text, so the
+ * line numbers are derived from what the browser actually parsed rather than
+ * assumed to equal the on-disk file.
+ */
+const LOGPOINTS = [
+  {
+    key: 'stage',
+    anchor: 'const arcCredit = dockStationArcCredit',
+    note: 'stage/corridor branch: every planner, detour, traffic and recovery decision for this tick',
+    condition: cond(`window.__i234.rec('stage',{
+      ph:ap.phase,idle:ap.idle===true,thr:${N('ap.throttle', 2)},
+      rng:${N('range')},sd:${N('stageDistance')},spd:${N('speed', 2)},
+      pok:planned.ok===true,hold:planned.hold||null,psign:planned.sign,pturnR:${N('planned.turnR')},
+      pint:planned.intercept===true,
+      pw:(Number.isFinite(planned.ax)?[+(planned.ax).toFixed(1),+(planned.ay).toFixed(1),+(planned.az).toFixed(1)]:null),
+      pos:${V('p')},stage:${V('points.stage')},aim:${V('_aim')},
+      sb:stationBlocked===true,rd:routeDetour===true,det:detouring===true,
+      dv:dockDetourValid===true,dw:(dockDetourValid?[+dockDetourX.toFixed(1),+dockDetourY.toFixed(1),+dockDetourZ.toFixed(1)]:null),
+      tb:trafficBlocked===true,td:trafficDetour===true,ty:trafficYield===true,ceb:cruiseExitBlocked===true,
+      brk:braking===true,al:${N('steer.align', 4)},yaw:${N('steer.yawAbs', 3)},
+      ali:aligned===true,nt:needTurn===true,ov:stageOvershot===true,rec:dockRecovering===true,
+      best:${N('dockBestRange')},bh:${N('dockBestHeading', 3)},
+      pa:${N('dockProgressAt', 2)},stall:${N('(ctx.world.time-dockProgressAt)', 2)},
+      rp:dockReplans,twu:${N('dockTrafficWaitUsed', 2)},
+      nb:planningBodies?planningBodies.count:null,ab:_apBodies.count
+    },true)`),
+  },
+  {
+    key: 'cruise',
+    anchor: 'const cruiseRemaining = stationBlocked',
+    note: 'cruise branch: braking/escape-hold decision and the aim actually flown',
+    condition: cond(`window.__i234.rec('cruise',{
+      ph:ap.phase,idle:ap.idle===true,thr:${N('ap.throttle', 2)},
+      rng:${N('range')},sd:${N('stageDistance')},spd:${N('speed', 2)},
+      pok:planned.ok===true,hold:planned.hold||null,
+      pos:${V('p')},stage:${V('points.stage')},aim:${V('_aim')},
+      pw:(Number.isFinite(planned.ax)?[+(planned.ax).toFixed(1),+(planned.ay).toFixed(1),+(planned.az).toFixed(1)]:null),
+      sb:stationBlocked===true,ceb:cruiseExitBlocked===true,
+      brk:braking===true,esc:escapeHold===true,al:${N('steer.align', 4)},yaw:${N('steer.yawAbs', 3)},
+      rec:dockRecovering===true,dv:dockDetourValid===true,
+      best:${N('dockBestRange')},bh:${N('dockBestHeading', 3)},
+      pa:${N('dockProgressAt', 2)},stall:${N('(ctx.world.time-dockProgressAt)', 2)},
+      rp:dockReplans,twu:${N('dockTrafficWaitUsed', 2)},
+      nb:planningBodies?planningBodies.count:null
+    },true)`),
+  },
+  {
+    key: 'aimpre',
+    anchor: 'const exit = dockCruiseExitAim',
+    note: 'cruise aim attribution: _aim after the detour/recovery choice and avoid-bias, BEFORE dockCruiseExitAim rewrites it',
+    condition: cond(`window.__i234.rec('aimpre',{
+      ph:ap.phase,
+      pw:(Number.isFinite(planned.ax)?[+(planned.ax).toFixed(1),+(planned.ay).toFixed(1),+(planned.az).toFixed(1)]:null),
+      hold:planned.hold||null,
+      aimPre:${V('_aim')},pos:${V('p')},stage:${V('points.stage')},
+      det:detouring===true,rd:routeDetour===true,dv:dockDetourValid===true,
+      sb:stationBlocked===true,rec:dockRecovering===true,nb:planningBodies?planningBodies.count:null
+    },true)`),
+  },
+  {
+    // Root correction: run 1 recorded the cruise branch's FINAL ap.idle but not
+    // its separate terms, so "the direct cruise should-brake was false" was not
+    // in evidence. dockCruiseShouldBrake is a pure read-only predicate
+    // (src/game/dock-cruise.js:L117-L146 — it only reads position, velocity and
+    // the body bag and returns a boolean), so a logpoint may evaluate it.
+    key: 'cruisebrake',
+    anchor: 'const cruiseRemaining = stationBlocked',
+    required: true,
+    note: 'cruise hold attribution: each term of ap.idle measured on its own',
+    condition: cond(`window.__i234.rec('cruisebrake',{
+      ph:ap.phase,idle:ap.idle===true,thr:${N('ap.throttle', 2)},
+      spd:${N('speed', 2)},sd:${N('stageDistance')},
+      csb:dockCruiseShouldBrake(p,ctx.ship.velocity,acceleration,planningBodies)===true,
+      dsb:dockShouldBrake(stageDistance,speed,acceleration,DOCK_STAGE_BRAKE_BUFFER)===true,
+      brk:braking===true,esc:escapeHold===true,
+      tb:trafficBlocked===true,ceb:cruiseExitBlocked===true,
+      alignHold:steer.align<0.97,al:${N('steer.align', 4)},yaw:${N('steer.yawAbs', 3)}
+    },true)`),
+  },
+  {
+    key: 'corridor',
+    anchor: 'const settleDistance = dockDistance(p, points.settle)',
+    note: 'corridor/settle tail: the local planner, the aim flown and the final braking decision',
+    condition: cond(`window.__i234.rec('corridor',{
+      ph:ap.phase,idle:ap.idle===true,thr:${N('ap.throttle', 2)},
+      rng:${N('range')},spd:${N('speed', 2)},
+      inZone:!!(ctx.station&&ctx.station.inZone===true),
+      pok:planned.ok===true,hold:planned.hold||null,
+      pw:(Number.isFinite(planned.ax)?[+(planned.ax).toFixed(1),+(planned.ay).toFixed(1),+(planned.az).toFixed(1)]:null),
+      pos:${V('p')},settle:${V('points.settle')},aim:${V('_aim')},
+      al:${N('steer.align', 4)},yaw:${N('steer.yawAbs', 3)},
+      best:${N('dockBestRange')},bh:${N('dockBestHeading', 3)},
+      pa:${N('dockProgressAt', 2)},stall:${N('(ctx.world.time-dockProgressAt)', 2)},
+      rp:dockReplans,nb:bodies?bodies.count:null
+    },true)`),
+  },
+  {
+    // Early-return rejections. Each one disengages BEFORE the instrumented
+    // tail, so without these a cancellation from any of them would be
+    // attributed only by the disengage stack, with none of its planner inputs.
+    //
+    // A breakpoint on an `if` line fires on EVERY evaluation, not only when
+    // the branch is taken, so each of these conditions repeats the branch's
+    // own predicate and records nothing unless the rejection really happens.
+    // The anchors carry their indentation because three dock branches share
+    // the same `!planned.ok` wording.
+    key: 'reject-stage',
+    anchor: '    if (!planned.ok || !Number.isFinite(planned.ax)',
+    note: 'primary stage/cruise plan rejection: disengages blocked before the instrumented tail',
+    condition: cond(`if(!(planned.ok===true&&Number.isFinite(planned.ax)
+      &&Number.isFinite(planned.ay)&&Number.isFinite(planned.az)))window.__i234.rec('reject-stage',{
+      ph:ap.phase,pok:planned.ok===true,hold:planned.hold||null,
+      ax:${N('planned.ax')},ay:${N('planned.ay')},az:${N('planned.az')},
+      rng:${N('range')},sd:${N('stageDistance')},spd:${N('speed', 2)},
+      pos:${V('p')},stage:${V('points.stage')},
+      st:stageTransit===true,nb:planningBodies?planningBodies.count:null,ab:_apBodies.count
+    })`),
+  },
+  {
+    key: 'reject-transit',
+    anchor: "if (!transit.ok) { disengage(ctx, 'blocked'); return; }",
+    note: 'stage traffic transit plan rejection: disengages blocked before the instrumented tail',
+    condition: cond(`if(transit.ok!==true)window.__i234.rec('reject-transit',{
+      ph:ap.phase,tok:transit.ok===true,hold:transit.hold||null,
+      rng:${N('range')},sd:${N('stageDistance')},spd:${N('speed', 2)},
+      pos:${V('p')},aim:${V('_aim')},
+      nb:planningBodies?planningBodies.count:null,tbod:_stageTrafficBodies.count
+    })`),
+  },
+  {
+    key: 'reject-corridor',
+    anchor: "|| planned.hold === 'detour') {",
+    note: 'corridor/settle plan rejection, including its detour-hold rejection',
+    condition: cond(`if(!(planned.ok===true&&Number.isFinite(planned.ax)
+      &&Number.isFinite(planned.ay)&&Number.isFinite(planned.az))
+      ||planned.hold==='detour')window.__i234.rec('reject-corridor',{
+      ph:ap.phase,pok:planned.ok===true,hold:planned.hold||null,
+      ax:${N('planned.ax')},ay:${N('planned.ay')},az:${N('planned.az')},
+      rng:${N('range')},spd:${N('speed', 2)},
+      inZone:!!(ctx.station&&ctx.station.inZone===true),
+      pos:${V('p')},settle:${V('points.settle')},nb:bodies?bodies.count:null
+    })`),
+  },
+  {
+    key: 'watch',
+    anchor: 'if (now - dockProgressAt >= DOCK_BLOCK_SECONDS / 2',
+    note: 'dockMakingProgress: the progress-watchdog state that decides blocked',
+    condition: cond(`window.__i234.rec('watch',{
+      ph:ap.phase,idle:ap.idle===true,
+      rng:${N('range')},yaw:${N('yawAbs', 3)},
+      ty:trafficYield===true,arc:${N('arcCredit', 3)},imp:improved===true,
+      best:${N('dockBestRange')},bh:${N('dockBestHeading', 3)},
+      now:${N('now', 2)},pa:${N('dockProgressAt', 2)},stall:${N('(now-dockProgressAt)', 2)},
+      twu:${N('dockTrafficWaitUsed', 2)},rp:dockReplans,dph:dockPhase
+    }, (now-dockProgressAt) < 4)`),
+  },
+  {
+    key: 'off',
+    anchor: 'const routeWas = flyingFlag(ctx)',
+    note: 'disengage(): cancellation reason, call site and the traffic present at that instant',
+    condition: cond(`if(ap.mode==='dock'&&ap.engaged===true)window.__i234.recOff({
+      reason:String(reason||''),phase:ap.phase,
+      rng:${N('ap.range')},prog:${N('ap.progress', 3)},
+      rec:dockRecovering===true,dv:dockDetourValid===true,
+      best:${N('dockBestRange')},bh:${N('dockBestHeading', 3)},
+      pa:${N('dockProgressAt', 2)},stall:${N('(ctx.world.time-dockProgressAt)', 2)},
+      rp:dockReplans,twu:${N('dockTrafficWaitUsed', 2)},
+      site:String((new Error()).stack||'').split('\\n').slice(1,6).join(' | ').slice(0,600)
+    })`),
+  },
+];
+
+await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpoint, folder }) => {
+  const wallStart = Date.now();
+  const left = () => WALL_BUDGET_MS - (Date.now() - wallStart);
+
+  result.fixture = false;
+  result.natural = true;
+  result.method = 'Natural starter light hull, Freehold Greenhand origin. Public Agent API only: '
+    + 'undock, plotRoute, engageAutopilot, approachDock (queued dock), dock. Intact traffic, damage, '
+    + 'solar clearance and clocks. No teleport, no timer change, no fixture, no auto-reacquisition. '
+    + 'Instrumentation is read-only: 0.25 s sampler with the real live-ship fields, a pass-through '
+    + 'ctx.emit tap, and CDP conditional-breakpoint logpoints that read the dock controller frame and '
+    + 'return false. No product source is modified; the harness verifies the src hash at both ends.';
+  result.ports = { vite: VITE_PORT, cdp: 'ephemeral loopback (shared issue-74 harness)' };
+  result.wallBudgetMs = WALL_BUDGET_MS;
+  result.legs = [];
+  result.trace = [];
+  result.events = [];
+  result.dec = [];
+  result.off = [];
+  result.pageErrors = [];
+
+  // ---- read-only page instrumentation
+  result.instrument = await c.eval(INSTALL);
+  console.log('INSTRUMENT', JSON.stringify(result.instrument));
+
+  // ---- CDP logpoints on the SERVED module text
+  const servedUrl = `http://127.0.0.1:${VITE_PORT}/src/game/autopilot.js`;
+  const served = await fetch(servedUrl).then((r) => (r.ok ? r.text() : Promise.reject(Error('served ' + r.status))));
+  const lines = served.split('\n');
+  result.logpoints = { servedUrl, servedLines: lines.length, set: [] };
+
+  // A never-pausing condition is the contract; resume immediately if the page
+  // ever really pauses, so a probe fault can never freeze the run.
+  let pauses = 0;
+  c.ws.addEventListener('message', (e) => {
+    try {
+      const m = JSON.parse(String(e.data));
+      if (m.method === 'Debugger.paused') { pauses++; c.send('Debugger.resume').catch(() => {}); }
+    } catch {}
+  });
+  await c.send('Debugger.enable');
+
+  for (const lp of LOGPOINTS) {
+    // A condition that fails to compile would really pause the page, so each
+    // one is parsed here before it is ever installed.
+    try { new Function(`return ${lp.condition};`); } catch (e) {
+      throw Error(`logpoint condition does not parse: ${lp.key}: ${e.message}`);
+    }
+    // Fail closed on an AMBIGUOUS anchor. Several dock branches share wording
+    // (three of them reject a plan with the same `!planned.ok` test), and
+    // silently taking the first hit would attribute a branch to the wrong
+    // line. An anchor must match exactly one served line unless the logpoint
+    // names which occurrence it wants.
+    const hits = [];
+    lines.forEach((l, i) => { if (l.includes(lp.anchor)) hits.push(i); });
+    if (hits.length === 0) {
+      throw Error(`logpoint anchor not found in served source: ${lp.key} :: ${lp.anchor}`);
+    }
+    if (hits.length > 1 && !Number.isInteger(lp.occurrence)) {
+      throw Error(`logpoint anchor is ambiguous (${hits.length} served lines: `
+        + `${hits.map((i) => i + 1).join(', ')}): ${lp.key} :: ${lp.anchor}`);
+    }
+    const idx = Number.isInteger(lp.occurrence) ? hits[lp.occurrence] : hits[0];
+    if (!Number.isInteger(idx)) {
+      throw Error(`logpoint occurrence ${lp.occurrence} out of range (${hits.length}): ${lp.key}`);
+    }
+    const set = await c.send('Debugger.setBreakpointByUrl', {
+      urlRegex: 'src/game/autopilot\\.js',
+      lineNumber: idx,
+      columnNumber: Math.max(0, lines[idx].length - lines[idx].trimStart().length),
+      condition: lp.condition,
+    });
+    result.logpoints.set.push({
+      key: lp.key, note: lp.note, anchor: lp.anchor,
+      anchorMatches: hits.length, occurrence: lp.occurrence ?? 0,
+      required: lp.required === true,
+      servedLine: idx + 1, servedText: lines[idx].trim(),
+      breakpointId: set.breakpointId,
+      locations: (set.locations || []).map((l) => ({ line: l.lineNumber + 1, col: l.columnNumber })),
+    });
+    console.log('LOGPOINT', lp.key, 'served line', idx + 1, 'resolved', (set.locations || []).length);
+  }
+  if (!result.logpoints.set.every((s) => s.locations.length > 0)) {
+    throw Error('a logpoint did not resolve to a breakable location: ' + JSON.stringify(result.logpoints.set));
+  }
+
+  const drain = async () => {
+    const d = await c.eval(DRAIN);
+    result.trace.push(...d.trace);
+    result.events.push(...d.events);
+    result.dec.push(...d.dec);
+    result.off.push(...d.off);
+    result.shapes = d.shapes;
+    result.decDropped = d.dropped;
+    if (d.errors && d.errors.length) result.pageErrors.push(...d.errors);
+  };
+
+  await checkpoint('boot-docked-freehold');
+  const boot = await observe();
+  result.startClass = result.instrument?.classKey ?? null;
+  result.startSystem = boot.world.currentSystem;
+
+  const leg = async (dest, label, maxRetries = 3) => {
+    const legRec = {
+      label, dest, retries: [], wallStartMs: Date.now() - wallStart,
+      receipts: [], cancellations: [], completed: false,
+    };
+    result.legs.push(legRec);
+
+    const say = async (name, args = {}) => {
+      const r = await act(name, args, false);
+      legRec.receipts.push({ name, args, ok: r.ok, token: r.token, notice: r.notice, t: r.t });
+      return r;
+    };
+    const refused = async (r, step) => {
+      legRec.failed = { step, ok: r.ok, error: r.error ?? null, notice: r.notice ?? null };
+      console.log('LEG REFUSED', label, step, JSON.stringify(legRec.failed));
+      await drain();
+      await checkpoint(`${label}-refused-${step}`);
+      legRec.wallEndMs = Date.now() - wallStart;
+      return legRec;
+    };
+    const budgetGuard = () => { if (left() <= 0) throw Error(`wall budget exhausted during ${label}`); };
+
+    let s = await observe();
+    if (s.flags.docked) {
+      const un = await say('undock');
+      if (!un.ok) return refused(un, 'undock');
+      try {
+        await wait((o) => o.flags.docked === false,
+          Math.min(90, Math.max(20, left() / 1000 - 30)), `${label} undock completes`, budgetGuard);
+      } catch (e) {
+        legRec.failed = { step: 'undock-settle', timeout: String(e).slice(0, 300) };
+        await drain();
+        legRec.wallEndMs = Date.now() - wallStart;
+        return legRec;
+      }
+    }
+    const plotted = await say('plotRoute', { dest });
+    if (!plotted.ok) return refused(plotted, 'plotRoute');
+    const engaged = await say('engageAutopilot');
+    if (!engaged.ok) return refused(engaged, 'engageAutopilot');
+    const queued = await say('approachDock');
+    legRec.queuedAccepted = queued.ok === true;
+    if (!queued.ok) return refused(queued, 'approachDock');
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (left() < 45000) { legRec.abortedForBudget = true; break; }
+      let last = null;
+      try {
+        last = await wait(
+          (o) => o.flags.docked === true
+            || (o.autopilot?.mode === 'dock' && o.autopilot.engaged === false
+              && ['impact', 'blocked', 'stale', 'lost-station', 'dock-refused'].includes(o.autopilot.reason)),
+          Math.min(240, Math.max(30, left() / 1000 - 30)),
+          `${label} attempt ${attempt}`,
+          budgetGuard,
+        );
+      } catch (e) {
+        legRec.retries.push({ attempt, timeout: String(e).slice(0, 300) });
+        break;
+      }
+      await drain();
+      if (last.flags.docked) {
+        const at = last.world?.currentSystem ?? null;
+        legRec.dockedAtT = last.t;
+        legRec.dockedSystem = at;
+        legRec.completed = sameSystem(at, dest);
+        if (!legRec.completed) legRec.dockedWrongSystem = { expected: dest, actual: at };
+        break;
+      }
+      const cancel = {
+        attempt, t: last.t,
+        reason: last.autopilot.reason, phase: last.autopilot.phase,
+        range: last.autopilot.range, progress: last.autopilot.progress,
+        speed: last.ship.speed, hull: last.ship.hull,
+        // The controller's own cancellation record, with call site and the
+        // traffic that was actually present at that instant.
+        off: result.off.filter((o) => o.t >= last.t - 30 && o.t <= last.t + 1),
+        decWindow: result.dec.filter((r) => r.t >= last.t - 25 && r.t <= last.t + 1),
+        traceWindow: result.trace.filter((r) => r.t >= last.t - 25 && r.t <= last.t + 1),
+        eventsWindow: result.events.filter((r) => r.t >= last.t - 25 && r.t <= last.t + 1),
+      };
+      legRec.cancellations.push(cancel);
+      console.log('CANCEL', label, cancel.reason, 'phase', cancel.phase, 'range', cancel.range,
+        'sites', JSON.stringify(cancel.off.map((o) => ({ r: o.reason, stall: o.stall, rec: o.rec, site: String(o.site).slice(0, 90) }))));
+      await checkpoint(`${label}-cancel-${attempt}-${cancel.reason}`);
+      if (attempt === maxRetries) break;
+      const retry = await say('approachDock');
+      if (!retry.ok) { legRec.retryRefused = retry; break; }
+    }
+    await drain();
+    await checkpoint(`${label}-end`);
+    legRec.wallEndMs = Date.now() - wallStart;
+    return legRec;
+  };
+
+  await leg('veridian', 'freehold-to-veridian');
+  if (left() > 90000) await leg('freehold', 'veridian-to-freehold');
+  else result.skipped = ['veridian-to-freehold'];
+  if (left() > 120000) await leg('hollowreach', 'freehold-to-hollowreach');
+  else result.skipped = [...(result.skipped || []), 'freehold-to-hollowreach'];
+
+  await drain();
+  result.debuggerPauses = pauses;
+
+  const cancels = result.legs.flatMap((l) => l.cancellations.map((x) => ({ leg: l.label, ...x })));
+  const bodyHits = result.events.filter((e) => e.type === 'bodyHit')
+    .map((e) => ({
+      t: e.t, kind: e.kind, speed: e.speed, damage: e.damage,
+      // src/game/autopilot.js:L288-L292 — only damage 0 AND |speed| < 1 is spared.
+      wouldCancelDock: !(e.damage === 0 && Number.isFinite(e.speed) && Math.abs(e.speed) < 1),
+    }));
+  const withV = result.trace.filter((r) => r.nearWithin300 > 0);
+  result.summary = {
+    legsRun: result.legs.length,
+    legsCompleted: result.legs.filter((l) => l.completed).length,
+    cancellations: cancels.length,
+    impactCancellations: cancels.filter((x) => x.reason === 'impact').length,
+    blockedCancellations: cancels.filter((x) => x.reason === 'blocked').length,
+    controllerCancellations: result.off.length,
+    cancelReasons: result.off.reduce((m, o) => { m[o.reason] = (m[o.reason] || 0) + 1; return m; }, {}),
+    bodyHitsTotal: bodyHits.length,
+    bodyHitsHarmful: bodyHits.filter((h) => h.wouldCancelDock).length,
+    traceSamples: result.trace.length,
+    decisionSamples: result.dec.length,
+    decisionsDropped: result.decDropped ?? 0,
+    decisionTags: result.dec.reduce((m, d) => { m[d.tag] = (m[d.tag] || 0) + 1; return m; }, {}),
+    // Proof the NPC sampler now measures instead of guessing.
+    npcFieldCheck: {
+      samplesWithTrafficWithin300: withV.length,
+      samplesWithUnknownSpeed: withV.filter((r) => r.nearSpeedUnknownWithin300 > 0).length,
+      maxMovingWithin300: withV.reduce((m, r) => Math.max(m, r.nearMovingWithin300 || 0), 0),
+      maxParkedWithin300: withV.reduce((m, r) => Math.max(m, r.nearParkedWithin300 || 0), 0),
+    },
+    debuggerPauses: pauses,
+    pageInstrumentationErrors: result.pageErrors.length,
+    wallElapsedS: +((Date.now() - wallStart) / 1000).toFixed(1),
+    unreproducedNote: 'Classes absent from this run are unreproduced, not absent from the product.',
+  };
+
+  // ---- FAIL CLOSED on capture quality -------------------------------------
+  // A probe that cannot prove it captured cleanly must not hand back evidence
+  // that reads as clean. Every gate below is a defect in the MEASUREMENT, not
+  // in the product: a cancellation is a finding, a dropped sample is a fault.
+  const tagCount = result.summary.decisionTags;
+  const phasesSeen = new Set(result.trace.map((r) => r.phase).filter(Boolean));
+  // Coverage is checked against what the run actually flew rather than against
+  // an assumed itinerary: if the 0.25 s trace saw a phase, that phase's
+  // decision tag must have samples, or the branch went uninstrumented.
+  const COVERAGE = [
+    ['cruise', ['cruise', 'cruisebrake']],
+    ['stage', ['stage']],
+    ['corridor', ['corridor']],
+    ['settle', ['corridor']],
+  ];
+  const failures = [];
+  if (pauses > 0) failures.push(`the page was paused ${pauses} time(s) by instrumentation`);
+  if (result.pageErrors.length) {
+    failures.push(`page instrumentation raised ${result.pageErrors.length} error(s): `
+      + result.pageErrors.slice(0, 3).join(' | '));
+  }
+  if ((result.decDropped ?? 0) > 0) {
+    failures.push(`${result.decDropped} decision sample(s) were dropped by the sink cap`);
+  }
+  if (!result.dec.length) failures.push('no controller decision samples were captured at all');
+  if (!result.trace.length) failures.push('no flight trace samples were captured at all');
+  for (const [phase, tags] of COVERAGE) {
+    if (!phasesSeen.has(phase)) continue;
+    for (const tag of tags) {
+      if (!tagCount[tag]) {
+        failures.push(`phase '${phase}' was flown but its '${tag}' logpoint captured 0 samples`);
+      }
+    }
+  }
+  const unknownSpeed = result.summary.npcFieldCheck.samplesWithUnknownSpeed;
+  if (unknownSpeed > 0) {
+    failures.push(`${unknownSpeed} sample(s) recorded traffic within 300 u with an unknown speed,`
+      + ' so their moving/parked split is a guess');
+  }
+  for (const s of result.logpoints.set) {
+    if (!s.locations.length) failures.push(`logpoint '${s.key}' resolved to no breakable location`);
+  }
+  result.summary.captureVerdict = failures.length ? 'FAIL' : 'PASS';
+  result.summary.captureFailures = failures;
+  result.summary.phasesFlown = [...phasesSeen].sort();
+  result.bodyHits = bodyHits;
+  result.cancellationsFlat = cancels.map(({ traceWindow, eventsWindow, decWindow, ...rest }) => rest);
+
+  await writeFile(resolve(folder, 'trace-0.25s.json'), JSON.stringify(result.trace));
+  await writeFile(resolve(folder, 'events.json'), JSON.stringify(result.events, null, 1));
+  await writeFile(resolve(folder, 'decisions.json'), JSON.stringify(result.dec));
+  await writeFile(resolve(folder, 'cancellations.json'), JSON.stringify(cancels, null, 1));
+  await writeFile(resolve(folder, 'controller-cancellations.json'), JSON.stringify(result.off, null, 1));
+  result.traceFile = 'trace-0.25s.json';
+  result.decisionFile = 'decisions.json';
+  result.trace = [];
+  result.events = [];
+  result.dec = [];
+
+  console.log('SUMMARY', JSON.stringify(result.summary, null, 2));
+  // Raised AFTER every artifact is on disk, so a failed capture is still fully
+  // inspectable; it just may not be reported as evidence.
+  if (failures.length) {
+    throw Error('CAPTURE FAILED — this run is not usable as evidence:\n  - '
+      + failures.join('\n  - '));
+  }
+});
