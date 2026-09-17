@@ -8398,17 +8398,86 @@ export function initStation(ctx) {
     return out;
   }
 
+  /**
+   * Issue #236/#237 HUD arbitration: how urgent one shared projection's
+   * existing instruction is on the single persistent status line.
+   *
+   * Display ordering ONLY. It reads the projection the evaluator already
+   * published and never writes mission state, timers, suspicion or progress,
+   * and it invents no risk rule of its own — the tiers simply mirror the
+   * branch `stepShadow` already took to build `instruction`.
+   *
+   *   0 dangerous latched warning — the line the pilot can still act on
+   *   1 local withdrawal after a warning, least remaining grace first
+   *   2 local observation in progress
+   *   3 local contact work (select / range / line of sight)
+   *   4 docked at a station in the mission's own system
+   *   5 remote travel, unavailable contact, and filed-report fallbacks
+   *
+   * Inside tier 0 the order is ACTUAL URGENCY, not the warning label.
+   * `stepShadow` ends an assignment only when BOTH published thresholds are
+   * met — suspicion at `suspicionMax` AND the grace fully spent — so the
+   * soonest either can happen is
+   *
+   *   estimatedExposureSeconds =
+   *     max((suspicionMax - suspicion) / suspicionGain, remainingGrace)
+   *
+   * read straight off the already-bounded projection. Smallest estimate
+   * first, then least remaining grace. A `final-warning` label never jumps
+   * the queue on its own: a job at full suspicion with the whole 8 s of grace
+   * left is further from exposure than one at 99 suspicion with 0.1 s left.
+   *
+   * Ties keep the job's existing position in `ctx.world.jobs`.
+   */
+  const SHADOW_LOCAL_CONTACT = ['not-selected', 'out-of-range', 'occluded'];
+  function shadowExposureEstimate(suspicion, grace) {
+    const gain = COURIER_SHADOW.suspicionGain;
+    const toMax = gain > 0 ? Math.max(0, COURIER_SHADOW.suspicionMax - suspicion) / gain : Infinity;
+    return Math.max(toMax, grace);
+  }
+  function shadowStatusRank(proj) {
+    if (!proj || typeof proj.instruction !== 'string' || !proj.instruction) return null;
+    const shadow = proj.shadow && typeof proj.shadow === 'object' ? proj.shadow : null;
+    const warned = !!(shadow && shadow.warned === true);
+    const suspicion = shadow && Number.isFinite(shadow.suspicion) ? shadow.suspicion : 0;
+    const grace = Number.isFinite(proj.graceRemaining) ? proj.graceRemaining : Infinity;
+    const reason = proj.contactReason;
+    const local = reason === 'observing' || SHADOW_LOCAL_CONTACT.includes(reason);
+    if (proj.phase === 'basic-ready') return { tier: 5, exposure: Infinity, grace: Infinity };
+    if (warned && proj.dangerous === true) {
+      return { tier: 0, exposure: shadowExposureEstimate(suspicion, grace), grace };
+    }
+    if (warned && suspicion > 0 && local) return { tier: 1, exposure: Infinity, grace };
+    if (reason === 'observing') return { tier: 2, exposure: Infinity, grace: Infinity };
+    if (SHADOW_LOCAL_CONTACT.includes(reason)) return { tier: 3, exposure: Infinity, grace: Infinity };
+    if (reason === 'docked') return { tier: 4, exposure: Infinity, grace: Infinity };
+    return { tier: 5, exposure: Infinity, grace: Infinity };
+  }
+
   /** The one persistent mission-status line the HUD shows. '' when idle. */
   function peekShadowStatus() {
     const jobs = ctx.world.jobs;
     if (!Array.isArray(jobs)) return '';
+    let best = null;
+    let bestRank = null;
     for (let i = 0; i < jobs.length; i++) {
       const job = jobs[i];
       if (!isShadowJob(job) || job.state !== 'accepted') continue;
       const proj = shadowProjection.get(job.id);
-      if (proj && proj.instruction) return proj.instruction;
+      const rank = shadowStatusRank(proj);
+      if (!rank) continue;
+      // Strictly better only: an equal rank keeps the earlier job, so the
+      // displayed line is stable for the same set of assignments.
+      if (bestRank === null
+        || rank.tier < bestRank.tier
+        || (rank.tier === bestRank.tier
+          && (rank.exposure < bestRank.exposure
+            || (rank.exposure === bestRank.exposure && rank.grace < bestRank.grace)))) {
+        best = proj.instruction;
+        bestRank = rank;
+      }
     }
-    return '';
+    return best === null ? '' : best;
   }
 
   function peekOffers() {

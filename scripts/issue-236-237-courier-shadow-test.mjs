@@ -15,6 +15,10 @@
  * Part F  independent-review regression pins: materialization recertification,
  *         detection-range eligibility, name bounds, human warning grace and
  *         final-warning wording, the rendezvous side, and the status placement.
+ * Part G  the single persistent HUD row arbitrated across several employers:
+ *         local danger ahead of remote travel and of an acquired report,
+ *         urgency by estimated exposure rather than the warning label, local
+ *         observation and contact ahead of remote, stable ties, and purity.
  *
  * Every fixture here is SYNTHETIC. Nothing in this file is a natural live
  * occlusion, a natural flight, or a browser acceptance run.
@@ -1671,5 +1675,256 @@ ok('a failed materialization certificate refuses the courier and ends the assign
   assert.ok(hudSource.includes('missionStatus.textContent'), 'and renders it text-safe');
 }
 ok('the mission status line moved off the right-hand panel stack (layout needs live QA)');
+
+// ===========================================================================
+// Part G — the one persistent HUD row, arbitrated across several employers
+// ===========================================================================
+// Synthetic multi-employer fixtures driven through the REAL station frame: the
+// live per-frame evaluator produces every projection below, and the only thing
+// under test is WHICH existing instruction the single HUD row shows. Nothing
+// here is a natural flight or a browser observation.
+{
+  const { spawnLiveShip, removeLiveShip, recordPosition } = binds;
+  dock('freehold');
+  ctx.stationDesk.selectService('jobs');
+  for (const j of [...ctx.world.jobs]) {
+    if (isShadowJob(j) && j.state === 'accepted') ctx.stationDesk.abandonJob(j.id);
+  }
+  tick(4);
+  const row = shadowOf('freehold');
+  assert.ok(row, 'an offer exists for the HUD arbitration run');
+  const destId = row.destSystem;
+  assert.equal(api.act({ v: 2, name: 'acceptJob', args: { id: row.id } }).ok, true);
+  const localJob = ctx.world.jobs.find((j) => j.id === row.id);
+  if (ctx.flags.docked) ctx.stationDesk.undock();
+  ctx.flags.docked = false;
+  ctx.world.currentSystem = destId;
+  ctx.lastEvents = [{ type: 'systemLoaded', to: destId }];
+  world.update(0);
+  tick(40);
+  assert.equal(localJob.shadow.courierCreated, true, 'the bound courier materialized');
+  const rec = ctx.world.recordBanks[destId].find((r) => r.id === localJob.recordId);
+  assert.ok(rec);
+  const at = new (ctx.ship.object.position.constructor)();
+  recordPosition(rec, at);
+  const live = spawnLiveShip(ctx, rec, at);
+  assert.ok(live, 'the bound courier instantiates');
+  ctx.ships.push(live);
+  rec.live = true;
+
+  // Extra employers' assignments. Each is an ordinary accepted shadow row the
+  // real frame evaluates; only its identity and its own persisted state differ.
+  const extra = [];
+  let seq = 0;
+  const addJob = (over, front) => {
+    seq += 1;
+    const job = {
+      ...localJob,
+      id: 'qa-hud-' + seq,
+      recordId: localJob.recordId,
+      destSystem: destId,
+      shadow: { ...freshShadowState(), courierCreated: true },
+      ...over,
+    };
+    if (front) ctx.world.jobs.unshift(job); else ctx.world.jobs.push(job);
+    extra.push(job);
+    return job;
+  };
+  const clearExtra = () => {
+    for (const job of extra.splice(0)) {
+      const i = ctx.world.jobs.indexOf(job);
+      if (i >= 0) ctx.world.jobs.splice(i, 1);
+    }
+    localJob.shadow = { ...freshShadowState(), courierCreated: true };
+  };
+  // A remote assignment for another employer: a different system entirely, so
+  // the shared evaluator reports wrong-system travel for it.
+  const remoteOver = (target, over) => ({
+    target,
+    originSystem: destId,
+    destSystem: 'freehold',
+    recordId: 'courier-spy-freehold-qa-hud',
+    ...over,
+  });
+  const warnedState = (suspicion, graceRemaining) => ({
+    v: 1,
+    courierCreated: true,
+    observedSeconds: 0,
+    suspicion,
+    warned: true,
+    warningSeconds: T.graceSeconds - graceRemaining,
+  });
+  const place = (range, select) => {
+    ctx.ship.object.position.set(at.x + range, at.y, at.z);
+    ctx.ship.velocity.set(0, 0, 0);
+    ctx.ship.speed = 0;
+    ctx.targets.current = select ? live : null;
+  };
+  const hud = () => ctx.stationDesk.peekShadowStatus();
+  const instructionOf = (job) => ctx.stationDesk.peekShadow(job).instruction;
+  const apiInstruction = (job) => {
+    const r = api.observe().jobs.active.find((x) => x.id === job.id);
+    return r && r.shadow ? r.shadow.instruction : null;
+  };
+
+  // G1 — an earlier REMOTE assignment must not hide a live local warning.
+  {
+    clearExtra();
+    const remote = addJob(remoteOver('Remote Runner'), true);
+    place(100, false);
+    localJob.shadow = warnedState(60, 7);
+    tick(1);
+    assert.ok(ctx.world.jobs.indexOf(remote) < ctx.world.jobs.indexOf(localJob),
+      'the remote assignment really is the earlier row');
+    assert.equal(ctx.stationDesk.peekShadow(remote).contactReason, 'wrong-system');
+    assert.match(instructionOf(remote), /^Travel to /);
+    assert.match(hud(), /Give me room/, 'the local warning is the line shown');
+    assert.equal(hud(), instructionOf(localJob), 'and it is that job\u2019s own existing projection');
+    assert.notEqual(hud(), instructionOf(remote));
+    // The per-job Jobs/API status is untouched: each row still states its own.
+    assert.equal(apiInstruction(remote), instructionOf(remote), 'the remote row keeps its own status');
+    assert.equal(apiInstruction(localJob), instructionOf(localJob), 'the local row keeps its own status');
+  }
+
+  // G2 — conflicting thresholds: exposure needs suspicion AT MAX *and* the
+  // grace spent, so 99 suspicion with 0.1 s of grace left is nearer exposure
+  // than a "final warning" at 100 suspicion with the whole 8 s still in hand.
+  // The label must not jump the queue.
+  {
+    clearExtra();
+    place(100, false);
+    const fullGrace = addJob({ target: 'Label Only', shadow: warnedState(100, T.graceSeconds) }, true);
+    const nearExposure = addJob({ target: 'Cutting It Fine', shadow: warnedState(99, 0.1) });
+    tick(1);
+    assert.equal(ctx.stationDesk.peekShadow(fullGrace).risk, 'final-warning',
+      'the full-grace row is the one labelled final-warning');
+    assert.equal(ctx.stationDesk.peekShadow(nearExposure).risk, 'warned',
+      'the nearly-exposed row carries only the plain warned label');
+    assert.ok(ctx.world.jobs.indexOf(fullGrace) < ctx.world.jobs.indexOf(nearExposure));
+    assert.equal(hud(), instructionOf(nearExposure), 'the nearest-to-exposure row wins the HUD');
+    assert.ok(hud().includes('Cutting It Fine'), hud());
+  }
+
+  // G3 — the mirror case: suspicion still far from the maximum is NOT urgent,
+  // even with almost no grace left, because both thresholds are required.
+  {
+    clearExtra();
+    place(100, false);
+    const lowSuspicion = addJob({ target: 'Slow Burn', shadow: warnedState(10, 0.1) }, true);
+    const atMax = addJob({ target: 'Two Seconds Out', shadow: warnedState(100, 2) });
+    tick(1);
+    assert.ok(ctx.world.jobs.indexOf(lowSuspicion) < ctx.world.jobs.indexOf(atMax));
+    assert.equal(hud(), instructionOf(atMax), '100 suspicion / 2 s grace outranks 10 suspicion / 0.1 s');
+    assert.ok(hud().includes('Two Seconds Out'), hud());
+  }
+
+  // G4 — several local warnings at the same estimated exposure fall back to
+  // the least remaining grace, not to the job order.
+  {
+    clearExtra();
+    place(100, false);
+    const moreGrace = addJob({ target: 'Roomy', shadow: warnedState(20, 2) }, true);
+    const lessGrace = addJob({ target: 'Tight', shadow: warnedState(20, 1) });
+    tick(1);
+    const a = ctx.stationDesk.peekShadow(moreGrace);
+    const b = ctx.stationDesk.peekShadow(lessGrace);
+    assert.equal(a.warningGraceRemaining > b.warningGraceRemaining, true);
+    assert.ok(ctx.world.jobs.indexOf(moreGrace) < ctx.world.jobs.indexOf(lessGrace));
+    assert.equal(hud(), instructionOf(lessGrace), 'the least remaining grace wins the tie');
+    assert.ok(hud().includes('Tight'), hud());
+  }
+
+  // G5 — an ACQUIRED remote basic report must not hide a local danger warning.
+  {
+    clearExtra();
+    place(100, false);
+    const filed = addJob(remoteOver('Filed Already', { progress: 1 }), true);
+    localJob.shadow = warnedState(80, 3);
+    tick(1);
+    assert.equal(ctx.stationDesk.peekShadow(filed).phase, 'basic-ready');
+    assert.match(instructionOf(filed), /^Basic report acquired/);
+    assert.match(hud(), /Give me room/, 'the danger line still owns the HUD row');
+    assert.equal(hud(), instructionOf(localJob));
+    assert.equal(apiInstruction(filed), instructionOf(filed), 'the filed row keeps its own status');
+  }
+
+  // G6 — local observation, then local contact work, both ahead of remote
+  // travel; no warning is latched in either case.
+  {
+    clearExtra();
+    addJob(remoteOver('Remote Runner'), true);
+    place(250, true);
+    tick(1);
+    assert.equal(ctx.stationDesk.peekShadow(localJob).contactReason, 'observing');
+    assert.equal(hud(), instructionOf(localJob), 'local observation outranks remote travel');
+    assert.match(hud(), /^Observing /);
+
+    place(500, false);
+    tick(1);
+    assert.equal(ctx.stationDesk.peekShadow(localJob).contactReason, 'not-selected');
+    assert.equal(hud(), instructionOf(localJob), 'local contact work outranks remote travel');
+    assert.match(hud(), /^Select /);
+  }
+
+  // G7 — equal priority keeps the original job order, both ways round.
+  {
+    clearExtra();
+    place(500, false);
+    const alpha = addJob({ target: 'Tie Alpha' });
+    const beta = addJob({ target: 'Tie Beta' });
+    localJob.state = 'offered';
+    tick(1);
+    assert.equal(ctx.stationDesk.peekShadow(alpha).contactReason,
+      ctx.stationDesk.peekShadow(beta).contactReason, 'the two rows really are equal priority');
+    assert.equal(hud(), instructionOf(alpha), 'the earlier row wins an exact tie');
+    const ia = ctx.world.jobs.indexOf(alpha);
+    const ib = ctx.world.jobs.indexOf(beta);
+    ctx.world.jobs[ia] = beta;
+    ctx.world.jobs[ib] = alpha;
+    tick(1);
+    assert.equal(hud(), instructionOf(beta), 'reversing the order reverses the tie, nothing else');
+    localJob.state = 'accepted';
+  }
+
+  // G8 — the selection is a pure read: same answer every call, and no job,
+  // shadow state, counter or per-row projection moves because of it.
+  {
+    clearExtra();
+    place(100, false);
+    addJob(remoteOver('Remote Runner'), true);
+    const near = addJob({ target: 'Cutting It Fine', shadow: warnedState(99, 0.1) });
+    localJob.shadow = warnedState(50, 6);
+    tick(1);
+    const jobsBefore = JSON.stringify(ctx.world.jobs);
+    const creditsBefore = ctx.world.credits;
+    const standingBefore = JSON.stringify(ctx.world.reputation);
+    const projectionsBefore = ctx.world.jobs
+      .filter((j) => isShadowJob(j) && j.state === 'accepted')
+      .map((j) => JSON.stringify(ctx.stationDesk.peekShadow(j)));
+    const first = hud();
+    assert.equal(hud(), first);
+    assert.equal(hud(), first, 'repeated reads return the same line');
+    assert.equal(first, instructionOf(near), 'and it is exactly the chosen row\u2019s own projection');
+    assert.equal(JSON.stringify(ctx.world.jobs), jobsBefore, 'no job record moved');
+    assert.equal(ctx.world.credits, creditsBefore, 'no payment');
+    assert.equal(JSON.stringify(ctx.world.reputation), standingBefore, 'no standing write');
+    const projectionsAfter = ctx.world.jobs
+      .filter((j) => isShadowJob(j) && j.state === 'accepted')
+      .map((j) => JSON.stringify(ctx.stationDesk.peekShadow(j)));
+    assert.deepEqual(projectionsAfter, projectionsBefore, 'every per-row projection is unchanged');
+  }
+
+  // Leave the world as Part G found it.
+  clearExtra();
+  ctx.targets.current = null;
+  removeLiveShip(ctx, live);
+  const li = ctx.ships.indexOf(live);
+  if (li >= 0) ctx.ships.splice(li, 1);
+  rec.live = false;
+  dock('freehold');
+  ctx.stationDesk.selectService('jobs');
+  assert.equal(ctx.stationDesk.abandonJob(row.id).ok, true);
+}
+ok('the persistent HUD row shows the most urgent shared projection across employers');
 
 console.log(`\nAll ${pass} courier-shadow checks passed (synthetic fixtures only; no natural live run is claimed).`);

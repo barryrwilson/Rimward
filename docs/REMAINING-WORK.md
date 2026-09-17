@@ -51,6 +51,17 @@ evidence is now 51 focused checks, `npm run build`, an unchanged
 placement still needs live QA, and independent re-review plus the natural
 browser flows remain open.
 
+Candidate `fd099a66` then failed independent re-review on one new blocking
+finding: the single persistent HUD line showed the first accepted assignment, so
+an earlier employer's remote travel instruction hid a live local danger warning.
+It is repaired on `codex/issues-236-237-warning-priority` as display arbitration
+only — local danger first, ordered by estimated exposure rather than the warning
+label, then local observation and contact work, then remote and filed-report
+fallbacks, with stable ties. Per-job Jobs/API status, timers, risk, persistence
+and actions are unchanged. Automated evidence is now 52 focused checks,
+`npm run build`, an unchanged `npm run test:boot` and the reviewer's own repro
+re-run unmodified. Independent re-review and the live/natural flows stay open.
+
 Next: independent security and regression review naming the exact commit, then
 the natural live-browser runs the design requires (accept, find by name, follow,
 acquire, file; loss and reacquisition; withdrawal after warning; reload
