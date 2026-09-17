@@ -67,6 +67,10 @@ update or remove unrelated worktrees as part of that handoff.
 This repo is indexed in `graft/`: small linked markdown nodes that explain each
 system and carry exact file:line spans. This graph is a local, regenerable
 artifact ignored by Git; refresh it after checkout changes.
+If Graft or the graph is absent (including on a fresh clone), report the missing
+prerequisite without installing automatically. Use an existing `graft/INDEX.md`
+if available; otherwise inspect the needed source directly and disclose that
+graph-assisted context was unavailable.
 
 For ANY task here — understanding how something works, finding where code lives,
 or scoping a change — get context from the graph before grepping or opening

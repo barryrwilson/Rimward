@@ -53,8 +53,9 @@ bounty and patrol remain excluded. See [the acceptance contract and verification
 > an implementation plan and not a promise that every item ships unchanged.
 
 Historical merge-status corrections for PRs #111, #165, #167, #180 and
-#187–199 were reconciled against the history of master `357d4987`. This is
-not a current census of open issues or pull requests.
+#187–199 were reconciled on 2026-09-16 (local date) against master
+`357d4987724b8bc6afb2afe22be2fdd8a1d81f6a`. This is not a current census
+of open issues or pull requests.
 Use [REMAINING-WORK.md](REMAINING-WORK.md) for current merge records and
 unfiled candidates. Dated playtest observations below retain their original
 product intent and evidence limits; they are not new defects inferred from
@@ -74,7 +75,7 @@ Merge and deployment remain separate; see [scope and evidence](Issues203205209Tr
 
 Merged in [PR #196](https://github.com/barryrwilson/Rimward/pull/196): a completed approach shows its docking
 receipt without contradictory range or already-docked errors. Explicit refused
-commands still report their reason. Live browser verification passed; the final review is recorded in the merged PR. See [evidence](Issue185DockReceiptsEvidence.md).
+commands still report their reason. Live browser verification passed in the existing evidence. See [evidence](Issue185DockReceiptsEvidence.md).
 
 ### A station kiss should not abort the dock — #184
 
@@ -82,7 +83,7 @@ Merged in [PR #193](https://github.com/barryrwilson/Rimward/pull/193): while sta
 station touch under 1 u/s keeps the helm, so the approach no longer breaks off
 and cruise back from a graze the hull never felt. A real impact, a damaging
 scrape, and contact in any other phase still cancel under that historical rule.
-Final verification is recorded in PR #193. Widened to every kind and phase by
+Merged in PR #193; widened to every kind and phase by
 #200 below.
 
 ### No zero-damage brush should abort the dock — #200
@@ -98,7 +99,7 @@ live browser validation are pending.
 
 Merged in [PR #188](https://github.com/barryrwilson/Rimward/pull/188): a failed approach stops the hull instead
 of returning to creep or an old throttle setting, and the impact notice names
-hull contact. Hail/combat helm ownership remains respected. Final review is recorded in the merged PR; see [evidence](Issue173DockCancelEvidence.md). Contact sensitivity
+hull contact. Hail/combat helm ownership remains respected. See [evidence](Issue173DockCancelEvidence.md). Contact sensitivity
 at creep speed was addressed by #184 / PR #193.
 
 ### Consignment cargo is visibly not yours — #177
@@ -609,7 +610,7 @@ the final PR record supersedes its pending labels.
   route helm keeps the ship to the final arrival and the same dock controller
   then takes the berth, so no second command is needed at the arrival gate.
   The wish is session-only and ends on any cancellation, replot or clear.
-  Merged in [PR #194](https://github.com/barryrwilson/Rimward/pull/194); see its final verification record.
+  Merged in [PR #194](https://github.com/barryrwilson/Rimward/pull/194); see the PR for recorded scope and evidence.
 - [#169](https://github.com/barryrwilson/Rimward/issues/169): raw pitch is
   explicitly mouse-style positive-down; real hull tests cover pitch, yaw and
   roll in both directions. The original no-turn symptom did not reproduce
@@ -1939,7 +1940,7 @@ destination two gates out across those three families — never more than one,
 and the seat counts accepted work per origin so it cannot be farmed. Pay and
 deadline scale with the jump count and the posting states the distance. The
 unique tutorial consignment stays a one-gate run unless every renewable slot is
-taken. Merged in [PR #190](https://github.com/barryrwilson/Rimward/pull/190); its final record carries verification.
+taken. Merged in [PR #190](https://github.com/barryrwilson/Rimward/pull/190); see [design and evidence](Msn02TradeDesign.md).
 
 Support at least:
 
@@ -2251,7 +2252,7 @@ Agent visibility follow-up [#102](https://github.com/barryrwilson/Rimward/issues
 merged in [PR #111](https://github.com/barryrwilson/Rimward/pull/111): live sun boundaries and exposure are available through
 `observe().hazards.sun`, and existing solar damage warnings reach the public
 event history. Build, boot, focused, regression and live checks pass; independent
-Claude Code QA returned PASS on `de3346a`. The merged PR carries the final review record.
+Claude Code QA returned PASS on `de3346a`.
 See [the evidence record](Issue102SolarHazardsEvidence.md).
 Authored layout and damage tuning are unchanged.
 

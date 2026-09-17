@@ -98,7 +98,9 @@ Historical records for #168–#186 below retain their implementation and review
 evidence. Their pending labels are superseded by the merged PR records in the
 completed table (PR #180 and #187–199); they are not outstanding implementation
 tasks. Newer follow-ups and their limitations remain recorded below. This
-reconciliation against master `357d4987` is not an open-issue census or new QA.
+reconciliation covers PRs #165, #167, #180 and #187–199 as of 2026-09-16
+(local date), against master `357d4987724b8bc6afb2afe22be2fdd8a1d81f6a`.
+It is not an open-issue census or new QA.
 
 Issue [#206](https://github.com/barryrwilson/Rimward/issues/206) is implemented
 on the isolated `codex/issue-206-haul-duplicates` candidate: the legacy
@@ -421,21 +423,21 @@ artifacts, with their stated limitations.
 
 | Outcome | Issue / merged PR | Durable design or evidence |
 |---|---|---|
-| Clarify haul buy-in, market refusals, and temporary price events | [#179](https://github.com/barryrwilson/Rimward/issues/179) / [PR #199](https://github.com/barryrwilson/Rimward/pull/199) | Final PR record; verification applies to its named artifact and stated limits. |
-| Remember visited station sell prices for trade planning | [#174](https://github.com/barryrwilson/Rimward/issues/174) / [PR #198](https://github.com/barryrwilson/Rimward/pull/198) | Final PR record; verification applies to its named artifact and stated limits. |
-| Make larger cargo hulls discoverable after maxing hold racks | [#186](https://github.com/barryrwilson/Rimward/issues/186) / [PR #197](https://github.com/barryrwilson/Rimward/pull/197) | Final PR record; verification applies to its named artifact and stated limits. |
-| Fix false failure messages after automatic docking | [#185](https://github.com/barryrwilson/Rimward/issues/185) / [PR #196](https://github.com/barryrwilson/Rimward/pull/196) | Final PR record; verification applies to its named artifact and stated limits. |
-| Add a real commodity counter buy/sell spread | [#175](https://github.com/barryrwilson/Rimward/issues/175) / [PR #195](https://github.com/barryrwilson/Rimward/pull/195) | Final PR record; verification applies to its named artifact and stated limits. |
-| Queue station docking behind agent routes | [#183](https://github.com/barryrwilson/Rimward/issues/183) / [PR #194](https://github.com/barryrwilson/Rimward/pull/194) | Final PR record; verification applies to its named artifact and stated limits. |
-| Fix harmless station touches cancelling dock approach | [#184](https://github.com/barryrwilson/Rimward/issues/184) / [PR #193](https://github.com/barryrwilson/Rimward/pull/193) | Final PR record; verification applies to its named artifact and stated limits. |
-| Fix haul payouts for destination purchases during a berth | [#182](https://github.com/barryrwilson/Rimward/issues/182) / [PR #192](https://github.com/barryrwilson/Rimward/pull/192) | Final PR record; verification applies to its named artifact and stated limits. |
-| Fix same-berth settlement after unique haul delivery | [#181](https://github.com/barryrwilson/Rimward/issues/181) / [PR #191](https://github.com/barryrwilson/Rimward/pull/191) | Final PR record; verification applies to its named artifact and stated limits. |
-| Add two-gate transport jobs with distance-scaled pay and deadlines | [#176](https://github.com/barryrwilson/Rimward/issues/176) / [PR #190](https://github.com/barryrwilson/Rimward/pull/190) | Final PR record; verification applies to its named artifact and stated limits. |
-| Protect ferry consignment cargo from market sales | [#177](https://github.com/barryrwilson/Rimward/issues/177) / [PR #189](https://github.com/barryrwilson/Rimward/pull/189) | Final PR record; verification applies to its named artifact and stated limits. |
-| Stop the ship after failed dock approaches | [#173](https://github.com/barryrwilson/Rimward/issues/173) / [PR #188](https://github.com/barryrwilson/Rimward/pull/188) | Final PR record; verification applies to its named artifact and stated limits. |
-| Fix docking stage detours for all keep-out bodies | [#172](https://github.com/barryrwilson/Rimward/issues/172) / [PR #187](https://github.com/barryrwilson/Rimward/pull/187) | Final PR record; verification applies to its named artifact and stated limits. |
-| Fix Agent API station approach, controls, and desk consistency | [#168](https://github.com/barryrwilson/Rimward/issues/168), [#169](https://github.com/barryrwilson/Rimward/issues/169), [#170](https://github.com/barryrwilson/Rimward/issues/170), [#171](https://github.com/barryrwilson/Rimward/issues/171), [#178](https://github.com/barryrwilson/Rimward/issues/178) / [PR #180](https://github.com/barryrwilson/Rimward/pull/180) | Final PR record; verification applies to its named artifact and stated limits. |
-| Station hold: only live pursuit presses the dwell (#166) | [#166](https://github.com/barryrwilson/Rimward/issues/166) / [PR #167](https://github.com/barryrwilson/Rimward/pull/167) | Final PR record; verification applies to its named artifact and stated limits. |
+| Clarify haul buy-in, market refusals, and temporary price events | [#179](https://github.com/barryrwilson/Rimward/issues/179) / [PR #199](https://github.com/barryrwilson/Rimward/pull/199) | [Existing design and evidence](Issue179MarketPane.md); merge alone does not establish new QA. |
+| Remember visited station sell prices for trade planning | [#174](https://github.com/barryrwilson/Rimward/issues/174) / [PR #198](https://github.com/barryrwilson/Rimward/pull/198) | [Existing design and evidence](Issue174PriceMemory.md); merge alone does not establish new QA. |
+| Make larger cargo hulls discoverable after maxing hold racks | [#186](https://github.com/barryrwilson/Rimward/issues/186) / [PR #197](https://github.com/barryrwilson/Rimward/pull/197) | Merged outcome; see PR for recorded scope and evidence. |
+| Fix false failure messages after automatic docking | [#185](https://github.com/barryrwilson/Rimward/issues/185) / [PR #196](https://github.com/barryrwilson/Rimward/pull/196) | [Existing design and evidence](Issue185DockReceiptsEvidence.md); merge alone does not establish new QA. |
+| Add a real commodity counter buy/sell spread | [#175](https://github.com/barryrwilson/Rimward/issues/175) / [PR #195](https://github.com/barryrwilson/Rimward/pull/195) | [Existing design and evidence](Issue175CounterSpreadEvidence.md); merge alone does not establish new QA. |
+| Queue station docking behind agent routes | [#183](https://github.com/barryrwilson/Rimward/issues/183) / [PR #194](https://github.com/barryrwilson/Rimward/pull/194) | Merged outcome; see PR for recorded scope and evidence. |
+| Fix harmless station touches cancelling dock approach | [#184](https://github.com/barryrwilson/Rimward/issues/184) / [PR #193](https://github.com/barryrwilson/Rimward/pull/193) | Merged outcome; see PR for recorded scope and evidence. |
+| Fix haul payouts for destination purchases during a berth | [#182](https://github.com/barryrwilson/Rimward/issues/182) / [PR #192](https://github.com/barryrwilson/Rimward/pull/192) | [Existing design and evidence](playtests/2026-09-15-issue-182-arrival-cargo.md); merge alone does not establish new QA. |
+| Fix same-berth settlement after unique haul delivery | [#181](https://github.com/barryrwilson/Rimward/issues/181) / [PR #191](https://github.com/barryrwilson/Rimward/pull/191) | [Existing design and evidence](PassengerCommitmentPolicyDesign.md); merge alone does not establish new QA. |
+| Add two-gate transport jobs with distance-scaled pay and deadlines | [#176](https://github.com/barryrwilson/Rimward/issues/176) / [PR #190](https://github.com/barryrwilson/Rimward/pull/190) | [Existing design and evidence](Msn02TradeDesign.md); merge alone does not establish new QA. |
+| Protect ferry consignment cargo from market sales | [#177](https://github.com/barryrwilson/Rimward/issues/177) / [PR #189](https://github.com/barryrwilson/Rimward/pull/189) | [Existing design and evidence](../reviews/issue-177-consignment-evidence.md); merge alone does not establish new QA. |
+| Stop the ship after failed dock approaches | [#173](https://github.com/barryrwilson/Rimward/issues/173) / [PR #188](https://github.com/barryrwilson/Rimward/pull/188) | [Existing design and evidence](Issue173DockCancelEvidence.md); merge alone does not establish new QA. |
+| Fix docking stage detours for all keep-out bodies | [#172](https://github.com/barryrwilson/Rimward/issues/172) / [PR #187](https://github.com/barryrwilson/Rimward/pull/187) | Merged outcome; see PR for recorded scope and evidence. |
+| Fix Agent API station approach, controls, and desk consistency | [#168](https://github.com/barryrwilson/Rimward/issues/168), [#169](https://github.com/barryrwilson/Rimward/issues/169), [#170](https://github.com/barryrwilson/Rimward/issues/170), [#171](https://github.com/barryrwilson/Rimward/issues/171), [#178](https://github.com/barryrwilson/Rimward/issues/178) / [PR #180](https://github.com/barryrwilson/Rimward/pull/180) | [Existing design and evidence](AgentApiFixes20260914.md); merge alone does not establish new QA. |
+| Station hold: only live pursuit presses the dwell (#166) | [#166](https://github.com/barryrwilson/Rimward/issues/166) / [PR #167](https://github.com/barryrwilson/Rimward/pull/167) | Merged outcome; see PR for recorded scope and evidence. |
 | Only Escape takes the ship back from Agent Play; pointer motion, clicks, flight keys and the fire button are discarded while a lease or an agent-engaged helm owns it, and the HUD says so | [#163](https://github.com/barryrwilson/Rimward/issues/163) / [PR #165](https://github.com/barryrwilson/Rimward/pull/165) | `agentOwnsShip` / `markAgentHelm` in `src/systems/controls.js`; `observe().control.input === 'escape'`; the Escape-only contract in [AgentApiDesign.md](AgentApiDesign.md) and [AgentReactiveDefenseDesign.md](AgentReactiveDefenseDesign.md); issue #163 pins in `test:combat-intent`, `test:reactive-defense`, wave 132/141 of `test:boot`; live check 2026-09-13. |
 | A claimed derelict is kept as an owned hull, sold, or returned at the shipyard desk by the player's choice; a kept hull carries the kit its class implies and `hot: true` | [#159](https://github.com/barryrwilson/Rimward/issues/159) / [#161](https://github.com/barryrwilson/Rimward/pull/161) | `settleClaimedHull` in `src/game/derelict.js`; **Claimed hulls** pane in `shipyard-desk.js`; `npm run test:prize` section 8 inside `test:boot`; live check 2026-09-13. Nothing settles on dock any more. |
 | The shipyard buys an unmounted hull back from the hangar (`HULL_RESALE` home/foreign rates; a hot hull sells anywhere at the fence rate) | [#158](https://github.com/barryrwilson/Rimward/issues/158) / [#160](https://github.com/barryrwilson/Rimward/pull/160) | `sellHangarHull` in `src/game/shipyard.js`; `npm run test:hull-sale` (58 pins) inside `test:boot`; live check 2026-09-13. |
@@ -554,8 +556,8 @@ The branch adds historical SELL quotes captured when viewing a docked market,
 a Market toggle naming the best remembered station and age per commodity,
 chart hover/selection readouts, save normalization and agent row parity.
 [Contract and current verification](Issue174PriceMemory.md). Build, boot and
-focused regressions and ten live browser checks pass. Final review is recorded
-in [PR #198](https://github.com/barryrwilson/Rimward/pull/198).
+focused regressions and ten live browser checks pass in the existing evidence.
+Merged in [PR #198](https://github.com/barryrwilson/Rimward/pull/198).
 
 ### Issue #179 — market pane costs, caps and transient prices (merged in PR #199)
 

@@ -12,6 +12,10 @@ check `graft --version` before using it. The shared instructions and ignore
 rules do not install the tool. Editor/MCP hooks and machine-specific settings
 kept locally through `.git/info/exclude` are not backed up by GitHub; preserve
 them separately and configure them again on another machine.
+On a fresh clone the ignored graph may also be absent. If the tool or graph is
+missing, report that prerequisite; do not install tooling automatically. Use an
+existing `graft/INDEX.md` when available, otherwise inspect the needed source
+directly and record that the graph-assisted check was unavailable.
 
 1. Inspect this checkout before touching it: `git status --short --branch`,
    `git branch --show-current`, and `git worktree list`. Confirm the directory
