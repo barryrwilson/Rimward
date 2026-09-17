@@ -1,5 +1,17 @@
 # RIMWARD remaining work
 
+## Courier shadowing and mission-local suspicion — #236 / #237
+
+Design drafted by Sloane on `codex/spy-shadowing-design-236-237`, based on
+`83ec515879ed116621ff843ddc382e341047e364`. The owner selected this batch;
+the issues' explicit schema/scope gate remains pending. The bounded proposal
+adds a named local courier, deliberate observation, warning and withdrawal,
+and employer-only basic payment while preserving introductory spy jobs.
+See [implementation contract and approval request](Issue236237CourierShadowingDesign.md).
+Next: independent specification review, then explicit implementation-scope
+approval. No product code or implementation QA is claimed; optional deep
+intelligence (#238) remains parked.
+
 ## Light-hull arrival diagnosis and recovery guidance — #234
 
 Partial candidate only: impact and blocked-approach messages now tell the pilot
