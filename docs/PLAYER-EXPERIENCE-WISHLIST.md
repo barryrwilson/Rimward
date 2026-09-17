@@ -52,9 +52,10 @@ bounty and patrol remain excluded. See [the acceptance contract and verification
 > This is an idea and product-intent source for future Orchestrator waves, not
 > an implementation plan and not a promise that every item ships unchanged.
 
-Current status reconciled on 2026-09-10 against master
-`0dd7908e3929725d646958d43f63de57b68dc7c8`: all filed issues are closed and
-all PRs are closed, with historical preservation PR #60 closed without merge.
+Historical merge-status corrections for PRs #111, #165, #167, #180 and
+#187–199 were reconciled on 2026-09-16 (local date) against master
+`357d4987724b8bc6afb2afe22be2fdd8a1d81f6a`. This is not a current census
+of open issues or pull requests.
 Use [REMAINING-WORK.md](REMAINING-WORK.md) for current merge records and
 unfiled candidates. Dated playtest observations below retain their original
 product intent and evidence limits; they are not new defects inferred from
@@ -72,18 +73,18 @@ Merge and deployment remain separate; see [scope and evidence](Issues203205209Tr
 
 ### Successful docking should sound successful — #185
 
-Implemented on the isolated candidate: a completed approach shows its docking
+Merged in [PR #196](https://github.com/barryrwilson/Rimward/pull/196): a completed approach shows its docking
 receipt without contradictory range or already-docked errors. Explicit refused
-commands still report their reason. Live browser verification passed; independent
-review remains pending. See [evidence](Issue185DockReceiptsEvidence.md).
+commands still report their reason. Live browser verification passed in the existing evidence. See [evidence](Issue185DockReceiptsEvidence.md).
 
 ### A station kiss should not abort the dock — #184
 
-Implemented on the isolated candidate: while staging or settling, a zero-damage
+Merged in [PR #193](https://github.com/barryrwilson/Rimward/pull/193): while staging or settling, a zero-damage
 station touch under 1 u/s keeps the helm, so the approach no longer breaks off
 and cruise back from a graze the hull never felt. A real impact, a damaging
-scrape, and contact in any other phase still cancel. Independent review and live
-browser validation are pending. Widened to every kind and phase by #200 below.
+scrape, and contact in any other phase still cancel under that historical rule.
+Merged in PR #193; widened to every kind and phase by
+#200 below.
 
 ### No zero-damage brush should abort the dock — #200
 
@@ -96,19 +97,18 @@ live browser validation are pending.
 
 ### Dock cancellation follow-up — #173
 
-Implemented on the isolated candidate: a failed approach stops the hull instead
+Merged in [PR #188](https://github.com/barryrwilson/Rimward/pull/188): a failed approach stops the hull instead
 of returning to creep or an old throttle setting, and the impact notice names
-hull contact. Hail/combat helm ownership remains respected. Independent review
-is pending; see [evidence](Issue173DockCancelEvidence.md). Contact sensitivity
-at creep speed remains the separate #184 decision.
+hull contact. Hail/combat helm ownership remains respected. See [evidence](Issue173DockCancelEvidence.md). Contact sensitivity
+at creep speed was addressed by #184 / PR #193.
 
 ### Consignment cargo is visibly not yours — #177
 
-Implemented on the isolated candidate: the ferry's fronted Provisions read as
+Merged in [PR #189](https://github.com/barryrwilson/Rimward/pull/189): the ferry's fronted Provisions read as
 `3 yours · 4 consigned` in the hold total, the market pane, the bulk preview
 and `observe()`, and no sell path offers them while the contract runs. The
 player can still sell his own units of the same commodity, and can still buy
-more to make a short manifest whole. Independent review is pending; see
+more to make a short manifest whole. See
 [evidence](../reviews/issue-177-consignment-evidence.md).
 
 ### Adding a quick idea
@@ -472,7 +472,7 @@ checked against the current initiative text before capture.
   chevron 108. Selected POI omit.
 - [x] DONE (P2, NAV/DOCKING): Add docking approach assistance. Issue #172
   follow-up scans every planner keep-out body; five authored-gate solar
-  approach regressions are implemented, with independent QA pending.
+  approach regressions merged in [PR #187](https://github.com/barryrwilson/Rimward/pull/187).
   The J prompt
   appears, but there is no approach-speed cue or brake assist, so a cruise-
   speed approach ends in a bounce off the station hull. A "SLOW — approach
@@ -596,9 +596,9 @@ demand card, and the autopilot NAV panel with its cancel bar.
 
 ### Agent API playtest corrections — 2026-09-14
 
-Implemented on the local Agent API candidate, with builder evidence; final
-integrated QA and publication are pending in the
-[mission record](AgentApiFixes20260914.md).
+Merged in [PR #180](https://github.com/barryrwilson/Rimward/pull/180). The
+[mission record](AgentApiFixes20260914.md) retains historical builder evidence;
+the final PR record supersedes its pending labels.
 
 - [#168](https://github.com/barryrwilson/Rimward/issues/168): `approachDock`
   cruises to a distant local station with body/sun avoidance, brakes into the
@@ -610,8 +610,7 @@ integrated QA and publication are pending in the
   route helm keeps the ship to the final arrival and the same dock controller
   then takes the berth, so no second command is needed at the arrival gate.
   The wish is session-only and ends on any cancellation, replot or clear.
-  Implementation is pending review; independent QA and a live browser pass are
-  still outstanding.
+  Merged in [PR #194](https://github.com/barryrwilson/Rimward/pull/194); see the PR for recorded scope and evidence.
 - [#169](https://github.com/barryrwilson/Rimward/issues/169): raw pitch is
   explicitly mouse-style positive-down; real hull tests cover pitch, yaw and
   roll in both directions. The original no-turn symptom did not reproduce
@@ -689,9 +688,9 @@ items stay INBOX for a later wave. Scratch nits: `out/orch-fable/`.
   Manifest/toast overlap remains INBOX.
 - [x] DONE (P2, MARKET): Pane said “posted prices, no spread” while fills
   differed. BUY/SELL cells now share `tradeFillUnit` with `tryTrade`. Boot-test
-  TRADE offset is 5. Issue #175's Option B candidate adds a 5% counter spread:
+  TRADE offset is 5. Issue #175's merged Option B adds a 5% counter spread:
   sell fills cap at 95% of buy, rounded down; lower sell offers stay lower.
-  Independent QA is pending; see `docs/Issue175CounterSpreadEvidence.md`.
+  Merged in [PR #195](https://github.com/barryrwilson/Rimward/pull/195); see `docs/Issue175CounterSpreadEvidence.md`.
 - [x] DONE (P1, AGENT API/NAV): Add a playable outer **pad approach** intent
   with a brake profile. Fable had to hand-roll a steering loop against
   `window.__ctx` with synthetic mouse and key events, then rammed the station.
@@ -1729,7 +1728,7 @@ fallback only while the GLB is in flight, then swaps the real
 asset in under the same wrap without visiting the yard preview
 or waiting for matching NPC traffic. Independent and Hollow
 yards staying empty is unchanged.
-Issue #186 (2026-09-15), owner decision 2: the hull that carries
+Issue #186 (2026-09-15), merged in [PR #197](https://github.com/barryrwilson/Rimward/pull/197), owner decision 2: the hull that carries
 more is now visible instead of hidden. A maxed-out hold rack note
 in OUTFITTING names the freighter's stock hold from
 `cargoHoldFor('freighter')` and sends the player to Shipyard,
@@ -1941,8 +1940,7 @@ destination two gates out across those three families — never more than one,
 and the seat counts accepted work per origin so it cannot be farmed. Pay and
 deadline scale with the jump count and the posting states the distance. The
 unique tutorial consignment stays a one-gate run unless every renewable slot is
-taken. Implemented on an isolated candidate; independent QA and the live
-browser pass are pending.
+taken. Merged in [PR #190](https://github.com/barryrwilson/Rimward/pull/190); see [design and evidence](Msn02TradeDesign.md).
 
 Support at least:
 
@@ -2251,10 +2249,10 @@ is a safety net, not the normal way traffic navigates.
 - Danger is telegraphed clearly enough to permit escape before the lethal core.
 
 Agent visibility follow-up [#102](https://github.com/barryrwilson/Rimward/issues/102)
-is implemented locally: live sun boundaries and exposure are available through
+merged in [PR #111](https://github.com/barryrwilson/Rimward/pull/111): live sun boundaries and exposure are available through
 `observe().hazards.sun`, and existing solar damage warnings reach the public
 event history. Build, boot, focused, regression and live checks pass; independent
-Claude Code QA returned PASS on `de3346a`. PR review and merge remain pending.
+Claude Code QA returned PASS on `de3346a`.
 See [the evidence record](Issue102SolarHazardsEvidence.md).
 Authored layout and damage tuning are unchanged.
 
@@ -2760,17 +2758,17 @@ This wishlist was initialized from a one-question-at-a-time owner interview on
 conversation. When implementation evidence conflicts with an assumption in
 this document, preserve the desired outcome and update the assumed mechanism.
 
-- [ ] IN REVIEW (#174): Plan trading runs using last-seen station SELL prices.
+- [x] DONE (#174): Plan trading runs using last-seen station SELL prices.
   Market memory, chart readouts and agent parity are implemented on the issue
   branch. [Contract and verification](Issue174PriceMemory.md); ten live checks pass;
-  independent QA is pending. No merge or deployment is claimed.
+  merged in [PR #198](https://github.com/barryrwilson/Rimward/pull/198). No deployment is claimed.
 
-- [ ] IN REVIEW (#179): Read a market's real costs, caps and temporary prices
+- [x] DONE (#179): Read a market's real costs, caps and temporary prices
   without arithmetic or a refusal. The haul buy-in, the cleared stale bulk
   refusal and the transient event label are implemented on the issue branch;
   finite stock caps were already shown on every row since #91.
   [Contract and verification](Issue179MarketPane.md); independent Codex QA and
-  live checks passed. Merge remains pending; no deployment is claimed.
+  live checks passed. Merged in [PR #199](https://github.com/barryrwilson/Rimward/pull/199); no deployment is claimed.
   **Status 2026-09-15 (#206):** the buy-in line was drawn only on the offered
   `haul-provisions` card, and #206 retires that posting as a duplicate of the
   generated Provisions trade row. The stock caps, the bulk refusal and the event
