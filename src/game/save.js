@@ -576,6 +576,11 @@ function sanitizeOneJob(raw) {
       const wantRecord = shadowRecordId(id);
       const recordId = typeof src.recordId === 'string' ? src.recordId : '';
       if (!wantRecord || !isShadowRecordId(recordId) || recordId !== wantRecord) return null;
+      // The approved table REJECTS an out-of-bound name; it does not repair
+      // one. Check the raw string before any normalization, so a 41-character
+      // target drops the whole job instead of being truncated into a legal
+      // accepted contract. A legal 40 still normalizes exactly as before.
+      if (typeof src.target !== 'string' || src.target.length > NAME_MAX) return null;
       const target = jobText(src.target, NAME_MAX);
       if (!target) return null;
       if (progress !== 0 && progress !== 1) return null;

@@ -3,7 +3,10 @@ import { COMMODITIES, SHIP_CLASSES, SYSTEMS, BANDS, ACES, ORIGIN_ARCS, NAMED_GUN
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 import { writeStationHold } from './traffic-feel.js';
 import { tickDerelicts, writeDerelictPosition } from './derelict.js';
-import { shadowJobForRecordId, shadowRoute, isShadowRecordId } from './courier-shadow.js';
+import {
+  shadowJobForRecordId, shadowRoute, isShadowRecordId,
+  certifyShadowSystem, shadowPlanetsClear, shadowHullExtent,
+} from './courier-shadow.js';
 import {
   readEscape,
   escapeActive,
@@ -907,6 +910,22 @@ export function shadowBankReady(ctx, destId) {
 }
 
 /**
+ * Recertify the destination at MATERIALIZATION, not just at offer time.
+ *
+ * The whole static certificate is re-run against the destination's actual
+ * gate/hub/station/field geometry, and when the destination is the system the
+ * player is standing in, against the REAL live planet bounds the renderer is
+ * publishing this frame rather than the seeded build phase. A destination that
+ * no longer certifies gets no courier: the caller ends the assignment.
+ */
+export function shadowMaterializationCertified(ctx, destId) {
+  const cert = certifyShadowSystem(destId, { hullRadius: shadowHullExtent() });
+  if (!cert.ok) return false;
+  if (!ctx || !ctx.world || ctx.world.currentSystem !== destId) return true;
+  return shadowPlanetsClear(cert.route, ctx.planetBodies);
+}
+
+/**
  * ONE creation attempt for one accepted assignment, in an already
  * materialized destination bank.
  *
@@ -924,6 +943,10 @@ export function createShadowCourier(ctx, job, destId) {
   if (!name) return null;
   const bank = shadowBank(ctx, destId);
   if (!bank) return null;
+  // Recertify BEFORE any insert or adoption. A route that has stopped being
+  // safe must not gain a hull, and an existing matching record must not be
+  // adopted onto geometry that no longer clears.
+  if (!shadowMaterializationCertified(ctx, destId)) return null;
   for (let i = 0; i < bank.length; i++) {
     const rec = bank[i];
     if (!rec || rec.id !== recordId) continue;

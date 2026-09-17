@@ -94,8 +94,16 @@ nothing else — no police, no wanted state, no faction penalty, no forced fight
 for a starter hull. Withdrawing is always a real option, and the report, once
 acquired, cannot be taken back.
 
-Evidence is automated only: focused contract checks, build and boot all pass. The
-provisional tuning is not a balance conclusion, and no natural browser run is
+Warnings now say out loud how much patience is left and whether this is the
+final one, and the briefing names which hand the rendezvous is on — hold off the
+dock upright, world up, facing the first gate, and it is 900 units out to your
+right — rather than leaving two opposite answers 1800 units apart.
+
+Evidence is automated only: focused contract checks, build and boot all pass. A
+first independent review failed an earlier candidate and its findings are fixed;
+the persistent status line also moved off the right-hand panels, where an agent
+play panel covered it, and that placement still needs checking in a real window.
+The provisional tuning is not a balance conclusion, and no natural browser run is
 claimed yet. See [contract](Issue236237CourierShadowingDesign.md),
 [design review](Issue236237DesignReview.md) and
 [implementation mission](missions/issue-236-237.md).

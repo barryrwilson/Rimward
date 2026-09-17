@@ -19,8 +19,9 @@
  *    warning grace, clamped to the persisted bounds before it returns.
  */
 
-import { COURIER_SHADOW, JUMP, SYSTEMS } from './state.js';
+import { COURIER_SHADOW, JUMP, SYSTEMS, U } from './state.js';
 import { PHY } from './physics.js';
+import { scaleFor } from './ship-scale.js';
 import { sphereChordHit } from './ap-path.js';
 
 /** Max persisted id/name lengths. Must match save.js ID_MAX / NAME_MAX. */
@@ -259,6 +260,53 @@ export function shadowRoute(def) {
     far: b,
     waypoints: [a, b],
   };
+}
+
+/**
+ * The courier hull's collision extent — the same ladder collision.js
+ * radiusForClass walks: the loaded asset's own extent, then the class
+ * collision proxy, then the authored span. ONE definition, so the offer
+ * certificate, the materialization recertificate and the runtime corridor
+ * test can never disagree about how wide the hull is.
+ */
+export function shadowHullExtent() {
+  const scale = scaleFor(COURIER_SHADOW.classKey);
+  if (!scale) return 0;
+  if (Number.isFinite(scale.maxRadius) && scale.maxRadius > 0) return scale.maxRadius;
+  const p = scale.proxy;
+  if (p) {
+    const r = Math.hypot(p.rx || 0, p.ry || 0, p.halfLen || 0);
+    if (r > 0) return r;
+  }
+  if (Array.isArray(scale.span) && Number.isFinite(scale.span[1])) return scale.span[1] * 0.5;
+  return 0;
+}
+
+/**
+ * Which side of the station-to-first-gate lane the rendezvous sits on, in
+ * words a pilot can fly without reading coordinates.
+ *
+ * The engine's convention is forward = -Z, up = +Y, right = +X, so for an
+ * observer standing at the station and facing the first gate with world up,
+ * the right-hand vector is exactly D × up = (-D.z, 0, D.x) — the same T the
+ * route is built from. A focused pin checks that identity numerically rather
+ * than trusting this comment.
+ */
+export function shadowRendezvousSide() {
+  return 'right';
+}
+
+/**
+ * Is the exact bound courier detectable the ordinary way — instantiated,
+ * undestroyed, and inside the same targeting range every other contact uses
+ * (inclusive)? A retained selection on a hull that has drifted past that range
+ * does NOT make it detectable.
+ */
+export function shadowDetectable(courierPresent, distance) {
+  return courierPresent === true
+    && typeof distance === 'number'
+    && Number.isFinite(distance)
+    && distance <= U.TARGET_RANGE;
 }
 
 /**
@@ -596,9 +644,36 @@ export function shadowJobForRecordId(jobs, recordId) {
 // so a HUD comm line that ignores a sender field still names the speaker.
 // ---------------------------------------------------------------------------
 
+/** The one approved warning sentence, used verbatim wherever it is spoken. */
+const WARNING_SENTENCE = "You're too close. Give me room. Open to 150 units or break sight.";
+
+/** ' 4.2 s of patience left.' — the human form of the API's graceRemaining. */
+function graceClause(graceRemaining) {
+  const left = typeof graceRemaining === 'number' && Number.isFinite(graceRemaining) && graceRemaining > 0
+    ? graceRemaining
+    : 0;
+  return left > 0
+    ? ` ${left.toFixed(1)} s of patience left.`
+    : ' No patience left — break off now.';
+}
+
 export const SHADOW_COPY = Object.freeze({
-  warning: (name) => `${name}: You're too close. Give me room. Open to 150 units or break sight.`,
+  warning: (name) => `${name}: ${WARNING_SENTENCE}`,
+  /**
+   * The persistent status line. It carries the same approved sentence plus the
+   * two things the public API already publishes and the pilot could not
+   * otherwise see: whether this is the final warning, and how much warned
+   * danger time is actually left. Text only — no new gauge, key or event.
+   */
+  warningStatus: (name, graceRemaining, finalWarning) => (
+    `${name}: ${finalWarning === true ? 'Final warning. ' : ''}${WARNING_SENTENCE}`
+    + graceClause(graceRemaining)
+  ),
   withdrawing: 'Withdrawing — attention falling.',
+  /** Withdrawing, once warned: say how much patience the retreat preserved. */
+  withdrawingStatus: (graceRemaining) => `Withdrawing — attention falling.${graceClause(graceRemaining)}`,
+  /** Beyond ordinary targeting range the contact cannot be selected at all. */
+  closeIn: (name, range) => `Close to within ${range} units of ${name} to pick it up on targeting.`,
   outsideArea: 'Contact outside observation area; wait for return.',
   exposed: 'Courier identified the tail. Assignment lost; withdraw.',
   expired: 'Shadow assignment expired',
@@ -660,6 +735,8 @@ export function stepShadow(shadow, input, dt) {
 
   const acquired = inp.acquired === true;
   const ended = inp.accepted !== true || inp.expired === true;
+  // The ONE detection rule the public id, the card and the HUD all share.
+  const detectable = shadowDetectable(inp.courierPresent === true, inp.distance);
 
   // Contact reason, in the order the player can act on it.
   let reason;
@@ -669,7 +746,10 @@ export function stepShadow(shadow, input, dt) {
   else if (inp.sameSystem !== true) reason = 'wrong-system';
   else if (inp.courierAlive !== true || inp.courierPresent !== true) reason = 'target-unavailable';
   else if (inp.certified !== true || inp.inCorridor !== true) reason = 'target-unavailable';
-  else if (inp.selected !== true) reason = 'not-selected';
+  // A contact beyond ordinary targeting range cannot be picked up at all, so
+  // the card must never tell the pilot to select it. Retaining an old
+  // selection on a hull that has drifted out of range does not change that.
+  else if (inp.selected !== true) reason = detectable ? 'not-selected' : 'out-of-range';
   else if (!fin(inp.distance)) reason = 'target-unavailable';
   else if (inp.distance < COURIER_SHADOW.minRange || inp.distance > COURIER_SHADOW.maxRange) reason = 'out-of-range';
   else if (inp.sightClear !== true) reason = 'occluded';
@@ -739,6 +819,7 @@ export function stepShadow(shadow, input, dt) {
   }
 
   const risk = riskWord(next.suspicion, next.warned, next.warningSeconds);
+  const graceLeft = Math.max(0, COURIER_SHADOW.graceSeconds - next.warningSeconds);
   const done = acquired || completed;
 
   let phase;
@@ -757,9 +838,12 @@ export function stepShadow(shadow, input, dt) {
     const pay = fin(inp.payQuoted) ? Math.round(inp.payQuoted) : 0;
     instruction = SHADOW_COPY.acquired(station, pay);
   } else if (next.warned && dangerous) {
-    instruction = SHADOW_COPY.warning(name);
+    // Finding 4: the human line must carry the same two facts the API does —
+    // whether this is the final warning, and the warned danger time actually
+    // left. Repeated and restored close approaches render it again from state.
+    instruction = SHADOW_COPY.warningStatus(name, graceLeft, risk === 'final-warning');
   } else if (next.warned && active && next.suspicion > 0) {
-    instruction = SHADOW_COPY.withdrawing;
+    instruction = SHADOW_COPY.withdrawingStatus(graceLeft);
   } else if (reason === 'target-unavailable') {
     instruction = SHADOW_COPY.outsideArea;
   } else if (reason === 'docked') {
@@ -770,7 +854,9 @@ export function stepShadow(shadow, input, dt) {
   } else if (reason === 'not-selected') {
     instruction = `Select ${name} to gather the report.`;
   } else if (reason === 'out-of-range') {
-    instruction = `Hold ${COURIER_SHADOW.minRange}–${COURIER_SHADOW.maxRange} units from ${name}.`;
+    instruction = detectable
+      ? `Hold ${COURIER_SHADOW.minRange}–${COURIER_SHADOW.maxRange} units from ${name}.`
+      : SHADOW_COPY.closeIn(name, U.TARGET_RANGE);
   } else if (reason === 'occluded') {
     instruction = `Line of sight to ${name} is blocked.`;
   } else {
@@ -788,6 +874,7 @@ export function stepShadow(shadow, input, dt) {
     exposed,
     completed,
     dangerous,
-    graceRemaining: Math.max(0, COURIER_SHADOW.graceSeconds - next.warningSeconds),
+    detectable,
+    graceRemaining: graceLeft,
   };
 }

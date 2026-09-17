@@ -948,21 +948,39 @@ function ensureW2Styles() {
   color: var(--dim);
 }
 /* Issue #236/#237: one persistent mission-status line. Same text the Jobs
-   card and the public API publish; hidden entirely when no line is active. */
+   card and the public API publish; hidden entirely when no line is active.
+
+   Placement: the LEFT rail under the controls chip. The right rail already
+   carries the manifest, the power/bio/position stack and the agent-play panel,
+   and a 44ch line pinned there was overlapped and unreadable at 1440x900
+   (out/issue-236-237/live-attempt-2/courier-success/partial-observation.png).
+   The left column above the plant/flight/heat row is free at every supported
+   size, and the width is clamped so a narrow window wraps instead of running
+   under the centre reticle. */
 #hud .rw-mission-status {
   position: absolute;
-  top: 170px;
-  right: 14px;
-  max-width: 44ch;
+  top: 72px;
+  left: 14px;
+  right: auto;
+  max-width: min(42ch, calc(100vw - 420px));
+  min-width: 0;
   padding: 6px 12px;
-  background: rgba(2, 6, 13, 0.72);
+  background: rgba(2, 6, 13, 0.82);
   border-left: 3px solid var(--cyan);
   border-radius: 2px;
   font-size: calc(12px * var(--rw-text-scale, 1));
+  line-height: 1.35;
   letter-spacing: 0.06em;
   color: var(--dim);
-  text-align: right;
+  text-align: left;
+  overflow-wrap: anywhere;
   pointer-events: none;
+}
+@media (max-width: 900px) {
+  #hud .rw-mission-status {
+    top: 64px;
+    max-width: calc(100vw - 28px);
+  }
 }
 #hud .rw-mission-status.is-hidden { display: none; }
 #hud .rw-mission-status.is-warned { color: var(--warn, #f0c070); }

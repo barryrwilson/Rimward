@@ -37,6 +37,20 @@ Evidence so far is automated only: 44 focused contract checks, `npm run build`,
 and an unchanged `npm run test:boot`, all passing. The corridor measurement comes
 from the real NPC update over 240 simulated seconds and ten end turns.
 
+Candidate `55e9244` failed independent review with five blocking findings, and
+its natural browser attempt stopped early on a sixth, visual one: the persistent
+mission status was obscured by the agent-play panel at 1440x900. All six are
+repaired on a new artifact with focused regression pins — materialization
+recertification against real gate and live planet geometry, detection-range
+eligibility for the published target id, rejection of an out-of-bound courier
+name, the final-warning distinction and remaining grace in the human status
+text, the unambiguous rendezvous side stated in an upright, world-up,
+facing-the-first-gate frame, and the status-line placement. The automated
+evidence is now 51 focused checks, `npm run build`, an unchanged
+`npm run test:boot` and the reviewer's own probes re-run unmodified. The HUD
+placement still needs live QA, and independent re-review plus the natural
+browser flows remain open.
+
 Next: independent security and regression review naming the exact commit, then
 the natural live-browser runs the design requires (accept, find by name, follow,
 acquire, file; loss and reacquisition; withdrawal after warning; reload

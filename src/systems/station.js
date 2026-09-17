@@ -60,7 +60,6 @@ import {
 } from '../game/launch-clearance.js';
 import { requestLaneClearance } from './npc.js';
 import { SUSPEND_AFTER_MS } from './controls.js';
-import { scaleFor } from '../game/ship-scale.js';
 import { COURIER_SHADOW } from '../game/state.js';
 import {
   certifyShadowSystem,
@@ -69,9 +68,12 @@ import {
   pointInCorridor,
   SHADOW_COPY,
   shadowCourierName,
+  shadowDetectable,
   shadowFrameSeconds,
+  shadowHullExtent,
   shadowPlanetsClear,
   shadowRecordId,
+  shadowRendezvousSide,
   shadowRoute,
   shadowSightClear,
   stepShadow,
@@ -3599,18 +3601,8 @@ function makeEspionageJob(ctx, sysId, slot) {
 
 /** The courier hull's collision extent; the motion corridor must contain it. */
 function shadowHullRadius() {
-  // Same ladder collision.js radiusForClass walks: the loaded asset's own
-  // extent first, then the class collision proxy, then the authored span.
-  const scale = scaleFor(COURIER_SHADOW.classKey);
-  if (!scale) return 0;
-  if (Number.isFinite(scale.maxRadius) && scale.maxRadius > 0) return scale.maxRadius;
-  const p = scale.proxy;
-  if (p) {
-    const r = Math.hypot(p.rx || 0, p.ry || 0, p.halfLen || 0);
-    if (r > 0) return r;
-  }
-  if (Array.isArray(scale.span) && Number.isFinite(scale.span[1])) return scale.span[1] * 0.5;
-  return 0;
+  // ONE definition, shared with the materialization recertificate in world.js.
+  return shadowHullExtent();
 }
 
 /**
@@ -3640,9 +3632,18 @@ function shadowBriefing(ctx, sysId, dest, name, pay) {
   const employerLine = employerName ? ` for ${employerName}` : '';
   const gateName = route.ok && route.gateTo ? shadowSystemName(route.gateTo) : 'the first';
   const mins = Math.round(COURIER_SHADOW.deadlineSeconds / 60);
+  // Finding 5: there are two opposite perpendicular positions, and the wrong
+  // one is 1800 units from the courier. Name the side the way a pilot can fly
+  // it — and say which way up, because "your right" only means one place once
+  // the frame is fixed: upright, world up, facing the first gate from the
+  // dock. That is the same reference the API's rendezvous prose states, and
+  // the word comes from shadowRendezvousSide(), which a focused pin checks
+  // against the numeric T the route and the API both publish.
+  const side = shadowRendezvousSide();
   return `${name} runs a quiet local errand out of ${destDock} in ${destSys}. `
-    + `The rendezvous sits ${COURIER_SHADOW.rendezvousRange} units off that dock, square across the `
-    + `${gateName} gate lane. Find the name with ordinary targeting, hold `
+    + `Hold off that dock upright, world up, and face the ${gateName} gate: the rendezvous is `
+    + `${COURIER_SHADOW.rendezvousRange} units out to your ${side}, square across that `
+    + `gate lane. Find the name with ordinary targeting, hold `
     + `${COURIER_SHADOW.minRange}–${COURIER_SHADOW.maxRange} units with clear sight for `
     + `${COURIER_SHADOW.requiredSeconds} accumulated seconds, then file at ${homeName}${employerLine} `
     + `for ${pay} UU within ${mins} minutes of accepting. Docking does not gather this report. `
@@ -3847,7 +3848,12 @@ function tickShadowFrame(ctx, dt) {
     const input = shadowFrameInputs(ctx, job);
     const out = stepShadow(job.shadow, input, step);
     job.shadow = out.shadow;
-    out.currentTargetId = input.courierPresent ? input.liveId : null;
+    // The public id is a HANDLE TO A DETECTABLE CONTACT, not proof the hull
+    // exists somewhere. It is published only when the exact bound courier
+    // meets the same eligibility ordinary nearby targeting uses — instantiated,
+    // undestroyed and inside the inclusive targeting range — whatever the
+    // player's retained selection says.
+    out.currentTargetId = out.detectable ? input.liveId : null;
     shadowProjection.set(job.id, out);
     // Present a latched warning — a new crossing, or one restored from a save
     // — on a real visible frame, and only then may grace resume.
@@ -8368,7 +8374,8 @@ export function initStation(ctx) {
       targetName: typeof job.target === 'string' ? job.target : '',
       targetSystem: dest,
       rendezvous: `${COURIER_SHADOW.rendezvousRange} u off ${spyStationName(dest, 'the far dock')}, `
-        + `perpendicular to the lane toward the ${shadowSystemName(route.gateTo)} gate`,
+        + `to the ${shadowRendezvousSide()} of the lane toward the ${shadowSystemName(route.gateTo)} gate `
+        + '(facing that gate from the dock, world up)',
       rendezvousGateTo: route.gateTo ?? null,
       rendezvousRange: COURIER_SHADOW.rendezvousRange,
       rendezvousOffset: { x: route.offset.x, y: route.offset.y, z: route.offset.z },

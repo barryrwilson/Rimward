@@ -11,6 +11,10 @@
  *         round trips, old-slot isolation and the family cap.
  * Part D  the real station owner: offer, accept, courier lifecycle,
  *         settlement, expiry, standing isolation and the API projection.
+ * Part E  real freighter motion on the certified route.
+ * Part F  independent-review regression pins: materialization recertification,
+ *         detection-range eligibility, name bounds, human warning grace and
+ *         final-warning wording, the rendezvous side, and the status placement.
  *
  * Every fixture here is SYNTHETIC. Nothing in this file is a natural live
  * occlusion, a natural flight, or a browser acceptance run.
@@ -18,9 +22,9 @@
  * Run: node --import ./scripts/with-css-stub.mjs scripts/issue-236-237-courier-shadow-test.mjs
  */
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { seedBootRandom, installDomStubs, bootGameSystems } from './lib/boot-harness.mjs';
-import { SYSTEMS, COURIER_SHADOW, JUMP, SHIP_CLASSES } from '../src/game/state.js';
+import { SYSTEMS, COURIER_SHADOW, JUMP, SHIP_CLASSES, U } from '../src/game/state.js';
 import { AUTHORED_SYSTEMS } from '../src/game/authored-systems.js';
 import { PHY } from '../src/game/physics.js';
 import {
@@ -37,7 +41,10 @@ import {
   SHADOW_COPY,
   shadowClearance,
   shadowCourierName,
+  shadowDetectable,
   shadowFrameSeconds,
+  shadowHullExtent,
+  shadowRendezvousSide,
   shadowGateClearance,
   shadowJobForRecordId,
   shadowOrbitClearance,
@@ -456,8 +463,12 @@ ok('loss of selection, range, sight, corridor, system or dock pauses without los
   const safeShort = run(s, { distance: 300 }, 2);
   assert.ok(safeShort.shadow.suspicion > 0 && safeShort.shadow.suspicion < s.suspicion,
     'opening range immediately stops accumulation and starts the fall');
-  assert.equal(safeShort.instruction, SHADOW_COPY.withdrawing,
-    'a falling warned contact reads as withdrawing');
+  assert.equal(safeShort.instruction, SHADOW_COPY.withdrawingStatus(safeShort.graceRemaining),
+    'a falling warned contact reads as withdrawing, with its patience named');
+  assert.ok(safeShort.instruction.startsWith(SHADOW_COPY.withdrawing),
+    'the approved withdrawal sentence is still the lead');
+  assert.ok(safeShort.instruction.includes('8.0 s of patience left'),
+    'unspent grace is stated to the human, not only to the API');
   const safeHold = run(s, { distance: 300 }, 20);
   assert.equal(safeHold.shadow.warningSeconds, 0, 'safe time never consumes grace');
   assert.equal(safeHold.risk, 'cooling');
@@ -467,8 +478,14 @@ ok('loss of selection, range, sight, corridor, system or dock pauses without los
     'once attention is gone the card is back to plain observation');
   // The warning text names the courier in the text itself.
   const close = stepShadow(s, inputs({ distance: 100 }), 0.1);
-  assert.equal(close.instruction, SHADOW_COPY.warning('Slow Tithe 7'));
-  assert.ok(close.instruction.includes('Slow Tithe 7'));
+  assert.ok(close.instruction.includes('Slow Tithe 7'), 'the courier names itself');
+  assert.ok(close.instruction.includes("You're too close. Give me room. Open to 150 units or break sight."),
+    'the approved warning sentence is carried verbatim');
+  assert.equal(close.instruction,
+    SHADOW_COPY.warningStatus('Slow Tithe 7', close.graceRemaining, close.risk === 'final-warning'));
+  // The one-shot comm line stays exactly the approved sentence.
+  assert.equal(SHADOW_COPY.warning('Slow Tithe 7'),
+    "Slow Tithe 7: You're too close. Give me room. Open to 150 units or break sight.");
 }
 ok('the warning latches once, presents before grace, and decays on withdrawal');
 
@@ -678,6 +695,31 @@ assert.equal(ctx.world.jobs.filter((j) => isShadowJob(j) && j.originSystem === '
 for (const bit of [offer.target, 'Veridian', String(T.rendezvousRange), '150–400', '30 accumulated seconds',
   'Docking does not gather this report', 'Crowding inside 150 units']) {
   assert.ok(offer.detail.includes(bit), 'briefing states: ' + bit);
+}
+// The side word only means one place once the frame is fixed, so the human
+// briefing must state the upright, world-up, facing-the-first-gate reference
+// the API prose and the numeric offset share.
+{
+  const side = shadowRendezvousSide();
+  const gateName = SYSTEMS[shadowRoute(SYSTEMS[offer.destSystem]).gateTo].name;
+  assert.ok(offer.detail.includes('upright'), 'briefing names the upright attitude');
+  assert.ok(offer.detail.includes('world up'), 'briefing names the world-up reference');
+  assert.ok(offer.detail.includes('face the ' + gateName + ' gate'),
+    'briefing names the station-to-first-gate facing');
+  assert.ok(offer.detail.includes('out to your ' + side),
+    'briefing names the side, in that frame');
+  const upright = offer.detail.indexOf('upright');
+  const worldUp = offer.detail.indexOf('world up');
+  const facing = offer.detail.indexOf('face the ' + gateName + ' gate');
+  const hand = offer.detail.indexOf('out to your ' + side);
+  assert.ok(upright < hand && worldUp < hand && facing < hand,
+    'the frame is stated before the hand it resolves');
+  // The public projection states the same reference for the same side.
+  const apiRow = api.observe().jobs.offers.find((j) => j.id === offer.id);
+  assert.ok(apiRow.shadow.rendezvous.includes('to the ' + side + ' of the lane'),
+    'the API names the same hand');
+  assert.ok(apiRow.shadow.rendezvous.includes('world up'),
+    'the API names the same world-up reference');
 }
 ok('a single clearly titled shadow posting joins both introductory spy slots');
 
@@ -1285,5 +1327,349 @@ ok('repeated assignments never accumulate courier records in a bank');
   }
 }
 ok('a replaced introductory posting keeps its place ahead of the shadow row');
+
+// ===========================================================================
+// Part F — independent-review regression pins (QA fix round)
+// ===========================================================================
+// Synthetic fixtures against the real station/world owners. None of these is a
+// natural flight or a browser observation.
+
+// F1 — detection eligibility: 600 inclusive, just beyond, and far away, with
+// the selection both retained and dropped.
+{
+  const detCases = [
+    { d: 600, selected: true },
+    { d: 600, selected: false },
+    { d: 600.5, selected: true },
+    { d: 600.5, selected: false },
+    { d: 1000, selected: true },
+    { d: 1000, selected: false },
+  ];
+  for (const c of detCases) {
+    const out = stepShadow(freshShadowState(), inputs({ distance: c.d, selected: c.selected }), 0.1);
+    const want = c.d <= U.TARGET_RANGE;
+    assert.equal(out.detectable, want, 'detectable at ' + c.d + ' should be ' + want);
+    assert.equal(shadowDetectable(true, c.d), want, 'the shared predicate agrees at ' + c.d);
+    if (!want) {
+      // Beyond ordinary targeting range nothing may tell the pilot to select
+      // it, and no selectable id may be published — retained selection or not.
+      assert.equal(out.contactReason, 'out-of-range', 'far contact is out of range at ' + c.d);
+      assert.equal(out.instruction.includes('Select '), false,
+        'no Select instruction beyond detection at ' + c.d + ' (selected=' + c.selected + ')');
+      if (!c.selected) {
+        assert.equal(out.instruction, SHADOW_COPY.closeIn('Slow Tithe 7', U.TARGET_RANGE));
+      }
+    } else if (!c.selected) {
+      assert.equal(out.contactReason, 'not-selected');
+      assert.equal(out.instruction, 'Select Slow Tithe 7 to gather the report.');
+    } else {
+      assert.equal(out.contactReason, 'out-of-range', '600 is outside the 150-400 band');
+      assert.equal(out.instruction, 'Hold 150–400 units from Slow Tithe 7.');
+    }
+  }
+  assert.equal(shadowDetectable(false, 100), false, 'an uninstantiated courier is never detectable');
+  assert.equal(shadowDetectable(true, NaN), false);
+  assert.equal(shadowDetectable(true, null), false);
+}
+ok('detection is the ordinary inclusive 600 u rule, selection or no selection');
+
+// F2 — the ACCEPTED public projection publishes the selectable id only while
+// the exact bound hull is detectable the ordinary way. Real station + real API.
+{
+  const { spawnLiveShip, removeLiveShip, recordPosition } = binds;
+  dock('freehold');
+  ctx.stationDesk.selectService('jobs');
+  for (const j of [...ctx.world.jobs]) {
+    if (isShadowJob(j) && j.state === 'accepted') ctx.stationDesk.abandonJob(j.id);
+  }
+  tick(4);
+  const row = shadowOf('freehold');
+  assert.ok(row, 'an offer exists for the detection run');
+  const destId = row.destSystem;
+  assert.equal(api.act({ v: 2, name: 'acceptJob', args: { id: row.id } }).ok, true);
+  const liveRow = ctx.world.jobs.find((j) => j.id === row.id);
+  if (ctx.flags.docked) ctx.stationDesk.undock();
+  ctx.flags.docked = false;
+  ctx.world.currentSystem = destId;
+  ctx.lastEvents = [{ type: 'systemLoaded', to: destId }];
+  world.update(0);
+  tick(40);
+  assert.equal(liveRow.shadow.courierCreated, true);
+  const rec = ctx.world.recordBanks[destId].find((r) => r.id === liveRow.recordId);
+  assert.ok(rec);
+  const at = new (ctx.ship.object.position.constructor)();
+  recordPosition(rec, at);
+  const live = spawnLiveShip(ctx, rec, at);
+  assert.ok(live, 'the bound courier instantiates');
+  ctx.ships.push(live);
+  rec.live = true;
+  const readShadow = () => {
+    const rows = api.observe().jobs.active;
+    const r = rows.find((x) => x.id === row.id);
+    return r && r.shadow ? r.shadow : null;
+  };
+  const place = (range, select) => {
+    ctx.ship.object.position.set(at.x + range, at.y, at.z);
+    ctx.ship.velocity.set(0, 0, 0);
+    ctx.ship.speed = 0;
+    ctx.targets.current = select ? live : null;
+    tick(2);
+  };
+  for (const select of [true, false]) {
+    place(250, select);
+    const near = readShadow();
+    assert.ok(near, 'the accepted row publishes a projection');
+    assert.equal(near.currentTargetId, live.id,
+      'a detectable courier publishes its selectable id (selected=' + select + ')');
+    place(600, select);
+    assert.equal(readShadow().currentTargetId, live.id,
+      '600 units is inclusive (selected=' + select + ')');
+    place(620, select);
+    const past = readShadow();
+    assert.equal(past.currentTargetId, null,
+      'just beyond targeting range publishes no id (selected=' + select + ')');
+    assert.equal(past.instruction.includes('Select '), false,
+      'and never tells the pilot to select it (selected=' + select + ')');
+    place(1000, select);
+    const far = readShadow();
+    assert.equal(far.currentTargetId, null,
+      '1000 units publishes no id even with the selection retained (selected=' + select + ')');
+    assert.equal(far.contactReason, 'out-of-range');
+    assert.equal(far.instruction.includes('Select '), false);
+  }
+  ctx.targets.current = null;
+  removeLiveShip(ctx, live);
+  const li = ctx.ships.indexOf(live);
+  if (li >= 0) ctx.ships.splice(li, 1);
+  rec.live = false;
+  dock('freehold');
+  ctx.stationDesk.selectService('jobs');
+  assert.equal(ctx.stationDesk.abandonJob(row.id).ok, true);
+}
+ok('the accepted API row publishes a selectable id only inside ordinary detection range');
+
+// F5 — the human side word matches the numeric T the route and API publish.
+{
+  const side = shadowRendezvousSide();
+  assert.equal(side, 'right');
+  for (const id of Object.keys(AUTHORED_SYSTEMS)) {
+    const def = SYSTEMS[id];
+    if (!def.station || !def.gates?.length) continue;
+    const r = shadowRoute(def);
+    if (!r.ok) continue;
+    const s0 = def.station.position;
+    const g0 = def.gates[0].position;
+    // Engine convention: forward -Z, up +Y, right +X. Standing at the station
+    // facing the first gate, the right-hand vector is D x up = (-D.z, 0, D.x).
+    const dx = g0[0] - s0[0];
+    const dz = g0[2] - s0[2];
+    const len = Math.hypot(dx, dz);
+    const D = { x: dx / len, z: dz / len };
+    const rightX = -D.z;
+    const rightZ = D.x;
+    const offLen = Math.hypot(r.offset.x, r.offset.z);
+    const dot = (r.offset.x / offLen) * rightX + (r.offset.z / offLen) * rightZ;
+    assert.ok(Math.abs(dot - 1) < 1e-3,
+      id + ': the published offset points to the observer’s ' + side + ' (dot ' + dot.toFixed(6) + ')');
+    assert.ok(Math.abs(r.perp.x - rightX) < 1e-9 && Math.abs(r.perp.z - rightZ) < 1e-9,
+      id + ': T is exactly the right-hand vector');
+  }
+}
+ok('the briefing side word is the same hand as the numeric rendezvous offset');
+
+// F4 — the human line distinguishes the final warning and states the actual
+// remaining grace, on a first, a repeated and a restored close approach.
+{
+  const warnedState = (grace, susp) => ({
+    v: 1, courierCreated: true, observedSeconds: 5,
+    suspicion: susp, warned: true, warningSeconds: grace,
+  });
+  const full = stepShadow(warnedState(0, 60), inputs({ distance: 100 }), 0);
+  assert.equal(full.risk, 'warned');
+  assert.ok(full.instruction.includes('8.0 s of patience left'));
+  assert.equal(full.instruction.includes('Final warning'), false);
+
+  const mid = stepShadow(warnedState(4, 60), inputs({ distance: 100 }), 0);
+  assert.ok(mid.instruction.includes('4.0 s of patience left'), mid.instruction);
+  assert.notEqual(mid.instruction, full.instruction,
+    'different remaining grace must not read identically');
+
+  const finalWarn = stepShadow(warnedState(7.9, 100), inputs({ distance: 100 }), 0);
+  assert.equal(finalWarn.risk, 'final-warning');
+  assert.ok(finalWarn.instruction.startsWith('Slow Tithe 7: Final warning.'), finalWarn.instruction);
+  assert.ok(finalWarn.instruction.includes('0.1 s of patience left'), finalWarn.instruction);
+  assert.notEqual(finalWarn.instruction, mid.instruction);
+
+  const spent = stepShadow(warnedState(8, 100), inputs({ distance: 100 }), 0);
+  assert.ok(spent.instruction.includes('No patience left'), spent.instruction);
+
+  // The API and the human line agree on the same number, always.
+  for (const g of [0, 1.5, 4, 7.9, 8]) {
+    const out = stepShadow(warnedState(g, 60), inputs({ distance: 100 }), 0);
+    assert.equal(out.graceRemaining, 8 - g);
+    if (out.graceRemaining > 0) {
+      assert.ok(out.instruction.includes(out.graceRemaining.toFixed(1) + ' s of patience left'),
+        'human text states the API grace at ' + g);
+    }
+  }
+  // A RESTORED warned job renders the same line from saved state alone: the
+  // instruction is recomputed each frame, never remembered.
+  const restoredState = sanitizeShadowState(warnedState(3, 100), { state: 'accepted', progress: 0 });
+  assert.ok(restoredState, 'the warned state round-trips');
+  const restored = stepShadow(restoredState, inputs({ distance: 100 }), 0);
+  assert.equal(restored.instruction, stepShadow(warnedState(3, 100), inputs({ distance: 100 }), 0).instruction);
+  assert.ok(restored.instruction.includes('5.0 s of patience left'));
+  assert.ok(restored.instruction.startsWith('Slow Tithe 7: Final warning.'));
+}
+ok('the human warning states the final-warning risk and the real remaining grace');
+
+// F3 — an out-of-bound saved courier name REJECTS the job; a legal 40 loads.
+{
+  const snap = JSON.parse(JSON.stringify(saveSnapshot(ctx)));
+  const row = snap.world.jobs.find((j) => isShadowJob(j));
+  assert.ok(row, 'a shadow row is in the snapshot');
+  const legal = 'A'.repeat(40);
+  const oversize = 'A'.repeat(41);
+  const legalSnap = JSON.parse(JSON.stringify(snap));
+  legalSnap.world.jobs.find((j) => j.id === row.id).target = legal;
+  restore(ctx, legalSnap);
+  const keptLegal = ctx.world.jobs.find((j) => j.id === row.id);
+  assert.ok(keptLegal, 'a legal 40-character name still loads');
+  assert.equal(keptLegal.target, legal, 'and is preserved exactly');
+  const badSnap = JSON.parse(JSON.stringify(snap));
+  badSnap.world.jobs.find((j) => j.id === row.id).target = oversize;
+  restore(ctx, badSnap);
+  assert.equal(ctx.world.jobs.some((j) => j.id === row.id), false,
+    'a 41-character name drops the whole job instead of being truncated');
+  // Normalization still applies inside the bound: control characters and
+  // surrounding whitespace are cleaned, not a reason to reject.
+  const normSnap = JSON.parse(JSON.stringify(snap));
+  normSnap.world.jobs.find((j) => j.id === row.id).target = '  Even Measure 1  ';
+  restore(ctx, normSnap);
+  const normalized = ctx.world.jobs.find((j) => j.id === row.id);
+  assert.ok(normalized, 'a normalizable name still loads');
+  assert.equal(normalized.target, 'Even Measure 1');
+  restore(ctx, snap);
+}
+ok('an out-of-bound courier name rejects the job; a legal 40 normalizes as before');
+
+// F1 — materialization recertification: a gate injected at the rendezvous, and
+// a real live planet inside the envelope, each refuse the courier and end the
+// accepted assignment with contact lost, no retry, no payment, no standing.
+{
+  const { shadowMaterializationCertified } = await import('../src/game/world.js');
+  const scenarios = [
+    {
+      name: 'gate at the rendezvous',
+      apply: (destId) => {
+        const def = SYSTEMS[destId];
+        const r = shadowRoute(def);
+        const mid = { x: (r.near.x + r.far.x) / 2, y: r.near.y, z: (r.near.z + r.far.z) / 2 };
+        const before = def.gates.slice();
+        def.gates.push({ position: [mid.x, mid.y, mid.z], to: 'freehold' });
+        return () => { def.gates.length = 0; for (const g of before) def.gates.push(g); };
+      },
+    },
+    {
+      name: 'actual live planet inside the envelope',
+      apply: (destId) => {
+        const r = shadowRoute(SYSTEMS[destId]);
+        const mid = { x: (r.near.x + r.far.x) / 2, y: r.near.y, z: (r.near.z + r.far.z) / 2 };
+        const saved = ctx.planetBodies;
+        ctx.planetBodies = [{ x: mid.x, y: mid.y, z: mid.z, radius: 30 }];
+        return () => { ctx.planetBodies = saved; };
+      },
+    },
+  ];
+  for (const scenario of scenarios) {
+    dock('freehold');
+    ctx.stationDesk.selectService('jobs');
+    for (const j of [...ctx.world.jobs]) {
+      if (isShadowJob(j) && j.state === 'accepted') ctx.stationDesk.abandonJob(j.id);
+    }
+    tick(4);
+    const row = shadowOf('freehold');
+    assert.ok(row, scenario.name + ': an offer exists');
+    const destId = row.destSystem;
+    assert.equal(api.act({ v: 2, name: 'acceptJob', args: { id: row.id } }).ok, true);
+    const liveRow = ctx.world.jobs.find((j) => j.id === row.id);
+    // Force the DEFERRED path: no courier yet, bank not visited in this state.
+    liveRow.shadow.courierCreated = false;
+    const bank = ctx.world.recordBanks[destId];
+    if (Array.isArray(bank)) {
+      const bi = bank.findIndex((r) => r && r.id === liveRow.recordId);
+      if (bi >= 0) bank.splice(bi, 1);
+    }
+    // Travel to the destination so the live bodies belong to it, then break
+    // the geometry before the materialization pass runs.
+    if (ctx.flags.docked) ctx.stationDesk.undock();
+    ctx.flags.docked = false;
+    ctx.world.currentSystem = destId;
+    ctx.lastEvents = [{ type: 'systemLoaded', to: destId }];
+    world.update(0);
+    const undo = scenario.apply(destId);
+    try {
+      assert.equal(shadowMaterializationCertified(ctx, destId), false,
+        scenario.name + ': the destination no longer certifies');
+      const creditsBefore = ctx.world.credits;
+      const standingBeforeCase = JSON.stringify(ctx.world.reputation);
+      const bankBefore = (ctx.world.recordBanks[destId] ?? []).length;
+      tick(120);
+      assert.equal(ctx.world.jobs.some((j) => j.id === row.id), false,
+        scenario.name + ': the accepted assignment ends');
+      assert.equal((ctx.world.recordBanks[destId] ?? []).length, bankBefore,
+        scenario.name + ': no courier was inserted');
+      assert.equal((ctx.world.recordBanks[destId] ?? []).some((r) => r.id === liveRow.recordId), false,
+        scenario.name + ': the bound record does not exist');
+      assert.equal(ctx.world.credits, creditsBefore, scenario.name + ': no payment');
+      assert.equal(JSON.stringify(ctx.world.reputation), standingBeforeCase,
+        scenario.name + ': no standing write');
+      // No retry: further ticks cannot resurrect it.
+      tick(240);
+      assert.equal(ctx.world.jobs.some((j) => j.id === row.id), false, scenario.name + ': no retry');
+      assert.equal((ctx.world.recordBanks[destId] ?? []).some((r) => r.id === liveRow.recordId), false,
+        scenario.name + ': still no courier after further ticks');
+    } finally {
+      undo();
+    }
+  }
+  // With the geometry sound again, the same path DOES create the courier — so
+  // the refusals above are the certificate, not a broken lifecycle.
+  dock('freehold');
+  ctx.stationDesk.selectService('jobs');
+  tick(4);
+  const goodRow = shadowOf('freehold');
+  assert.ok(goodRow);
+  const goodDest = goodRow.destSystem;
+  assert.equal(api.act({ v: 2, name: 'acceptJob', args: { id: goodRow.id } }).ok, true);
+  const goodJob = ctx.world.jobs.find((j) => j.id === goodRow.id);
+  if (ctx.flags.docked) ctx.stationDesk.undock();
+  ctx.flags.docked = false;
+  ctx.world.currentSystem = goodDest;
+  ctx.lastEvents = [{ type: 'systemLoaded', to: goodDest }];
+  world.update(0);
+  assert.equal(shadowMaterializationCertified(ctx, goodDest), true);
+  tick(60);
+  assert.equal(goodJob.shadow.courierCreated, true, 'sound geometry still materializes the courier');
+  dock('freehold');
+  ctx.stationDesk.selectService('jobs');
+  assert.equal(ctx.stationDesk.abandonJob(goodRow.id).ok, true);
+}
+ok('a failed materialization certificate refuses the courier and ends the assignment');
+
+// F6 (source side only) — the mission status line is on the free left rail,
+// clamped so a narrow window wraps. Layout itself still needs live QA.
+{
+  const hudSource = readFileSync(new URL('../src/systems/hud.js', import.meta.url), 'utf8');
+  const block = hudSource.slice(hudSource.indexOf('#hud .rw-mission-status {'));
+  const rule = block.slice(0, block.indexOf('}'));
+  assert.ok(rule.includes('left: 14px'), 'the status line sits on the left rail');
+  assert.ok(rule.includes('right: auto'), 'and is no longer pinned to the right rail');
+  assert.ok(rule.includes('max-width: min('), 'its width is clamped for narrow windows');
+  assert.ok(hudSource.includes('@media (max-width: 900px)'), 'a narrow-window rule exists');
+  assert.ok(hudSource.includes('peekShadowStatus'), 'the HUD still reads the shared instruction');
+  assert.ok(hudSource.includes('missionStatus.textContent'), 'and renders it text-safe');
+}
+ok('the mission status line moved off the right-hand panel stack (layout needs live QA)');
 
 console.log(`\nAll ${pass} courier-shadow checks passed (synthetic fixtures only; no natural live run is claimed).`);
