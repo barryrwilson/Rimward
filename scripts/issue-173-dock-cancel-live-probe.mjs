@@ -84,6 +84,7 @@ await runLive('dock-cancel', async ({ c, result, wait, checkpoint, save }) => {
   assert.equal(e.end.fullStop, true); assert.equal(e.end.throttle, 0);
   assert.ok(e.end.speed < 0.1, 'rendered flight settles below creep');
   assert.ok(e.end.chartOpen, 'chart remains open during stop');
-  assert.ok(e.events.some(ev => ev.text === 'Dock approach cancelled: hull contact.'));
+  // Issue #234 appended a next action; the specific cause text is unchanged.
+  assert.ok(e.events.some(ev => ev.text === 'Dock approach cancelled: hull contact. Wait for clearance or steer clear, then retry the approach.'));
   await checkpoint('cancelled-full-stop');
 });
