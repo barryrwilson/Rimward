@@ -10,7 +10,9 @@ and employer-only basic payment while preserving introductory spy jobs.
 See [implementation contract and approval request](Issue236237CourierShadowingDesign.md).
 Independent review of `558a1a90` found slot/cap and lifecycle contract gaps;
 the revised design specifies subtype dispatch, save limits, creation identity,
-and numeric public rendezvous data. Next: independent re-review of the revised
+and numeric public rendezvous data. A second review closed those findings and
+identified unsafe route geometry; the new revision specifies a perpendicular
+off-lane route with full observation-envelope clearance. Next: narrow independent re-review of the revised
 artifact, then explicit implementation-scope approval. No product code or implementation QA is claimed; optional deep
 intelligence (#238) remains parked.
 
