@@ -92,7 +92,13 @@ restricted-trade refusal token. Build, unchanged boot, focused regressions, live
 Chromium and independent Claude review pass
 on `codex/issues-203-205-209`; merge and deployment remain separate.
 See [scope and evidence](Issues203205209TraderClarity.md).
-## Active outcomes
+## Implementation records and status
+
+Historical records for #168–#186 below retain their implementation and review
+evidence. Their pending labels are superseded by the merged PR records in the
+completed table (PR #180 and #187–199); they are not outstanding implementation
+tasks. Newer follow-ups and their limitations remain recorded below. This
+reconciliation against master `357d4987` is not an open-issue census or new QA.
 
 Issue [#206](https://github.com/barryrwilson/Rimward/issues/206) is implemented
 on the isolated `codex/issue-206-haul-duplicates` candidate: the legacy
@@ -415,7 +421,22 @@ artifacts, with their stated limitations.
 
 | Outcome | Issue / merged PR | Durable design or evidence |
 |---|---|---|
-| Only Escape takes the ship back from Agent Play; pointer motion, clicks, flight keys and the fire button are discarded while a lease or an agent-engaged helm owns it, and the HUD says so | [#163](https://github.com/barryrwilson/Rimward/issues/163) / branch `claude/next-issue-519546` | `agentOwnsShip` / `markAgentHelm` in `src/systems/controls.js`; `observe().control.input === 'escape'`; the Escape-only contract in [AgentApiDesign.md](AgentApiDesign.md) and [AgentReactiveDefenseDesign.md](AgentReactiveDefenseDesign.md); issue #163 pins in `test:combat-intent`, `test:reactive-defense`, wave 132/141 of `test:boot`; live check 2026-09-13. |
+| Clarify haul buy-in, market refusals, and temporary price events | [#179](https://github.com/barryrwilson/Rimward/issues/179) / [PR #199](https://github.com/barryrwilson/Rimward/pull/199) | Final PR record; verification applies to its named artifact and stated limits. |
+| Remember visited station sell prices for trade planning | [#174](https://github.com/barryrwilson/Rimward/issues/174) / [PR #198](https://github.com/barryrwilson/Rimward/pull/198) | Final PR record; verification applies to its named artifact and stated limits. |
+| Make larger cargo hulls discoverable after maxing hold racks | [#186](https://github.com/barryrwilson/Rimward/issues/186) / [PR #197](https://github.com/barryrwilson/Rimward/pull/197) | Final PR record; verification applies to its named artifact and stated limits. |
+| Fix false failure messages after automatic docking | [#185](https://github.com/barryrwilson/Rimward/issues/185) / [PR #196](https://github.com/barryrwilson/Rimward/pull/196) | Final PR record; verification applies to its named artifact and stated limits. |
+| Add a real commodity counter buy/sell spread | [#175](https://github.com/barryrwilson/Rimward/issues/175) / [PR #195](https://github.com/barryrwilson/Rimward/pull/195) | Final PR record; verification applies to its named artifact and stated limits. |
+| Queue station docking behind agent routes | [#183](https://github.com/barryrwilson/Rimward/issues/183) / [PR #194](https://github.com/barryrwilson/Rimward/pull/194) | Final PR record; verification applies to its named artifact and stated limits. |
+| Fix harmless station touches cancelling dock approach | [#184](https://github.com/barryrwilson/Rimward/issues/184) / [PR #193](https://github.com/barryrwilson/Rimward/pull/193) | Final PR record; verification applies to its named artifact and stated limits. |
+| Fix haul payouts for destination purchases during a berth | [#182](https://github.com/barryrwilson/Rimward/issues/182) / [PR #192](https://github.com/barryrwilson/Rimward/pull/192) | Final PR record; verification applies to its named artifact and stated limits. |
+| Fix same-berth settlement after unique haul delivery | [#181](https://github.com/barryrwilson/Rimward/issues/181) / [PR #191](https://github.com/barryrwilson/Rimward/pull/191) | Final PR record; verification applies to its named artifact and stated limits. |
+| Add two-gate transport jobs with distance-scaled pay and deadlines | [#176](https://github.com/barryrwilson/Rimward/issues/176) / [PR #190](https://github.com/barryrwilson/Rimward/pull/190) | Final PR record; verification applies to its named artifact and stated limits. |
+| Protect ferry consignment cargo from market sales | [#177](https://github.com/barryrwilson/Rimward/issues/177) / [PR #189](https://github.com/barryrwilson/Rimward/pull/189) | Final PR record; verification applies to its named artifact and stated limits. |
+| Stop the ship after failed dock approaches | [#173](https://github.com/barryrwilson/Rimward/issues/173) / [PR #188](https://github.com/barryrwilson/Rimward/pull/188) | Final PR record; verification applies to its named artifact and stated limits. |
+| Fix docking stage detours for all keep-out bodies | [#172](https://github.com/barryrwilson/Rimward/issues/172) / [PR #187](https://github.com/barryrwilson/Rimward/pull/187) | Final PR record; verification applies to its named artifact and stated limits. |
+| Fix Agent API station approach, controls, and desk consistency | [#168](https://github.com/barryrwilson/Rimward/issues/168), [#169](https://github.com/barryrwilson/Rimward/issues/169), [#170](https://github.com/barryrwilson/Rimward/issues/170), [#171](https://github.com/barryrwilson/Rimward/issues/171), [#178](https://github.com/barryrwilson/Rimward/issues/178) / [PR #180](https://github.com/barryrwilson/Rimward/pull/180) | Final PR record; verification applies to its named artifact and stated limits. |
+| Station hold: only live pursuit presses the dwell (#166) | [#166](https://github.com/barryrwilson/Rimward/issues/166) / [PR #167](https://github.com/barryrwilson/Rimward/pull/167) | Final PR record; verification applies to its named artifact and stated limits. |
+| Only Escape takes the ship back from Agent Play; pointer motion, clicks, flight keys and the fire button are discarded while a lease or an agent-engaged helm owns it, and the HUD says so | [#163](https://github.com/barryrwilson/Rimward/issues/163) / [PR #165](https://github.com/barryrwilson/Rimward/pull/165) | `agentOwnsShip` / `markAgentHelm` in `src/systems/controls.js`; `observe().control.input === 'escape'`; the Escape-only contract in [AgentApiDesign.md](AgentApiDesign.md) and [AgentReactiveDefenseDesign.md](AgentReactiveDefenseDesign.md); issue #163 pins in `test:combat-intent`, `test:reactive-defense`, wave 132/141 of `test:boot`; live check 2026-09-13. |
 | A claimed derelict is kept as an owned hull, sold, or returned at the shipyard desk by the player's choice; a kept hull carries the kit its class implies and `hot: true` | [#159](https://github.com/barryrwilson/Rimward/issues/159) / [#161](https://github.com/barryrwilson/Rimward/pull/161) | `settleClaimedHull` in `src/game/derelict.js`; **Claimed hulls** pane in `shipyard-desk.js`; `npm run test:prize` section 8 inside `test:boot`; live check 2026-09-13. Nothing settles on dock any more. |
 | The shipyard buys an unmounted hull back from the hangar (`HULL_RESALE` home/foreign rates; a hot hull sells anywhere at the fence rate) | [#158](https://github.com/barryrwilson/Rimward/issues/158) / [#160](https://github.com/barryrwilson/Rimward/pull/160) | `sellHangarHull` in `src/game/shipyard.js`; `npm run test:hull-sale` (58 pins) inside `test:boot`; live check 2026-09-13. |
 | An NPC pirate may claim the crew and the hull of a yielded trader and fence the prize; a crewless hull is claimable by the player (H on a locked derelict) onto `world.claimedHulls` | [#147](https://github.com/barryrwilson/Rimward/issues/147) / [#157](https://github.com/barryrwilson/Rimward/pull/157) | `src/game/prize.js`, `PRIZE` / `PRIZE_CLAIM` in `state.js`; `npm run test:prize` inside `test:boot`. A named quarry is never a prize; a prize sale does not feed the market. |
@@ -494,7 +515,7 @@ outcome before implementation; preserve the original product intent.
 | Smoke/capture reliability | One of ten local #139 bridge smoke runs (2026-09-12) timed out only on the later `systemTransition` jump pin (90 s) with docking and console clean, so the flake is real and unrelated to docking. [Intermediate run 34499466594](https://github.com/barryrwilson/Rimward/actions/runs/34499466594) had no eligible public combat target (`attempted:false`) and a Models `captureScreenshot` timeout with four missing flows. The final run passed; retain these as bounded smoke/capture diagnostic follow-ups, not independently confirmed gameplay bugs. |
 | Performance headroom | The enforceable byte caps are now 3,671,906 minified / 1,098,526 gzip bytes: the owner approved doubling the #100 artifact counts by direct request on 2026-09-10, superseding the earlier 1,800,000 / 537,600 limits. Historic measurements are unchanged: #56 measured 1,835,632 minified / 549,169 gzip with a 7,340.4 ms startup median and one of five runs at 8,280 ms against 8,000 ms. The exact descriptor still pins the #100 artifact `assets/index-CY-oCepC.js` at 1,835,953 minified / 549,263 gzip for that exact bundle only. The 8,000 ms startup limit and the browser dependency boundary are unchanged and unwaived. Use the [#56](releases/issue-56-measured-decision.md) and [#100](releases/issue-100-measured-decision.md) measured decisions and the [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. |
 | Agent Play mouse ownership | **Implemented for [#163](https://github.com/barryrwilson/Rimward/issues/163)** (owner report 2026-09-06; owner decision 2026-09-13: Escape is the only takeover). `controls.js` no longer drops a lease on pointer motion, clicks, flight keys or fire; an agent-engaged helm (autopilot, dock approach, automine, flee) is marked by the bridge and released only by Escape. Kept here as the record of the observation; the completed table carries the durable evidence. |
-| Historical raw afterburner/flee report (local PIR-02) | The old raw command acquired a flee helm. #171 replaces that command with a single burner pulse, so its old flee-timer observations do not describe the new raw path. Tactical combat withdrawal retains its separate bounded authorization. See the current Agent API candidate and its live evidence before filing any remaining motion or station-contact defect. |
+| Historical raw afterburner/flee report (local PIR-02) | The old raw command acquired a flee helm. #171 replaces that command with a single burner pulse, so its old flee-timer observations do not describe the new raw path. Tactical combat withdrawal retains its separate bounded authorization. See merged PR #180 and its live evidence before filing any remaining motion or station-contact defect. |
 | Supported resumable API playtest runner (local PIR-07) | Local tooling proposal: expected build/API version, isolated profile, durable sequence recovery, acknowledged safe handoffs and sanitized evidence. Existing scenario probes do not by themselves establish the full resumable-runner contract. Scope only if selected; no browser credentials or in-game LLM runner. |
 | Models loading/retry/disposal (RW-003 PR4) | Optional, unfiled follow-up retained from the [accepted design](Mdl01ShipReferenceDesign.md). PR3 is merged; its narrow-phone sidebar and side-by-side scale comparison remain separately parked. Inspect current loading and resource ownership before writing a new issue. |
 | Historical station/Bloom visuals | [Preservation PR #60](https://github.com/barryrwilson/Rimward/pull/60) is closed **without merge**. Original work is preservation evidence, not current-master implementation. Any selected outcome needs a deliberate port and fresh QA; do not replay old source or backlog wholesale. |
@@ -503,8 +524,8 @@ outcome before implementation; preserve the original product intent.
 The preserved local September 6–7 role playtests cover nine attempted careers,
 not nine completed acceptance suites. Their filed findings map to #61–#74,
 now closed and merged above. PIR-01/03/04/05/06/08/09 map to
-#65/#66/#67/#63/#64/#61/#62 respectively; PIR-02/PIR-07 remain the candidates
-above. Subsequent focused fixes do not turn the old interrupted attempts into
+#65/#66/#67/#63/#64/#61/#62 respectively; PIR-02 is superseded by #171 in
+PR #180; PIR-07 remains the optional runner proposal above. Subsequent focused fixes do not turn the old interrupted attempts into
 successful campaigns or justify cross-role balance conclusions. Broader repeat
 campaigns and long-term progression remain optional evidence work.
 
@@ -527,15 +548,16 @@ dependencies/owner decisions, and likely overlapping files. Create external
 issues only with user or task authorization. Orca auto-start applies only to
 `orca:ready`; design, decision and optional items need their respective gates.
 
-### Issue #174 — remembered station prices (implementation, review pending)
+### Issue #174 — remembered station prices (merged in PR #198)
 
 The branch adds historical SELL quotes captured when viewing a docked market,
 a Market toggle naming the best remembered station and age per commodity,
 chart hover/selection readouts, save normalization and agent row parity.
 [Contract and current verification](Issue174PriceMemory.md). Build, boot and
-focused regressions and ten live browser checks pass; independent QA remains pending.
+focused regressions and ten live browser checks pass. Final review is recorded
+in [PR #198](https://github.com/barryrwilson/Rimward/pull/198).
 
-### Issue #179 — market pane costs, caps and transient prices (independent QA passed)
+### Issue #179 — market pane costs, caps and transient prices (merged in PR #199)
 
 The branch states an offered haul's buy-in and affordability before acceptance,
 stops a bulk-trade refusal outliving the condition that caused it, and labels an
@@ -545,7 +567,10 @@ item 2 (20-capacity rows showing capacity and refill) was already delivered by
 issue #91 and is now locked by regression coverage instead of re-implemented.
 [Contract and current verification](Issue179MarketPane.md). Build, boot, the new
 focused suite and the affected market/haul regressions pass, and nine live
-browser checks pass with zero console errors. Independent Codex QA passed the implementation, including live stock-refusal and timed event-expiry checks; merge remains pending.
+browser checks pass with zero console errors. Independent Codex QA passed the implementation, including live stock-refusal and timed event-expiry checks; merged in
+[PR #199](https://github.com/barryrwilson/Rimward/pull/199). The later #206
+retirement removed the legacy haul buy-in line; generated-haul cost disclosure
+remains a separate candidate, as described above.
 
 ### Issue #218 — supply-sensitive market fills (implemented; pending independent QA)
 
