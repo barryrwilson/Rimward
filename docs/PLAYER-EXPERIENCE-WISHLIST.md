@@ -66,10 +66,12 @@ old prose. Merge status does not establish fresh release QA or deployment.
 Issue #234 has a diagnosis and a narrow recovery-guidance candidate: after an
 impact or blocked approach, the persistent receipt tells the pilot to wait for
 clearance or steer clear, then retry. The desired outcome of dependable light-hull
-arrivals remains open. Natural flight reproduced impacts and repeated blocked
-approaches; no collision-avoidance or blocked-reliability fix is claimed, and
-safety cancellation still relinquishes the helm. Final verification, merge and
-deployment remain separate. See [diagnosis and evidence limits](Issue234LightDocking.md).
+arrivals remains open. The cruise turn-progress defect is now fixed and
+verified by a natural live run that docked 3 of 3 destinations with no blocked
+or impact cancellation. The broader #234 arrival impacts and the remaining
+blocked cases stay under investigation: no collision-avoidance or general
+blocked-reliability fix is claimed, and safety cancellation still relinquishes
+the helm. Final verification, merge and deployment remain separate. See [diagnosis and evidence limits](Issue234LightDocking.md).
 
 ## Collected spy intel reads as ready to file — 2026-09-16
 

@@ -45,6 +45,17 @@ import {
 
 export const AP_STEER_BREAK = 0.65;
 
+// The watchdog's heading-progress step. Extracted unchanged from the literal
+// dockMakingProgress used, and reused as the cruise turn-reference threshold
+// so issue #234 adds no new tuning value.
+const DOCK_HEADING_EPSILON = 0.05;
+const DOCK_TURN_REF_DOT = Math.cos(DOCK_HEADING_EPSILON);
+// Float-jitter floor for "this hull is actually rotating". Orders of magnitude
+// below a real turn (a hull turning 1 rad/s moves ~0.017 rad per frame) and
+// orders of magnitude above quaternion round-off, so it separates genuine
+// rotation from a motionless hull without being a tuning value.
+const DOCK_TURN_NOISE = 1e-3;
+
 const CHANNEL_KEYS = Object.freeze([
   'engaged', 'mode', 'phase', 'yaw', 'pitch', 'throttle', 'idle',
   'wantJump', 'wantDock', 'cycleHub', 'reason',
@@ -142,6 +153,16 @@ let dockBestHeading = Infinity;
 let dockProgressAt = 0;
 let dockWatchAt = 0;
 let dockTrafficWaitUsed = 0;
+// Issue #234, cruise turn credit. The reference is a FROZEN world direction:
+// convergence is measured as the hull's own rotation, so a moving aim can
+// never earn time. The used counter is the hard bound and is refilled only by
+// real all-time-best range progress.
+let dockTurnRefX = 0;
+let dockTurnRefY = 0;
+let dockTurnRefZ = 0;
+let dockTurnRefSet = false;
+let dockTurnBest = Infinity;
+let dockTurnCreditUsed = 0;
 let dockPulseAt = 0;
 let dockPhase = '';
 let dockRecovering = false;
@@ -254,6 +275,7 @@ function resetDockScratch() {
   dockProgressAt = 0;
   dockWatchAt = 0;
   dockTrafficWaitUsed = 0;
+  resetDockTurn();
   dockPulseAt = 0;
   dockPhase = '';
   dockRecovering = false;
@@ -961,6 +983,65 @@ function resetDockWatch(ctx, ap) {
   dockProgressAt = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
   dockWatchAt = dockProgressAt;
   dockTrafficWaitUsed = 0;
+  resetDockTurn();
+}
+
+function resetDockTurn() {
+  dockTurnRefSet = false;
+  dockTurnRefX = 0;
+  dockTurnRefY = 0;
+  dockTurnRefZ = 0;
+  dockTurnBest = Infinity;
+  dockTurnCreditUsed = 0;
+}
+
+// Issue #234. A cruise hull that yields to traffic is held stationary by the
+// align<0.97 turn hold, so it can earn neither range nor (after the aim moved)
+// heading credit, and the cruise watchdog call has no traffic/arc credit at
+// all. It is then cancelled 'blocked' while it is demonstrably turning back
+// onto a clear line.
+//
+// This credits that turn, and ONLY that turn:
+//
+//  - Convergence is measured against dockTurnRef, a world direction frozen
+//    when the heading target last moved materially. A rotating or jumping aim
+//    changes the reference, never the measured error, so target motion alone
+//    can never buy time.
+//  - Adopting a new reference returns 0. A rebase buys exactly zero seconds
+//    and never resets dockProgressAt or dockReplans.
+//  - Every credited second is drawn from ONE watchdog window, refilled only by
+//    a >=1u all-time-best range gain. Replans and aim oscillation cannot rearm
+//    it, so a hull that never actually closes range is finitely bounded.
+function dockTurnCredit(p, aim, fwd, elapsed) {
+  if (!finitePose(p) || !finitePose(aim) || !finitePose(fwd)) return 0;
+  let dx = aim.x - p.x, dy = aim.y - p.y, dz = aim.z - p.z;
+  const span = Math.hypot(dx, dy, dz);
+  if (!(span > 0) || !Number.isFinite(span)) return 0;
+  dx /= span; dy /= span; dz /= span;
+  const rebased = !dockTurnRefSet
+    || dockTurnRefX * dx + dockTurnRefY * dy + dockTurnRefZ * dz < DOCK_TURN_REF_DOT;
+  if (rebased) {
+    dockTurnRefX = dx; dockTurnRefY = dy; dockTurnRefZ = dz;
+    dockTurnRefSet = true;
+  }
+  const heading = Math.hypot(fwd.x, fwd.y, fwd.z);
+  if (!(heading > 0) || !Number.isFinite(heading)) return 0;
+  const dot = Math.max(-1, Math.min(1,
+    (fwd.x * dockTurnRefX + fwd.y * dockTurnRefY + fwd.z * dockTurnRefZ) / heading));
+  const error = Math.acos(dot);
+  if (!Number.isFinite(error)) return 0;
+  // Adoption is the yardstick moving, not the hull turning: no credit.
+  if (rebased) { dockTurnBest = error; return 0; }
+  // Credit the time spent genuinely converging, not a fixed step, so a real
+  // recovery turn is covered for as long as it actually takes. DOCK_TURN_NOISE
+  // is a float-jitter floor, far below any real turn rate: a motionless hull
+  // recomputes the same error and earns nothing.
+  if (!(error <= dockTurnBest - DOCK_TURN_NOISE)) return 0;
+  dockTurnBest = error;
+  if (!Number.isFinite(elapsed) || elapsed <= 0) return 0;
+  const credit = Math.min(elapsed, Math.max(0, DOCK_BLOCK_SECONDS - dockTurnCreditUsed));
+  dockTurnCreditUsed += credit;
+  return credit;
 }
 
 // A committed station tangent can increase literal stage range while its
@@ -998,7 +1079,7 @@ function dockStationArcCredit(p, goal) {
   return DOCK_BLOCK_SECONDS * gain / keep;
 }
 
-function dockMakingProgress(ctx, ap, range, yawAbs, trafficYield = false, arcCredit = 0) {
+function dockMakingProgress(ctx, ap, range, yawAbs, trafficYield = false, arcCredit = 0, turn = null) {
   const now = ctx.world && Number.isFinite(ctx.world.time) ? ctx.world.time : 0;
   if (dockPhase !== ap.phase) resetDockWatch(ctx, ap);
   const elapsed = Math.max(0, Math.min(0.25, now - dockWatchAt));
@@ -1007,15 +1088,25 @@ function dockMakingProgress(ctx, ap, range, yawAbs, trafficYield = false, arcCre
   if (Number.isFinite(range) && range <= dockBestRange - 1) {
     dockBestRange = range;
     dockTrafficWaitUsed = 0;
+    // Real all-time-best range progress is the ONLY thing that refills the
+    // cruise turn budget. It is cleared here, before this frame's turn credit
+    // is measured, so a rebase can never survive or steal a range reset.
+    dockTurnCreditUsed = 0;
     improved = true;
   }
-  if (Number.isFinite(yawAbs) && yawAbs <= dockBestHeading - 0.05) {
+  if (Number.isFinite(yawAbs) && yawAbs <= dockBestHeading - DOCK_HEADING_EPSILON) {
     dockBestHeading = yawAbs;
     improved = true;
   }
+  // Cruise only. Passing elapsed 0 on an improved frame keeps the frozen
+  // reference current without debiting the budget for time already credited.
+  const turnCredit = turn && ap.phase === 'cruise'
+    ? dockTurnCredit(turn.p, turn.aim, turn.fwd, improved ? 0 : elapsed) : 0;
   if (improved) dockProgressAt = now;
   else if (ap.phase === 'stage' && Number.isFinite(arcCredit) && arcCredit > 0) {
     dockProgressAt += Math.min(arcCredit, Math.max(0, now - dockProgressAt));
+  } else if (turnCredit > 0) {
+    dockProgressAt += Math.min(turnCredit, Math.max(0, now - dockProgressAt));
   }
   // Give verified moving traffic at most one watchdog window of waiting
   // credit per episode without distance progress. New blockers or changing
@@ -1333,7 +1424,12 @@ function dockTick(ctx) {
         ? range - DOCK_CRUISE_START_RANGE : stageDistance - DOCK_CRUISE_RANGE;
       if (dockShouldBrake(cruiseRemaining, speed, acceleration,
         DOCK_STAGE_BRAKE_BUFFER)) ap.throttle = 0;
-      if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs)) return;
+      // Issue #234: the cruise hold is a turn hold. Offer the frozen-reference
+      // turn credit so a hull rotating back onto a clear line is not cancelled
+      // as blocked; the credit is capped at one watchdog window per real range
+      // gain, so a permanently held hull still times out.
+      if (!dockMakingProgress(ctx, ap, stageDistance, steer.yawAbs, false, 0,
+        { p, aim: _aim, fwd: _fwd })) return;
       return;
     }
     const aligned = steer.align >= 0.97;
