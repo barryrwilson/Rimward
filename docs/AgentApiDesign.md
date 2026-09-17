@@ -572,6 +572,16 @@ and invalid origins omit them. Completing a spy objective at the destination
 still requires returning to `payAt`; the Jobs desk's existing file-at-home copy
 states the same requirement. No settlement or reward rules change.
 
+**Collected spy intel (issue #235).** An accepted `espionage` row whose
+`progress` has reached 1 reports `status: 'Intel acquired—return to <station>
+to file.'`, naming the same station as its own `payAt`. Before collection it
+keeps the #205 briefing line, its `destSystem`, and the rest of the row.
+Other return-for-payment families keep the briefing line at every progress
+value. The status is derived from the observed `progress`, exactly as the Jobs
+desk card is; no field is saved, no event or command is added, and rewards,
+deadlines and settlement are untouched. Delivered, lapsed and abandoned spy
+records leave `jobs.active` as before and pay only once.
+
 **Restricted trade refusals (issue #209).** The `trade` command's
 restricted-goods refusal uses `token: 'restricted'`, retaining the complete
 dockmaster line in `error`. `market.rows[].tradeAllowed === false` describes

@@ -61,6 +61,27 @@ unfiled candidates. Dated playtest observations below retain their original
 product intent and evidence limits; they are not new defects inferred from
 old prose. Merge status does not establish fresh release QA or deployment.
 
+## Light-hull arrival recovery remains partial — 2026-09-16
+
+Issue #234 has a diagnosis and a narrow recovery-guidance candidate: after an
+impact or blocked approach, the persistent receipt tells the pilot to wait for
+clearance or steer clear, then retry. The desired outcome of dependable light-hull
+arrivals remains open. Natural flight reproduced impacts and repeated blocked
+approaches; no collision-avoidance or blocked-reliability fix is claimed, and
+safety cancellation still relinquishes the helm. Final verification, merge and
+deployment remain separate. See [diagnosis and evidence limits](Issue234LightDocking.md).
+
+## Collected spy intel reads as ready to file — 2026-09-16
+
+Issue #235 is implemented on an isolated candidate, pending independent QA: once
+an agent collects the intel, the accepted espionage row in `observe().jobs`
+states `Intel acquired—return to <station> to file.` instead of the conditional
+briefing, naming the same station as `payAt` and the desk card. Before
+collection the destination and briefing are unchanged, and the other
+return-for-payment families are untouched. This is wording derived from existing
+state; no saved field, command, event, reward or deadline changes. Merge and
+deployment remain separate; see [scope and evidence](Issue235SpyStatus.md).
+
 ## Trader API clarity — 2026-09-16
 
 Issues #203, #205, and #209 are implemented and verified on an isolated candidate: identify the

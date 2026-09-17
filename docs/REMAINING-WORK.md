@@ -1,5 +1,30 @@
 # RIMWARD remaining work
 
+## Light-hull arrival diagnosis and recovery guidance — #234
+
+Partial candidate only: impact and blocked-approach messages now tell the pilot
+to wait for clearance or steer clear, then retry the approach. The distinct
+reason tokens and cancellation behavior remain intact. A natural browser route
+reproduced ship/gate impacts and repeated blocked approaches with traffic and
+safety checks enabled; the recovery wording does not fix those arrival failures.
+Collision avoidance and blocked-approach reliability remain open pending a
+bounded diagnosis of planner decisions and moving traffic. Issue #234 is not
+complete; final verification, merge and deployment remain separate. See
+[diagnosis and evidence limits](Issue234LightDocking.md).
+
+## Collected spy intel status — #235
+
+Implemented on `codex/issue-235-spy-status`, pending independent QA: an accepted
+espionage row whose objective is collected reports `Intel acquired—return to
+<station> to file.` in `observe().jobs.active[]`, naming its own `payAt` and
+agreeing with the Jobs desk card. The pre-collection briefing, destination
+fields, other job families, rewards, deadlines and settlement are unchanged, and
+nothing new is saved. Focused #203/#205/#209 coverage was extended with
+before/after collection, two employers, and delivered/lapsed/abandoned records
+with no duplicate payment; the live Chromium probe passes. Follow-up to closed
+#205, under tracking issue #233. Merge and deployment remain separate; see
+[scope and evidence](Issue235SpyStatus.md).
+
 ## Predictable freighter docking — #221
 
 Implemented on `codex/issue-221-freighter-docking`, pending independent QA.

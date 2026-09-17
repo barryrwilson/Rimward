@@ -7811,6 +7811,12 @@ export function initStation(ctx) {
     }
     if (typeof origin !== 'string' || !Object.hasOwn(SYSTEMS, origin)) return null;
     const name = SYSTEMS[origin].station?.name || SYSTEMS[origin].name;
+    // Issue 235: once the spy objective is collected the instruction stops being
+    // conditional. Derived from the same progress the desk card reads; nothing
+    // is saved, and settlement still happens on docking at payAt.
+    if (job.kind === 'espionage' && Number.isFinite(job.progress) && job.progress >= 1) {
+      return { payAt: origin, status: `Intel acquired—return to ${name} to file.` };
+    }
     return { payAt: origin, status: `Report at ${name} for payment after completing the objective.` };
   }
 

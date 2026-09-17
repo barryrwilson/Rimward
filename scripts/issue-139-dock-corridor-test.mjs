@@ -150,7 +150,8 @@ if (caseName === 'cancel') {
     ctx.lastEvents = [{ type: 'bodyHit', kind, speed: 30, t: ctx.world.time }];
     apSystem.update(DT);
     pin(`${kind} contact cancels dock approach`, !ctx.autopilot.engaged && ctx.autopilot.reason === 'impact');
-    pin('impact toast names hull contact', ctx.events.some(e => e.type === 'commLine' && e.text === 'Dock approach cancelled: hull contact.'));
+    // Issue #234 appended a next action; the specific cause text is unchanged.
+    pin('impact toast names hull contact', ctx.events.some(e => e.type === 'commLine' && e.text === 'Dock approach cancelled: hull contact. Wait for clearance or steer clear, then retry the approach.'));
     stopped(kind);
   }
   begin(); ctx.lastEvents = [{ type: 'shieldHit', player: true, actor: 'player', t: ctx.world.time }];

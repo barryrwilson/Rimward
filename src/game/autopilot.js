@@ -85,8 +85,12 @@ export const DOCK_APPROACH_LINES = Object.freeze({
   'no-station': 'Dock approach refused — current station is unavailable.',
   stale: 'Dock approach cancelled — station state became invalid.',
   'lost-station': 'Dock approach cancelled — station was lost.',
-  blocked: 'Dock approach cancelled — route is blocked.',
-  impact: 'Dock approach cancelled: hull contact.',
+  // Issue #234: both cancellations are truthful but gave the pilot no next
+  // action. The specific cause is unchanged; only a usable follow-up is
+  // appended. The helm is never retaken automatically — approachDock is the
+  // public command, so "retry the approach" is the literal next step.
+  blocked: 'Dock approach cancelled — route is blocked. Wait for clearance or steer clear, then retry the approach.',
+  impact: 'Dock approach cancelled: hull contact. Wait for clearance or steer clear, then retry the approach.',
   'dock-refused': 'Dock approach cancelled — dock pulse was refused.',
   cancel: 'Dock approach cancelled.',
   input: 'Dock approach cancelled — manual helm.',
