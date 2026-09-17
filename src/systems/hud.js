@@ -947,6 +947,43 @@ function ensureW2Styles() {
   text-transform: uppercase;
   color: var(--dim);
 }
+/* Issue #236/#237: one persistent mission-status line. Same text the Jobs
+   card and the public API publish; hidden entirely when no line is active.
+
+   Placement: the LEFT rail under the controls chip. The right rail already
+   carries the manifest, the power/bio/position stack and the agent-play panel,
+   and a 44ch line pinned there was overlapped and unreadable at 1440x900
+   (out/issue-236-237/live-attempt-2/courier-success/partial-observation.png).
+   The left column above the plant/flight/heat row is free at every supported
+   size, and the width is clamped so a narrow window wraps instead of running
+   under the centre reticle. */
+#hud .rw-mission-status {
+  position: absolute;
+  top: 72px;
+  left: 14px;
+  right: auto;
+  max-width: min(42ch, calc(100vw - 420px));
+  min-width: 0;
+  padding: 6px 12px;
+  background: rgba(2, 6, 13, 0.82);
+  border-left: 3px solid var(--cyan);
+  border-radius: 2px;
+  font-size: calc(12px * var(--rw-text-scale, 1));
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  text-align: left;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+@media (max-width: 900px) {
+  #hud .rw-mission-status {
+    top: 64px;
+    max-width: calc(100vw - 28px);
+  }
+}
+#hud .rw-mission-status.is-hidden { display: none; }
+#hud .rw-mission-status.is-warned { color: var(--warn, #f0c070); }
 #hud .rw-jump {
   position: absolute;
   left: 50%;
@@ -1114,6 +1151,10 @@ export function initHud(ctx) {
   const jumpFill = el('div', 'rw-bar-fill', jumpTrack);
 
   // ---------- context prompt (§13.4, one verb, bottom-center) ----------
+  // Issue #236/#237: persistent mission status (courier shadowing today).
+  // Text-safe: textContent only, from the shared station evaluator.
+  const missionStatus = el('div', 'rw-mission-status is-hidden', root);
+  missionStatus.setAttribute('role', 'status');
   const prompt = el('div', 'rw-prompt is-hidden', root);
   const promptKey = el('span', 'rw-prompt-key', prompt);
   const promptVerb = el('span', 'rw-prompt-verb', prompt);
@@ -1459,6 +1500,7 @@ export function initHud(ctx) {
     mood: '', echoes: -1, combat: null, contactsShown: null,
     prompt: '',
     promptSalvage: false,
+    missionStatus: '',
     posX: NaN, posY: NaN, posZ: NaN,
     homeRowShown: null, homeVal: '', homePipDist: '',
     homePipShown: null, homeChevShown: null,
@@ -2875,6 +2917,24 @@ export function initHud(ctx) {
           }
         }
       }
+      // --- Issue #236/#237: persistent mission status line ---
+      {
+        let line = '';
+        try {
+          const desk = ctx.stationDesk;
+          if (desk && typeof desk.peekShadowStatus === 'function') line = desk.peekShadowStatus();
+        } catch {
+          line = '';
+        }
+        const text = stripHudText(typeof line === 'string' ? line : '').slice(0, 200);
+        if (text !== last.missionStatus) {
+          last.missionStatus = text;
+          missionStatus.textContent = text;
+          missionStatus.classList.toggle('is-hidden', !text);
+          missionStatus.classList.toggle('is-warned', text.includes('Give me room'));
+        }
+      }
+
       const pStr = pKey + '|' + pVerb;
       const pSalvage = pVerb === 'Hail — dead in space';
       if (pStr !== last.prompt) {

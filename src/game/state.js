@@ -779,6 +779,46 @@ export const JUMP = {
 };
 
 /**
+ * Courier shadowing (issues #236/#237). Tuning only — the contract, geometry
+ * and the frame integrator live in game/courier-shadow.js. These are the
+ * design's PROVISIONAL playtest values, not measured balance conclusions.
+ * Distances are world units; times are simulation seconds.
+ *
+ * No new event name, key, gauge, equipment SKU or currency belongs here: the
+ * subtype reuses the espionage job family, existing comms and the Jobs desk.
+ */
+export const COURIER_SHADOW = Object.freeze({
+  version: 1,
+  slot: 2, // reserved for this subtype only; introductory spy keeps 0/1
+  slotsPerSystem: 1,
+  mission: 'courier-shadow',
+  classKey: 'freighter',
+  cruiseCap: 60, // <= SHIP_CLASSES.light.cruise: a starter hull can always keep station
+  requiredSeconds: 30,
+  minRange: 150, // inclusive lower edge of the safe observation band
+  maxRange: 400, // inclusive upper edge
+  suspicionMax: 100,
+  suspicionGain: 10, // points/s inside minRange with clear sight
+  suspicionDecay: 5, // points/s at any other distance or with sight broken
+  warnAt: 40,
+  graceSeconds: 8, // cumulative dangerous seconds AFTER a presented warning
+  frameSeconds: 0.1, // hard cap of mission time per visible rendered frame
+  deadlineSeconds: 900,
+  rendezvousRange: 900, // |offset| from the station along the perpendicular T
+  farRange: 1500, // the route's far waypoint along the same T
+  corridorRadius: 50, // courier-motion corridor around the route segment
+  // End turns: a freighter's ordinary minimum turn radius is 200 u, so an
+  // arcing reversal would swing the hull far outside the 50 u corridor. The
+  // courier instead holds station and pivots while its heading error exceeds
+  // this angle (rad), then resumes ordinary route flight. 200*(1-cos 0.25) is
+  // about 6 u of residual arc — well inside the 50 u corridor once the 34.6 u
+  // freighter hull extent is taken out of it.
+  turnHoldAngle: 0.25,
+  observationEnvelope: 400, // the whole qualifying-ray volume beyond the corridor
+  safetyMargin: 50,
+});
+
+/**
  * NPC escape (issue #68): a fleeing hull runs for a real physical gate or the
  * station holding lane instead of open space. Tuning only — the contract,
  * scoring and phase machine live in game/npc-escape.js. No damage, repair or

@@ -4,6 +4,10 @@ import { initPrices, tickPrices, applyEventPressure } from './market.js';
 import { writeStationHold } from './traffic-feel.js';
 import { tickDerelicts, writeDerelictPosition } from './derelict.js';
 import {
+  shadowJobForRecordId, shadowRoute, isShadowRecordId,
+  certifyShadowSystem, shadowPlanetsClear, shadowHullExtent,
+} from './courier-shadow.js';
+import {
   readEscape,
   escapeActive,
   escapeRouted,
@@ -296,10 +300,12 @@ function poolName(pool, sysId, i, fallback) {
   return (names && names[i]) ?? `${fallback} ${sysId}-${i + 1}`;
 }
 
-function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty = 0, system, outboundTo = null }) {
+function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty = 0, system, outboundTo = null, id = null }) {
   const plain = plainRoute(route);
   return {
-    id: `rec-${nextRecordNum++}`,
+    // Issue #236: a mission-owned hull carries its own namespaced id so the
+    // job binding survives a reload; every other record keeps the counter.
+    id: typeof id === 'string' && id ? id : `rec-${nextRecordNum++}`,
     name,
     classKey,
     faction,
@@ -477,7 +483,7 @@ function rebuildTransitRegistry(ctx) {
     const bank = banks[sysId];
     for (let i = 0; i < bank.length; i++) {
       const rec = bank[i];
-      if (rec.role === 'trader') normalizeTraderRecord(rec);
+      if (rec.role === 'trader') normalizeTraderRecord(rec, ctx);
       if (rec.role === 'miner') normalizeMinerRecord(rec);
       if (rec.role === 'patrol') healPadHome(rec);
       if (rec.state === 'inTransit') inTransitRegistry.push({ rec, sysId });
@@ -812,8 +818,13 @@ export function healPadHome(rec) {
 }
 
 /** Heal outboundTo and clamp old 3-waypoint trader routes to station↔gate. */
-export function normalizeTraderRecord(rec) {
+export function normalizeTraderRecord(rec, ctx = null) {
   if (!rec || rec.role !== 'trader') return rec;
+  // Issue #236: a courier bound to an ACCEPTED shadow assignment keeps the
+  // exact authored off-lane route the briefing and the API both quote. The
+  // ownership test reads the live job, never a flag on the record, so the
+  // moment that job ends the hull is ordinary traffic again.
+  if (shadowOwnedRecord(ctx, rec)) return rec;
   rec.outboundTo ??= null;
   if (rec.system && SYSTEMS[rec.system]?.gates?.length) traderOutboundDest(rec, rec.system);
   const route = rec.route;
@@ -841,6 +852,162 @@ export function normalizeTraderRecord(rec) {
   return rec;
 }
 
+// ---------- Courier shadowing (#236/#237): mission-owned hull lifecycle ----------
+
+/** The exact fixed identity a shadow courier must keep to stay adoptable. */
+const SHADOW_CLASS = 'freighter';
+
+/**
+ * Is `rec` the bound courier of an ACCEPTED shadow assignment right now?
+ *
+ * Ownership is derived from the live job's exact `recordId` — never from a
+ * flag written on the record — so a dropped, paid, abandoned or expired job
+ * leaves the hull as ordinary traffic on the very next read. The id-shape
+ * test runs first so this costs nothing for the other records in a bank.
+ */
+export function shadowOwnedRecord(ctx, rec) {
+  if (!ctx || !rec || typeof rec.id !== 'string') return false;
+  if (!isShadowRecordId(rec.id)) return false;
+  const world = ctx.world;
+  if (!world) return false;
+  return shadowJobForRecordId(world.jobs, rec.id) !== null;
+}
+
+/** Can this existing record be adopted as `job`'s courier instead of duplicated? */
+function shadowRecordAdoptable(rec, destId) {
+  return !!rec
+    && rec.role === 'trader'
+    && rec.classKey === SHADOW_CLASS
+    && rec.system === destId
+    && rec.state !== 'dead'
+    && rec.state !== 'captured'
+    && rec.state !== 'inTransit';
+}
+
+/** The bank a courier belongs to, or null while that system is unvisited. */
+function shadowBank(ctx, destId) {
+  const banks = ctx && ctx.world && ctx.world.recordBanks;
+  if (!banks || typeof banks !== 'object' || Array.isArray(banks)) return null;
+  if (!Object.hasOwn(banks, destId)) return null;
+  const bank = banks[destId];
+  return Array.isArray(bank) ? bank : null;
+}
+
+/** The bound record, or null. Never falls back on a nearest or similar ship. */
+export function findShadowCourier(ctx, job) {
+  if (!job || typeof job.recordId !== 'string' || typeof job.destSystem !== 'string') return null;
+  const bank = shadowBank(ctx, job.destSystem);
+  if (!bank) return null;
+  for (let i = 0; i < bank.length; i++) {
+    if (bank[i] && bank[i].id === job.recordId) return bank[i];
+  }
+  return null;
+}
+
+/** Has the destination bank been materialized yet? */
+export function shadowBankReady(ctx, destId) {
+  return shadowBank(ctx, destId) !== null;
+}
+
+/**
+ * Recertify the destination at MATERIALIZATION, not just at offer time.
+ *
+ * The whole static certificate is re-run against the destination's actual
+ * gate/hub/station/field geometry, and when the destination is the system the
+ * player is standing in, against the REAL live planet bounds the renderer is
+ * publishing this frame rather than the seeded build phase. A destination that
+ * no longer certifies gets no courier: the caller ends the assignment.
+ */
+export function shadowMaterializationCertified(ctx, destId) {
+  const cert = certifyShadowSystem(destId, { hullRadius: shadowHullExtent() });
+  if (!cert.ok) return false;
+  if (!ctx || !ctx.world || ctx.world.currentSystem !== destId) return true;
+  return shadowPlanetsClear(cert.route, ctx.planetBodies);
+}
+
+/**
+ * ONE creation attempt for one accepted assignment, in an already
+ * materialized destination bank.
+ *
+ * Before inserting, the exact id is checked: a valid matching record is
+ * ADOPTED, not duplicated. Returns the record on success, or null — the
+ * caller (station.js) owns what a failure means for the job, so nothing here
+ * writes job state, standing or credits.
+ */
+export function createShadowCourier(ctx, job, destId) {
+  if (!ctx || !job) return null;
+  if (typeof destId !== 'string' || !Object.hasOwn(SYSTEMS, destId)) return null;
+  const recordId = job.recordId;
+  if (typeof recordId !== 'string' || !isShadowRecordId(recordId)) return null;
+  const name = typeof job.target === 'string' && job.target ? job.target : null;
+  if (!name) return null;
+  const bank = shadowBank(ctx, destId);
+  if (!bank) return null;
+  // Recertify BEFORE any insert or adoption. A route that has stopped being
+  // safe must not gain a hull, and an existing matching record must not be
+  // adopted onto geometry that no longer clears.
+  if (!shadowMaterializationCertified(ctx, destId)) return null;
+  for (let i = 0; i < bank.length; i++) {
+    const rec = bank[i];
+    if (!rec || rec.id !== recordId) continue;
+    return shadowRecordAdoptable(rec, destId) ? rec : null;
+  }
+  const route = shadowRoute(SYSTEMS[destId]);
+  if (!route.ok) return null;
+  const rec = makeRecord(ctx, {
+    id: recordId,
+    name,
+    classKey: SHADOW_CLASS,
+    faction: SYSTEMS[destId].faction, // an ordinary local hull; no mission flag
+    role: 'trader',
+    route: [route.near, route.far],
+    cargo: [],
+    bounty: 0,
+    system: destId,
+    outboundTo: null,
+  });
+  // Deterministic start at the posted rendezvous end of its own route.
+  rec.legT = 0;
+  rec.leg = 0;
+  rec.dir = 1;
+  bank.push(rec);
+  return rec;
+}
+
+/**
+ * Terminal release of a shadow courier.
+ *
+ * Dropping ownership alone is not enough: the hull keeps the mission's custom
+ * two-waypoint route forever (normalizeTraderRecord only truncates routes
+ * LONGER than two), so every finished assignment would leave one more
+ * permanent freighter in the destination bank. Retire the exact bound record
+ * instead — one bank splice, by id.
+ *
+ * A hull that happens to be instantiated is not killed, wrecked or modified:
+ * it simply stops being a bank record, so traffic.js retires it on its
+ * ordinary range pass and the spawn pass can never re-instantiate it. No
+ * unrelated record is touched. Returns true when a record was retired.
+ */
+export function releaseShadowCourier(ctx, job) {
+  if (!job || typeof job.recordId !== 'string' || !isShadowRecordId(job.recordId)) return false;
+  const banks = ctx && ctx.world && ctx.world.recordBanks;
+  if (!banks || typeof banks !== 'object' || Array.isArray(banks)) return false;
+  let released = false;
+  for (const sysId in banks) {
+    if (!Object.hasOwn(banks, sysId)) continue;
+    const bank = banks[sysId];
+    if (!Array.isArray(bank)) continue;
+    for (let i = bank.length - 1; i >= 0; i--) {
+      const rec = bank[i];
+      if (!rec || rec.id !== job.recordId) continue;
+      bank.splice(i, 1);
+      rec.live = false;
+      released = true;
+    }
+  }
+  return released;
+}
+
 export function normalizeMinerRecord(rec) {
   if (!rec || rec.role !== 'miner') return rec;
   healPadHome(rec);
@@ -864,8 +1031,11 @@ export function traderOutboundDest(rec, sysId) {
   return rec.outboundTo;
 }
 
-export function traderAtOutboundGate(rec) {
+export function traderAtOutboundGate(rec, ctx = null) {
   if (!rec || rec.role !== 'trader' || rec.state !== 'enroute') return false;
+  // A bound courier never becomes a migration candidate: its assignment ends
+  // at the system line. No other trader gets this guard.
+  if (shadowOwnedRecord(ctx, rec)) return false;
   // Issue #68: a runner's frozen lane position is not a gate dwell. An
   // escaping record is never an ordinary migration candidate.
   if (escapeActive(rec)) return false;
@@ -1181,7 +1351,11 @@ export function tickBank(bank, sysId, ctx) {
       if (!rec.live) tickEscapeRecord(rec, sysId, ctx);
       continue;
     }
-    if (rec.role === 'trader') normalizeTraderRecord(rec);
+    // Issue #236: offline lane progress would walk a bound courier off the
+    // certified corridor while nobody is watching. Live local movement stays
+    // enabled — npc.js drives the instantiated hull on the same route.
+    if (shadowOwnedRecord(ctx, rec)) continue;
+    if (rec.role === 'trader') normalizeTraderRecord(rec, ctx);
     if (rec.role === 'miner') {
       normalizeMinerRecord(rec);
       rec.cargo ??= [];
@@ -1828,7 +2002,7 @@ export function initWorld(ctx) {
         // Ace and pirates never migrate. Live ships at the gate may leave —
         // traffic.js despawns inTransit. Mid-lane live ships are not yanked.
         const rec = bank[i];
-        if (!traderAtOutboundGate(rec)) continue;
+        if (!traderAtOutboundGate(rec, ctx)) continue;
         count++;
         if (Math.random() < 1 / count) { // reservoir pick, no alloc
           chosen = rec;

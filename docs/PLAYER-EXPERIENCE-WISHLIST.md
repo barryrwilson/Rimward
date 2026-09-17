@@ -73,6 +73,45 @@ blocked cases stay under investigation: no collision-avoidance or general
 blocked-reliability fix is claimed, and safety cancellation still relinquishes
 the helm. Final verification, merge and deployment remain separate. See [diagnosis and evidence limits](Issue234LightDocking.md).
 
+## Following a courier is its own kind of work — 2026-09-17
+
+Issues #236/#237 are implemented and independently verified on isolated runtime
+candidate `da1dc8cf`. A Jobs desk now carries one extra clearly titled
+**Shadow courier** posting beside the introductory spy work. The briefing names
+the courier, the rival system, a fixed off-lane rendezvous 900 units square
+across the station-to-gate lane, the 150–400 unit observation band, thirty
+accumulated seconds, the filing dock and the exact quote — and it says plainly
+that docking does not gather this report and that crowding inside 150 units
+attracts attention.
+
+The pilot flies there, finds the name with ordinary targeting, and holds station
+with normal throttle and match-speed. Getting greedy is the interesting part:
+inside 150 units with clear sight the courier's patience runs down, it warns the
+pilot by name, and only after that warning has actually been shown on screen does
+the eight-second grace start to burn. Opening the range or breaking sight stops
+it immediately and the attention falls away. Persisting loses the assignment and
+nothing else — no police, no wanted state, no faction penalty, no forced fight
+for a starter hull. Withdrawing is always a real option. Later courier loss
+cannot revoke an acquired report; it must still be filed before the deadline.
+
+Warnings now say out loud how much patience is left and whether this is the
+final one, and the briefing names which hand the rendezvous is on — hold off the
+dock upright, world up, facing the first gate, and it is 900 units out to your
+right — rather than leaving two opposite answers 1800 units apart.
+
+All 52 focused checks, build, unchanged boot and independent code/security reviews
+pass. Natural starter-hull play completed observation, loss/reacquisition, a mixed
+spy career and exactly-once payment; a separate successful session verified
+warning, withdrawal, grace persistence across reload and exposure followed by
+escape. Console checks were clean. The persistent status is readable at desktop
+and narrow widths, and local danger takes priority over remote job instructions.
+Provisional tuning is not a broad balance conclusion, and #234 docking reliability
+remains separate. No merge or deployment is claimed. See the
+[final evidence and limits](Issue236237ImplementationReview.md),
+[contract](Issue236237CourierShadowingDesign.md),
+[design review](Issue236237DesignReview.md) and
+[implementation mission](missions/issue-236-237.md).
+
 ## Collected spy intel reads as ready to file — 2026-09-16
 
 Issue #235 is implemented on an isolated candidate, pending independent QA: once

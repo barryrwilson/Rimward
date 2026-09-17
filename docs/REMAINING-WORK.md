@@ -2,22 +2,35 @@
 
 ## Courier shadowing and mission-local suspicion — #236 / #237
 
-Design drafted by Sloane on `codex/spy-shadowing-design-236-237`, based on
-`83ec515879ed116621ff843ddc382e341047e364`. The owner selected this batch;
-the issues' explicit schema/scope gate remains pending. The bounded proposal
-adds a named local courier, deliberate observation, warning and withdrawal,
-and employer-only basic payment while preserving introductory spy jobs.
-See [implementation contract and approval request](Issue236237CourierShadowingDesign.md).
-Independent review of `558a1a90` found slot/cap and lifecycle contract gaps;
-the revised design specifies subtype dispatch, save limits, creation identity,
-and numeric public rendezvous data. A second review closed those findings and
-identified unsafe route geometry; the new revision specifies a perpendicular
-off-lane route with full observation-envelope clearance. Independent Claude
-design review passed on `45f08800c701578f94820604338fb8d4b5049eed`.
-See [verdict, limits and implementation clarifications](Issue236237DesignReview.md).
-Next: explicit implementation-scope approval, then implementation and gameplay
-verification. No product code or implementation QA is claimed; optional deep
-intelligence (#238) remains parked.
+Implemented and acceptance verified on isolated branch
+`codex/issues-236-237-courier`, runtime candidate
+`da1dc8cfa06e87eb0f3c16343b1e173bcd45e3c7`. The owner approved the schema and
+scope on 2026-09-17. The separate **Shadow courier** posting adds named-target
+observation, mission-local suspicion, warning/withdrawal, persisted grace,
+exposure and employer-only basic payment while preserving introductory spy jobs.
+
+Independent code/regression and bounded security reviews PASS. All 52 focused
+grouped checks, build and unchanged boot pass. Natural starter-hull play verified
+30 seconds of observation, lost/reacquired contact, a mixed introductory/shadow
+career and exactly 840 UU combined settlement with no duplicate payment. A
+second successful session verified warning, safe withdrawal, exact grace across
+ordinary autosave reload, deliberate exposure and escape without forced combat.
+Both successful scenarios had zero console errors/exceptions. Desktop and narrow
+mission status were visually checked.
+
+The courier's motion corridor, route/envelope clearance, strict save validation,
+identity/lifecycle and per-job isolation have focused automated coverage.
+Earlier review failures were repaired, including the HUD warning priority across
+employers. The successful career's delayed browser shutdown is recorded honestly
+with independent cleanup confirmation; the combined warning run completed with
+clean harness shutdown. Existing #234 docking failures and provisional balance
+remain separate limitations. Optional deep intelligence (#238) remains parked.
+
+See the [final implementation review](Issue236237ImplementationReview.md) for
+exact evidence and limits, the [implementation mission](missions/issue-236-237.md)
+for history, and the [approved contract](Issue236237CourierShadowingDesign.md)
+and [design review](Issue236237DesignReview.md) for scope. No merge or deployment
+is claimed; the everyday checkout remains unchanged.
 
 ## Light-hull arrival diagnosis and recovery guidance — #234
 

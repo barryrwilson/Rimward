@@ -59,6 +59,31 @@ import {
   applyBerthInput,
 } from '../game/launch-clearance.js';
 import { requestLaneClearance } from './npc.js';
+import { SUSPEND_AFTER_MS } from './controls.js';
+import { COURIER_SHADOW } from '../game/state.js';
+import {
+  certifyShadowSystem,
+  freshShadowState,
+  isShadowJob,
+  pointInCorridor,
+  SHADOW_COPY,
+  shadowCourierName,
+  shadowDetectable,
+  shadowFrameSeconds,
+  shadowHullExtent,
+  shadowPlanetsClear,
+  shadowRecordId,
+  shadowRendezvousSide,
+  shadowRoute,
+  shadowSightClear,
+  stepShadow,
+} from '../game/courier-shadow.js';
+import {
+  createShadowCourier,
+  findShadowCourier,
+  releaseShadowCourier,
+  shadowBankReady,
+} from '../game/world.js';
 import { requestAutosave, stripControlChars, NAME_MAX } from '../game/save.js';
 import {
   DATA_CRYSTAL,
@@ -2469,6 +2494,10 @@ function healOfferedMiningTwins(ctx, sysId) {
 function jobSlotOf(job) {
   if (job.slot === 1) return 1;
   if (job.slot === 0) return 0;
+  // Issue #236: slot 2 exists for the EXACT courier-shadow subtype and for
+  // nothing else. Slot alone never opens it, so an old or stuffed espionage
+  // row with slot 2 still has no slot at all.
+  if (job.slot === COURIER_SHADOW.slot && isShadowJob(job)) return COURIER_SHADOW.slot;
   return null;
 }
 
@@ -3499,7 +3528,10 @@ function espionageRivalList(origin) {
 
 function resolveEspionageDest(ctx, origin, slot) {
   if (!Object.hasOwn(SYSTEMS, origin)) return null;
-  const n = slot === 1 ? 1 : 0;
+  // Issue #236: slot 2 resolves EXPLICITLY to the same first eligible rival as
+  // introductory slot 0 — it must never reach the non-1 fallback by accident.
+  // Offer and acceptance both come through here, so they cannot disagree.
+  const n = slot === COURIER_SHADOW.slot ? 0 : (slot === 1 ? 1 : 0);
   const list = espionageRivalList(origin);
   if (n >= list.length) return null;
   const dest = list[n];
@@ -3561,6 +3593,383 @@ function makeEspionageJob(ctx, sysId, slot) {
   };
 }
 
+// ---------- Courier shadowing (#236/#237) ----------
+// One extra, clearly titled posting at the SAME Jobs desk, in its own slot and
+// its own capacity. Every shared espionage path is gated on the exact
+// `mission` value, never on the slot number, so the two introductory postings
+// behave exactly as they did before this subtype existed.
+
+/** The courier hull's collision extent; the motion corridor must contain it. */
+function shadowHullRadius() {
+  // ONE definition, shared with the materialization recertificate in world.js.
+  return shadowHullExtent();
+}
+
+/**
+ * The posted destination for a shadow offer: the SAME first eligible rival the
+ * introductory slot 0 uses, and only when its one deterministic route passes
+ * the full clearance certificate. A missing gate, a zero direction or unsafe
+ * geometry simply omits the offer — this is a certificate, not a route search.
+ */
+function resolveShadowDest(ctx, origin) {
+  const dest = resolveEspionageDest(ctx, origin, COURIER_SHADOW.slot);
+  if (!dest) return null;
+  return certifyShadowSystem(dest, { hullRadius: shadowHullRadius() }).ok ? dest : null;
+}
+
+function shadowSystemName(sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return 'the far system';
+  return SYSTEMS[sysId].name || sysId;
+}
+
+/** The human briefing. Same station/gate reference and numbers the API gives. */
+function shadowBriefing(ctx, sysId, dest, name, pay) {
+  const route = shadowRoute(SYSTEMS[dest]);
+  const destSys = shadowSystemName(dest);
+  const destDock = spyStationName(dest, 'the far dock');
+  const homeName = spyStationName(sysId, 'the home dock');
+  const employerName = spyEmployerName(sysId);
+  const employerLine = employerName ? ` for ${employerName}` : '';
+  const gateName = route.ok && route.gateTo ? shadowSystemName(route.gateTo) : 'the first';
+  const mins = Math.round(COURIER_SHADOW.deadlineSeconds / 60);
+  // Finding 5: there are two opposite perpendicular positions, and the wrong
+  // one is 1800 units from the courier. Name the side the way a pilot can fly
+  // it — and say which way up, because "your right" only means one place once
+  // the frame is fixed: upright, world up, facing the first gate from the
+  // dock. That is the same reference the API's rendezvous prose states, and
+  // the word comes from shadowRendezvousSide(), which a focused pin checks
+  // against the numeric T the route and the API both publish.
+  const side = shadowRendezvousSide();
+  return `${name} runs a quiet local errand out of ${destDock} in ${destSys}. `
+    + `Hold off that dock upright, world up, and face the ${gateName} gate: the rendezvous is `
+    + `${COURIER_SHADOW.rendezvousRange} units out to your ${side}, square across that `
+    + `gate lane. Find the name with ordinary targeting, hold `
+    + `${COURIER_SHADOW.minRange}–${COURIER_SHADOW.maxRange} units with clear sight for `
+    + `${COURIER_SHADOW.requiredSeconds} accumulated seconds, then file at ${homeName}${employerLine} `
+    + `for ${pay} UU within ${mins} minutes of accepting. Docking does not gather this report. `
+    + `Crowding inside ${COURIER_SHADOW.minRange} units attracts attention.`;
+}
+
+/**
+ * Insert one INTRODUCTORY espionage row.
+ *
+ * The espionage family is now two kinds of row in one list, and several shared
+ * readers (and the boot suite) take "the first live espionage row for this
+ * system" as the introductory one. A replaced introductory posting is pushed
+ * at the end of world.jobs, which would land it AFTER a shadow row created
+ * earlier. Keep introductory rows ahead of this employer's shadow row so the
+ * family's existing order is exactly what it was before the subtype existed.
+ * Ordering only: no state, capacity or penalty behaviour changes here.
+ */
+function pushIntroEspionageJob(jobs, job) {
+  for (let i = 0; i < jobs.length; i++) {
+    const row = jobs[i];
+    if (isShadowJob(row) && row.originSystem === job.originSystem) {
+      jobs.splice(i, 0, job);
+      return;
+    }
+  }
+  jobs.push(job);
+}
+
+/** Live shadow rows for one employer (offered or accepted). */
+function shadowRowsFor(jobs, sysId) {
+  let n = 0;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (!isShadowJob(j) || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    n += 1;
+  }
+  return n;
+}
+
+/** One fresh shadow offer, or null when this employer cannot safely post one. */
+function makeShadowJob(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+  if (!originCanPostEspionage(sysId)) return null;
+  const dest = resolveShadowDest(ctx, sysId);
+  if (!dest) return null;
+  const id = nextEspionageId(ctx.world.jobs, sysId);
+  if (!id) return null;
+  const recordId = shadowRecordId(id);
+  if (!recordId) return null; // the prefixed id would exceed the persisted bound
+  const name = shadowCourierName(id);
+  if (!name) return null;
+  const pay = clampJobPay(jobPayFor(ctx, sysId, explorePayBase()));
+  if (!Number.isFinite(pay) || pay <= 0) return null;
+  return {
+    id,
+    kind: 'espionage',
+    mission: COURIER_SHADOW.mission,
+    slot: COURIER_SHADOW.slot,
+    originSystem: sysId,
+    destSystem: dest,
+    target: name,
+    recordId,
+    title: 'Shadow courier',
+    detail: shadowBriefing(ctx, sysId, dest, name, pay),
+    reward: pay,
+    need: 1,
+    progress: 0,
+    state: 'offered',
+    deadline: ctx.world.time + COURIER_SHADOW.deadlineSeconds,
+    shadow: freshShadowState(),
+  };
+}
+
+/**
+ * Replace a finished shadow row. An expired UNACCEPTED offer never creates a
+ * courier and never writes standing; the repost carries a new job id, a new
+ * record id and a freshly displayed quote. Slot 2 never receives an
+ * introductory offer.
+ */
+/**
+ * Session-only presentation latch. Keyed on the JOB OBJECT, so a reload or a
+ * save restore — both of which rebuild the row — drops the latch and the
+ * warning renders again before any further grace is consumed. It never
+ * restores spent grace, and nothing here is serialized.
+ */
+const shadowPresented = new WeakSet();
+
+/**
+ * Last frame's shared projection, by job id. The Jobs card, the HUD status
+ * line and the read-only API all read THIS, never a second rule set.
+ */
+const shadowProjection = new Map();
+
+/** The live hull instantiated for `rec`, or null. Never a nearest-ship guess. */
+function shadowLiveShip(ctx, rec) {
+  const ships = Array.isArray(ctx.ships) ? ctx.ships : null;
+  if (!ships || !rec) return null;
+  for (let i = 0; i < ships.length; i++) {
+    const live = ships[i];
+    if (live && live.record === rec && live.object) return live;
+  }
+  return null;
+}
+
+/** The only runtime obstruction classes this slice tests. */
+function shadowBodies(ctx) {
+  const sysId = ctx.world.currentSystem;
+  const pos = ctx.systems?.[sysId]?.station?.position;
+  const station = Array.isArray(pos) && pos.length >= 3
+    ? { x: pos[0], y: pos[1], z: pos[2] }
+    : null;
+  const rocks = ctx.asteroids && Array.isArray(ctx.asteroids.list) ? ctx.asteroids.list : null;
+  return { station, asteroids: rocks };
+}
+
+/** Everything one mission frame needs, read once. No world writes. */
+function shadowFrameInputs(ctx, job) {
+  const dest = job.destSystem;
+  const sameSystem = ctx.world.currentSystem === dest;
+  const rec = findShadowCourier(ctx, job);
+  const shipObj = ctx.ship?.object;
+  const hull = ctx.player && Number.isFinite(ctx.player.hull) ? ctx.player.hull : 1;
+  const out = {
+    accepted: job.state === 'accepted',
+    expired: Number.isFinite(job.deadline) && ctx.world.time >= job.deadline,
+    playerAlive: hull > 0,
+    docked: ctx.flags.docked === true,
+    berthHold: ctx.flags.berthHold === true,
+    sameSystem,
+    courierAlive: !!rec && rec.state !== 'dead' && rec.state !== 'captured'
+      && rec.state !== 'derelict' && rec.state !== 'inTransit',
+    courierPresent: false,
+    certified: false,
+    inCorridor: false,
+    selected: false,
+    distance: null,
+    sightClear: false,
+    acquired: Number.isFinite(job.progress) && job.progress >= 1,
+    warningPresented: shadowPresented.has(job),
+    courierName: job.target,
+    destName: shadowSystemName(dest),
+    employerStation: spyStationName(job.originSystem, 'the home dock'),
+    payQuoted: job.payQuoted,
+    liveId: null,
+  };
+  if (!sameSystem || !out.courierAlive || !shipObj || !Object.hasOwn(SYSTEMS, dest)) return out;
+  const live = shadowLiveShip(ctx, rec);
+  if (!live || (live.state && live.state.destroyed)) return out;
+  out.courierPresent = true;
+  const route = shadowRoute(SYSTEMS[dest]);
+  const hullR = shadowHullRadius();
+  // The certificate is re-read every frame: the static bounds AND the planets,
+  // which are the one solid body that moves. Losing it pauses every timer
+  // BEFORE any line-of-sight claim is made.
+  out.certified = certifyShadowSystem(dest, { hullRadius: hullR }).ok
+    && shadowPlanetsClear(route, ctx.planetBodies);
+  const cp = live.object.position;
+  out.inCorridor = pointInCorridor(route, cp.x, cp.y, cp.z, hullR);
+  out.selected = !!(ctx.targets && ctx.targets.current === live);
+  const pp = shipObj.position;
+  out.distance = Math.hypot(cp.x - pp.x, cp.y - pp.y, cp.z - pp.z);
+  out.sightClear = shadowSightClear(pp.x, pp.y, pp.z, cp.x, cp.y, cp.z, shadowBodies(ctx));
+  out.liveId = live.id ?? null;
+  return out;
+}
+
+/**
+ * End one shadow assignment. No faction standing is ever written here: the
+ * subtype is explicitly excluded from applySpyExpose, and mission failure adds
+ * no second penalty on top of ordinary combat or law.
+ */
+function endShadowJob(ctx, job, text, wasAccepted) {
+  job.state = 'failed';
+  if (wasAccepted) noteJobOutcome(ctx, job, 'lapsed');
+  ctx.emit('commLine', { text });
+  shadowProjection.delete(job.id);
+  replaceShadowJob(ctx, job);
+  requestAutosave(ctx);
+}
+
+/**
+ * Per-frame mission integration for every accepted shadow assignment.
+ *
+ * Mission time is capped at COURIER_SHADOW.frameSeconds per VISIBLE rendered
+ * frame and never exceeds elapsed simulation or presentation time; a delayed
+ * or resumed frame drops its backlog instead of replaying it as substeps.
+ * Returns true when the Jobs board must redraw.
+ */
+function tickShadowFrame(ctx, dt) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return false;
+  const hidden = typeof document !== 'undefined' && document.hidden === true;
+  const gapMs = Number.isFinite(ctx.frameGapMs) ? ctx.frameGapMs : 0;
+  const stalled = gapMs > SUSPEND_AFTER_MS;
+  const presentedDt = gapMs > 0 ? gapMs / 1000 : dt;
+  const step = stalled ? 0 : shadowFrameSeconds(dt, presentedDt, !hidden);
+  let dirty = false;
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const job = jobs[i];
+    if (!isShadowJob(job) || job.state !== 'accepted') continue;
+    const input = shadowFrameInputs(ctx, job);
+    const out = stepShadow(job.shadow, input, step);
+    job.shadow = out.shadow;
+    // The public id is a HANDLE TO A DETECTABLE CONTACT, not proof the hull
+    // exists somewhere. It is published only when the exact bound courier
+    // meets the same eligibility ordinary nearby targeting uses — instantiated,
+    // undestroyed and inside the inclusive targeting range — whatever the
+    // player's retained selection says.
+    out.currentTargetId = out.detectable ? input.liveId : null;
+    shadowProjection.set(job.id, out);
+    // Present a latched warning — a new crossing, or one restored from a save
+    // — on a real visible frame, and only then may grace resume.
+    if (step > 0 && job.shadow.warned && !shadowPresented.has(job)) {
+      ctx.emit('commLine', { text: SHADOW_COPY.warning(input.courierName) });
+      shadowPresented.add(job);
+      requestAutosave(ctx);
+    }
+    if (out.exposed) {
+      endShadowJob(ctx, job, SHADOW_COPY.exposed, true);
+      dirty = true;
+      continue;
+    }
+    if (out.completed && !input.acquired) {
+      // One operation: the exact save invariant is progress 1 WITH 30 s.
+      job.progress = 1;
+      job.shadow.observedSeconds = COURIER_SHADOW.requiredSeconds;
+      ctx.emit('commLine', { text: out.instruction });
+      requestAutosave(ctx);
+      dirty = true;
+    }
+  }
+  return dirty;
+}
+
+/**
+ * Slow-tick lifecycle for one shadow row: deadline, destination validity,
+ * the single deferred creation attempt, target loss and employer settlement.
+ * Returns `{ settled, dirty }`; the caller owns the board refresh.
+ */
+function tickShadowJob(ctx, job) {
+  const origin = job.originSystem;
+  const dest = job.destSystem;
+  const live = job.state === 'offered' || job.state === 'accepted';
+  if (live && Number.isFinite(job.deadline) && ctx.world.time >= job.deadline) {
+    const wasAccepted = job.state === 'accepted';
+    // Check expiry BEFORE settlement: an acquired report filed late is late.
+    endShadowJob(ctx, job, wasAccepted ? SHADOW_COPY.expired + '.' : SHADOW_COPY.postingWithdrawn + '.', wasAccepted);
+    return { settled: false, dirty: true };
+  }
+  if (job.state !== 'accepted') return { settled: false, dirty: false };
+  // The subtype is EXCLUDED from the legacy invalid-destination path: an
+  // accepted assignment is bound to the destination it was posted with, and
+  // its own validity is the route certificate, re-checked at materialization
+  // and on every mission frame.
+  if (!Object.hasOwn(SYSTEMS, origin) || !Object.hasOwn(SYSTEMS, dest) || job.need !== 1) {
+    endShadowJob(ctx, job, SHADOW_COPY.lost + '.', true);
+    return { settled: false, dirty: true };
+  }
+  const shadow = job.shadow;
+  if (!shadow || typeof shadow !== 'object') {
+    endShadowJob(ctx, job, SHADOW_COPY.lost + '.', true);
+    return { settled: false, dirty: true };
+  }
+  const acquired = Number.isFinite(job.progress) && job.progress >= 1;
+  if (shadow.courierCreated !== true) {
+    // ONE attempt, and only once the destination bank exists. A false marker
+    // is permission to create; it is never permission to replace a lost hull.
+    if (!shadowBankReady(ctx, dest)) return { settled: false, dirty: false };
+    const rec = createShadowCourier(ctx, job, dest);
+    if (!rec) {
+      endShadowJob(ctx, job, SHADOW_COPY.lost + '.', true);
+      return { settled: false, dirty: true };
+    }
+    shadow.courierCreated = true; // same synchronous operation as the insert
+    requestAutosave(ctx);
+  } else if (!acquired) {
+    // Once created, a missing or ended bound record is target LOSS, never a
+    // respawn. After the report is acquired, losing the courier cannot revoke it.
+    const rec = findShadowCourier(ctx, job);
+    const gone = !rec || rec.state === 'dead' || rec.state === 'captured'
+      || rec.state === 'derelict' || rec.state === 'inTransit';
+    if (gone) {
+      endShadowJob(ctx, job, SHADOW_COPY.lost + '.', true);
+      return { settled: false, dirty: true };
+    }
+  }
+  if (!acquired) return { settled: false, dirty: false };
+  if (!ctx.flags.docked || ctx.world.currentSystem !== origin) return { settled: false, dirty: false };
+  // Terminal BEFORE the reward effects, so a repeated tick or a reload of the
+  // resulting save cannot pay the same report twice.
+  job.state = 'failed';
+  const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+  noteJobOutcome(ctx, job, 'delivered', pay);
+  if (pay > 0) ctx.world.credits += pay;
+  const employer = SYSTEMS[origin].faction;
+  if (typeof employer === 'string' && Object.hasOwn(FACTIONS, employer)) {
+    writeFactionStanding(ctx, employer, MINING_REP);
+  }
+  rewardJobContacts(ctx, job);
+  const employerName = factionDisplayName(employer);
+  const repLine = employerName ? ' ' + employerName + ' standing +' + MINING_REP + '.' : '';
+  const homeName = spyStationName(origin, 'the home dock');
+  ctx.emit('commLine', {
+    text: 'Shadow report on ' + job.target + ' filed at ' + homeName + ' — ' + pay + ' UU posted.' + repLine,
+  });
+  shadowProjection.delete(job.id);
+  replaceShadowJob(ctx, job);
+  return { settled: true, dirty: true };
+}
+
+function replaceShadowJob(ctx, job) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  const idx = jobs.indexOf(job);
+  if (idx >= 0) jobs.splice(idx, 1);
+  shadowProjection.delete(job.id);
+  // Release ownership ONCE, through the single terminal funnel every path
+  // uses — settlement, expiry, contact loss, exposure and Jobs-desk
+  // abandonment all arrive here. The dedicated hull is retired; no unrelated
+  // record is killed or modified, and no later job reuses its id.
+  releaseShadowCourier(ctx, job);
+  // The next ordinary Jobs sync reposts with a NEW job id, a new record id and
+  // a freshly displayed quote. No cooldown and no saved timer is introduced.
+}
+
 function syncEspionageJobs(ctx, sysId) {
   if (!Object.hasOwn(SYSTEMS, sysId)) return;
   if (!originCanPostEspionage(sysId)) return;
@@ -3570,6 +3979,13 @@ function syncEspionageJobs(ctx, sysId) {
     const j = jobs[i];
     if (j.kind !== 'espionage' || j.originSystem !== sysId) continue;
     if (j.state !== 'offered') continue;
+    // Issue #236: a VALID shadow row survives this sweep on its own terms.
+    // An unknown espionage subtype is rejected outright rather than being
+    // read as an introductory posting.
+    if (j.mission !== undefined) {
+      if (!isShadowJob(j) || !resolveShadowDest(ctx, sysId)) jobs.splice(i, 1);
+      continue;
+    }
     const slot = j.slot === 1 ? 1 : (j.slot === 0 ? 0 : null);
     const dest = slot == null ? null : resolveEspionageDest(ctx, sysId, slot);
     if (!dest) jobs.splice(i, 1);
@@ -3581,6 +3997,9 @@ function syncEspionageJobs(ctx, sysId) {
     const j = jobs[i];
     if (j.kind !== 'espionage' || j.originSystem !== sysId) continue;
     if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    // The introductory cap counts introductory rows ONLY, so both old slots
+    // keep refilling normally whatever the shadow posting is doing.
+    if (j.mission !== undefined) continue;
     count += 1;
     if (j.slot === 0 || j.slot === 1) used.add(j.slot);
     const liveSlot = jobSlotOf(j);
@@ -3593,11 +4012,45 @@ function syncEspionageJobs(ctx, sysId) {
     if (!dest || bound.has(dest)) break;
     const job = makeEspionageJob(ctx, sysId, slot);
     if (!job) break;
-    jobs.push(job);
+    pushIntroEspionageJob(jobs, job);
     used.add(slot);
     bound.add(dest);
     count += 1;
   }
+  // Separate capacity: at most one offered or accepted shadow job per employer.
+  // It shares the rival destination with slot 0 by design, so `bound` is not
+  // consulted here.
+  if (shadowRowsFor(jobs, sysId) < COURIER_SHADOW.slotsPerSystem) {
+    const shadow = makeShadowJob(ctx, sysId);
+    if (shadow) jobs.push(shadow);
+  }
+  // Keep the subtype LAST among this employer's espionage rows. Introductory
+  // postings are spliced and re-pushed as they refill, so without this the
+  // extra posting could drift ahead of them; every consumer that walks the
+  // family in array order must still meet the two old slots first.
+  orderShadowLast(jobs, sysId);
+}
+
+function orderShadowLast(jobs, sysId) {
+  let row = null;
+  let rowAt = -1;
+  let lastIntro = -1;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind !== 'espionage' || j.originSystem !== sysId) continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    if (isShadowJob(j)) {
+      if (!row) {
+        row = j;
+        rowAt = i;
+      }
+    } else if (j.mission === undefined) {
+      lastIntro = i;
+    }
+  }
+  if (!row || lastIntro < rowAt) return;
+  jobs.splice(rowAt, 1);
+  jobs.push(row);
 }
 
 
@@ -3605,13 +4058,19 @@ function syncEspionageJobs(ctx, sysId) {
 
 
 function replaceEspionageJob(ctx, job) {
+  // Issue #236: the subtype owns its own factory and its own capacity; it must
+  // never hand slot 2 to the introductory maker.
+  if (isShadowJob(job)) {
+    replaceShadowJob(ctx, job);
+    return;
+  }
   const slot = detachJobSlot(ctx, job, 'espionage');
   if (slot == null) return;
   const jobs = ctx.world.jobs;
   const origin = job.originSystem;
   if (!resolveEspionageDest(ctx, origin, slot)) return;
   const next = makeEspionageJob(ctx, origin, slot);
-  if (next) jobs.push(next);
+  if (next) pushIntroEspionageJob(jobs, next);
 }
 
 function warDestId(origin) {
@@ -4663,6 +5122,15 @@ function tickDeliveryJobs(ctx, ui, render) {
       if (job.state === 'failed') {
         replaceEspionageJob(ctx, job);
         boardDirty = true;
+        continue;
+      }
+      // Issue #236: the EXACT subtype is dispatched and finished here, before
+      // the legacy body — so it never reaches applySpyExpose, the legacy
+      // invalid-destination path, or collection by docking at the destination.
+      if (isShadowJob(job)) {
+        const res = tickShadowJob(ctx, job);
+        if (res.settled) settled = true;
+        if (res.dirty) boardDirty = true;
         continue;
       }
       const live = job.state === 'offered' || job.state === 'accepted';
@@ -6044,6 +6512,46 @@ export function initStation(ctx) {
         render();
         return;
       }
+      // Issue #236: the EXACT subtype is dispatched before any legacy slot or
+      // destination check, so introductory acceptance is untouched below.
+      if (isShadowJob(job)) {
+        const shadowDest = resolveShadowDest(ctx, job.originSystem);
+        if (!shadowDest || shadowDest !== job.destSystem) {
+          ui.notice = 'That posting has no far dock.';
+          render();
+          return;
+        }
+        if (job.need !== 1 || typeof job.recordId !== 'string'
+          || job.recordId !== shadowRecordId(job.id)
+          || typeof job.target !== 'string' || !job.target) {
+          ui.notice = 'That posting is not valid.';
+          render();
+          return;
+        }
+        // The quote the card DISPLAYED is the agreement; nothing is requoted.
+        const shadowPay = clampJobPay(job.reward);
+        if (!Number.isFinite(shadowPay) || shadowPay <= 0) {
+          ui.notice = 'That posting has no posted pay.';
+          render();
+          return;
+        }
+        job.payQuoted = shadowPay;
+        job.deadline = ctx.world.time + COURIER_SHADOW.deadlineSeconds;
+        job.progress = 0;
+        job.shadow = freshShadowState();
+        // Create now when the destination bank already exists; otherwise the
+        // false marker is permission for ONE attempt at that bank's first load.
+        if (shadowBankReady(ctx, shadowDest)) {
+          const rec = createShadowCourier(ctx, job, shadowDest);
+          if (!rec) {
+            ui.notice = SHADOW_COPY.lost + '.';
+            replaceShadowJob(ctx, job);
+            render();
+            return;
+          }
+          job.shadow.courierCreated = true;
+        }
+      } else {
       const slot = jobSlotOf(job);
       const dest = slot == null ? null : resolveEspionageDest(ctx, job.originSystem, slot);
       if (!dest) {
@@ -6066,6 +6574,7 @@ export function initStation(ctx) {
       job.payQuoted = pay;
       job.deadline = ctx.world.time + MINING_DEADLINE;
       job.progress = 0;
+      }
     } else if (job.kind === 'war') {
       if (job.state !== 'offered') {
         render();
@@ -6305,6 +6814,13 @@ export function initStation(ctx) {
         const sysName = exploreSystemName(site ? site.siteSystem : originId);
         title = `Survey ${lmName}`;
         detail = `Fly to ${lmName} in ${sysName}. Redock here to file.`;
+      } else if (job.kind === 'espionage' && isShadowJob(job)) {
+        // Issue #236: the shadow posting keeps its own frozen briefing; the
+        // accepted card adds the live shared instruction, never a second rule.
+        title = job.title;
+        detail = job.detail;
+        const proj = job.state === 'accepted' ? shadowProjection.get(job.id) : null;
+        if (proj && proj.instruction) detail = `${detail} ${proj.instruction}`;
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = jobSlotOf(job);
@@ -6404,6 +6920,16 @@ export function initStation(ctx) {
           ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, explorePayBase()))
           : jobPayFor(ctx, originId, explorePayBase());
         rewardLine = `File the survey at this dock — pays ${est} UU`;
+      } else if (job.kind === 'espionage' && isShadowJob(job)) {
+        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        const homeName = spyStationName(originId, 'the home dock');
+        // The displayed offer quote IS the agreement; acceptance copies it.
+        const est = job.state === 'accepted'
+          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : clampJobPay(job.reward))
+          : clampJobPay(job.reward);
+        rewardLine = job.state === 'accepted'
+          ? `File the shadow report at ${homeName} — pays ${est} UU`
+          : `File the shadow report here — pays ${est} UU`;
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = jobSlotOf(job);
@@ -7814,10 +8340,144 @@ export function initStation(ctx) {
     // Issue 235: once the spy objective is collected the instruction stops being
     // conditional. Derived from the same progress the desk card reads; nothing
     // is saved, and settlement still happens on docking at payAt.
+    if (isShadowJob(job)) {
+      // Issue #235's filing text and payAt behaviour, kept for the subtype.
+      return Number.isFinite(job.progress) && job.progress >= 1
+        ? { payAt: origin, status: `Basic report acquired—return to ${name} to file.` }
+        : { payAt: origin, status: `Report at ${name} for payment after gathering the shadow report.` };
+    }
     if (job.kind === 'espionage' && Number.isFinite(job.progress) && job.progress >= 1) {
       return { payAt: origin, status: `Intel acquired—return to ${name} to file.` };
     }
     return { payAt: origin, status: `Report at ${name} for payment after completing the objective.` };
+  }
+
+  /**
+   * Issue #236/#237: the read-only `shadow` projection for one row.
+   *
+   * Offered rows carry the deterministic BRIEFING only — the same station,
+   * gate reference, perpendicular side and ranges the human card states.
+   * Accepted rows add the live fields from the shared evaluator plus the
+   * exact selectable live-target id, when the courier is actually detectable.
+   *
+   * Never published: the hidden record position, the occluder identity,
+   * offscreen health, or hidden NPC intent. `recordId` is not a navigation
+   * handle and is not exposed.
+   */
+  function peekShadow(job) {
+    if (!isShadowJob(job)) return null;
+    const dest = job.destSystem;
+    if (!Object.hasOwn(SYSTEMS, dest)) return null;
+    const route = shadowRoute(SYSTEMS[dest]);
+    if (!route.ok) return null;
+    const out = {
+      targetName: typeof job.target === 'string' ? job.target : '',
+      targetSystem: dest,
+      rendezvous: `${COURIER_SHADOW.rendezvousRange} u off ${spyStationName(dest, 'the far dock')}, `
+        + `to the ${shadowRendezvousSide()} of the lane toward the ${shadowSystemName(route.gateTo)} gate `
+        + '(facing that gate from the dock, world up)',
+      rendezvousGateTo: route.gateTo ?? null,
+      rendezvousRange: COURIER_SHADOW.rendezvousRange,
+      rendezvousOffset: { x: route.offset.x, y: route.offset.y, z: route.offset.z },
+      minRange: COURIER_SHADOW.minRange,
+      maxRange: COURIER_SHADOW.maxRange,
+      requiredSeconds: COURIER_SHADOW.requiredSeconds,
+    };
+    // An OFFER reports no live risk or progress before acceptance.
+    if (job.state !== 'accepted') return out;
+    const proj = shadowProjection.get(job.id);
+    const shadow = job.shadow && typeof job.shadow === 'object' ? job.shadow : freshShadowState();
+    out.phase = proj ? proj.phase : (job.progress >= 1 ? 'basic-ready' : 'seeking');
+    out.observedSeconds = Number.isFinite(shadow.observedSeconds) ? shadow.observedSeconds : 0;
+    out.risk = proj ? proj.risk : 'clear';
+    out.warningGraceRemaining = Math.max(0,
+      COURIER_SHADOW.graceSeconds - (Number.isFinite(shadow.warningSeconds) ? shadow.warningSeconds : 0));
+    out.contactReason = proj ? proj.contactReason : 'target-unavailable';
+    out.instruction = proj ? proj.instruction : '';
+    out.currentTargetId = proj && proj.currentTargetId != null ? proj.currentTargetId : null;
+    return out;
+  }
+
+  /**
+   * Issue #236/#237 HUD arbitration: how urgent one shared projection's
+   * existing instruction is on the single persistent status line.
+   *
+   * Display ordering ONLY. It reads the projection the evaluator already
+   * published and never writes mission state, timers, suspicion or progress,
+   * and it invents no risk rule of its own — the tiers simply mirror the
+   * branch `stepShadow` already took to build `instruction`.
+   *
+   *   0 dangerous latched warning — the line the pilot can still act on
+   *   1 local withdrawal after a warning, least remaining grace first
+   *   2 local observation in progress
+   *   3 local contact work (select / range / line of sight)
+   *   4 docked at a station in the mission's own system
+   *   5 remote travel, unavailable contact, and filed-report fallbacks
+   *
+   * Inside tier 0 the order is ACTUAL URGENCY, not the warning label.
+   * `stepShadow` ends an assignment only when BOTH published thresholds are
+   * met — suspicion at `suspicionMax` AND the grace fully spent — so the
+   * soonest either can happen is
+   *
+   *   estimatedExposureSeconds =
+   *     max((suspicionMax - suspicion) / suspicionGain, remainingGrace)
+   *
+   * read straight off the already-bounded projection. Smallest estimate
+   * first, then least remaining grace. A `final-warning` label never jumps
+   * the queue on its own: a job at full suspicion with the whole 8 s of grace
+   * left is further from exposure than one at 99 suspicion with 0.1 s left.
+   *
+   * Ties keep the job's existing position in `ctx.world.jobs`.
+   */
+  const SHADOW_LOCAL_CONTACT = ['not-selected', 'out-of-range', 'occluded'];
+  function shadowExposureEstimate(suspicion, grace) {
+    const gain = COURIER_SHADOW.suspicionGain;
+    const toMax = gain > 0 ? Math.max(0, COURIER_SHADOW.suspicionMax - suspicion) / gain : Infinity;
+    return Math.max(toMax, grace);
+  }
+  function shadowStatusRank(proj) {
+    if (!proj || typeof proj.instruction !== 'string' || !proj.instruction) return null;
+    const shadow = proj.shadow && typeof proj.shadow === 'object' ? proj.shadow : null;
+    const warned = !!(shadow && shadow.warned === true);
+    const suspicion = shadow && Number.isFinite(shadow.suspicion) ? shadow.suspicion : 0;
+    const grace = Number.isFinite(proj.graceRemaining) ? proj.graceRemaining : Infinity;
+    const reason = proj.contactReason;
+    const local = reason === 'observing' || SHADOW_LOCAL_CONTACT.includes(reason);
+    if (proj.phase === 'basic-ready') return { tier: 5, exposure: Infinity, grace: Infinity };
+    if (warned && proj.dangerous === true) {
+      return { tier: 0, exposure: shadowExposureEstimate(suspicion, grace), grace };
+    }
+    if (warned && suspicion > 0 && local) return { tier: 1, exposure: Infinity, grace };
+    if (reason === 'observing') return { tier: 2, exposure: Infinity, grace: Infinity };
+    if (SHADOW_LOCAL_CONTACT.includes(reason)) return { tier: 3, exposure: Infinity, grace: Infinity };
+    if (reason === 'docked') return { tier: 4, exposure: Infinity, grace: Infinity };
+    return { tier: 5, exposure: Infinity, grace: Infinity };
+  }
+
+  /** The one persistent mission-status line the HUD shows. '' when idle. */
+  function peekShadowStatus() {
+    const jobs = ctx.world.jobs;
+    if (!Array.isArray(jobs)) return '';
+    let best = null;
+    let bestRank = null;
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
+      if (!isShadowJob(job) || job.state !== 'accepted') continue;
+      const proj = shadowProjection.get(job.id);
+      const rank = shadowStatusRank(proj);
+      if (!rank) continue;
+      // Strictly better only: an equal rank keeps the earlier job, so the
+      // displayed line is stable for the same set of assignments.
+      if (bestRank === null
+        || rank.tier < bestRank.tier
+        || (rank.tier === bestRank.tier
+          && (rank.exposure < bestRank.exposure
+            || (rank.exposure === bestRank.exposure && rank.grace < bestRank.grace)))) {
+        best = proj.instruction;
+        bestRank = rank;
+      }
+    }
+    return best === null ? '' : best;
   }
 
   function peekOffers() {
@@ -7977,6 +8637,8 @@ export function initStation(ctx) {
     peekOffers,
     peekJobReward,
     peekJobReturn,
+    peekShadow,
+    peekShadowStatus,
     peekJobHold: (job) => tradeReserveHold(ctx, ctx.world.jobs, job),
     peekFillUnit,
     peekTradeAvailability,
@@ -8077,6 +8739,11 @@ export function initStation(ctx) {
       tickPatrolJob(ctx);
       tickFenceMarker(ctx);
       if (tickRecovery(ctx)) requestAutosave(ctx);
+      // Issue #236/#237: mission observation, suspicion and warning grace
+      // integrate on the VISIBLE rendered frame, not on the half-second job
+      // tick, so their caps are per-frame and a suspended tab advances none
+      // of them. Nothing else moved in this update order.
+      if (tickShadowFrame(ctx, dt) && ctx.flags.docked) render();
       jobTick += dt;
       if (jobTick >= 0.5) { jobTick = 0; tickDeliveryJobs(ctx, ui, render); }
     },
