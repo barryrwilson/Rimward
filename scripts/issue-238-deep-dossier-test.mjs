@@ -5,6 +5,7 @@ import { COURIER_SHADOW as T } from '../src/game/state.js';
 import { freshShadowState, sanitizeShadowState, stepShadow, shadowDossierBlocked,
   shadowEarnedPay, isShadowJob, shadowDossierTerms, guardShadowDossierSpace } from '../src/game/courier-shadow.js';
 import { readFileSync } from 'node:fs';
+import { agentCombatSet } from '../src/systems/controls.js';
 import { snapshot, restore } from '../src/game/save.js';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -49,7 +50,10 @@ for (const state of ['available', 'pursuing', 'ready', 'closed']) {
   if (state === 'closed') shadow.deep.closedReason = 'exposed';
   const terms = shadowDossierTerms(shadow, input());
   assert.equal(terms.includes('Optional:'), state === 'available');
-  if (state === 'closed') { assert.ok(terms.includes('Tail identified; dossier opportunity lost.')); assert.ok(terms.includes('cannot be retried')); }
+  if (state === 'closed') {
+    const instruction = stepShadow(shadow, input(), 0).instruction;
+    assert.equal(instruction, `Basic report ready. ${terms}`);
+    assert.ok(terms.includes('Tail identified; dossier opportunity lost.')); assert.ok(terms.includes('cannot be retried')); }
   if (state === 'ready') assert.ok(terms.includes('banked. File at Home for 300 UU total'));
   if (state === 'pursuing') assert.ok(terms.includes('attempt in progress'));
 }
@@ -189,9 +193,25 @@ pass('real offer freeze, basic completion, API refusal/availability, fresh reado
 const otherJob = { ...clone(job), id: 'spy-ferrous-909', originSystem: 'ferrous',
   recordId: 'courier-spy-ferrous-909', target: 'Other courier' };
 ctx.world.jobs.push(otherJob);
+function buttonKey(type, button = null) {
+  let stopped = false, cancelled = false;
+  const event = { code: 'Space', key: ' ', repeat: false, target: button,
+    stopPropagation() { stopped = true; }, preventDefault() { cancelled = true; } };
+  for (const fn of button?._listeners[type] || []) fn(event);
+  if (!stopped) for (const fn of dom.winListeners[type] || []) fn(event);
+  return { stopped, cancelled };
+}
+const combatProbe = () => agentCombatSet(ctx, { seq: 1, ttl: 1, targetId: 'missing-target', intent: 'engage' });
+buttonKey('keydown');
+assert.equal(combatProbe(), 'player-override', 'physical Space hold blocks combat lease');
 dom.dispatchKey('KeyM'); chart.update(0);
 const beginButton = [...dom.walkDom(document.body)].find(e => e.dataset?.choice === 'begin' && e.textContent.includes(String(D)));
 assert.ok(beginButton);
+document.activeElement = beginButton;
+assert.equal(buttonKey('keyup', beginButton).stopped, false, 'release reaches physical controls');
+ctx.galaxyChart.close();
+assert.notEqual(combatProbe(), 'player-override', 'release through focused button clears prior flight hold');
+dom.dispatchKey('KeyM'); chart.update(0);
 const dossierSection = [...dom.walkDom(document.body)].find(e => e.className === 'rw-shadow-assignment');
 beginButton.dataset.choice = 'invalid'; beginButton.click();
 assert.equal([...dom.walkDom(dossierSection)].filter(e => e.textContent?.includes('Dossier choice refused:')).length, 1,
@@ -208,7 +228,13 @@ ctx.elapsed += .2; chart.update(0);
 assert.equal(projectionReads, 2, 'one projection read per accepted row per paint');
 ctx.stationDesk.peekShadow = originalPeek;
 ctx.world.jobs = ctx.world.jobs.filter(j => j !== otherJob);
+const keydown = buttonKey('keydown', beginButton);
+const keyup = buttonKey('keyup', beginButton);
+assert.deepEqual(keydown, { stopped: true, cancelled: false });
+assert.deepEqual(keyup, { stopped: false, cancelled: false });
+// Model the browser's default button click after the uncancelled Space pair.
 beginButton.click();
+document.activeElement = null;
 assert.equal(job.shadow.deep.state, 'pursuing'); assert.equal(ctx.flags.chartOpen, false);
 unchanged(() => act(job.id, 'begin'));
 tick(140); const kept = job.shadow.deep.observedSeconds;

@@ -615,7 +615,6 @@ export function initGalaxyChart(ctx) {
         // Native buttons sit outside the SVG plot surface. The existing
         // chartOpen input gate suppresses flight fire until activation.
         button.addEventListener('keydown', guardShadowDossierSpace);
-        button.addEventListener('keyup', guardShadowDossierSpace);
         button.addEventListener('click', () => {
           const choice = button.dataset.choice;
           const result = ctx.stationDesk.chooseShadowDossier({ id: job.id, choice }, job);

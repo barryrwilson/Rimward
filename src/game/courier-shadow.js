@@ -959,7 +959,7 @@ export function stepShadow(shadow, input, dt) {
     instruction = next.deep?.state === 'ready'
       ? `Complete dossier ready. Return to ${station} for ${next.deep.payQuoted} UU total before the deadline.`
       : next.deep && next.deep.state !== 'legacy'
-        ? `Basic report ready. ${next.deep.state === 'closed' ? `Dossier opportunity lost (${next.deep.closedReason}); basic report survives. ` : ''}${shadowDossierTerms(next, inp)}`
+        ? `Basic report ready. ${shadowDossierTerms(next, inp)}`
         : SHADOW_COPY.acquired(station, pay);
   } else if (next.warned && dangerous) {
     // Finding 4: the human line must carry the same two facts the API does —

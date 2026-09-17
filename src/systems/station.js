@@ -6813,6 +6813,7 @@ export function initStation(ctx) {
     boardJobs(ctx, currentId).forEach((job, i) => {
       trackJob(job);
       const card = h('div', 'job-card', panel);
+      const dossier = isShadowJob(job) ? peekShadow(job) : null;
       let title = job.title;
       let detail = job.detail;
       if (job.kind === 'mining') {
@@ -6855,8 +6856,10 @@ export function initStation(ctx) {
         // accepted card adds the live shared instruction, never a second rule.
         title = job.title;
         detail = job.detail;
-        const proj = job.state === 'accepted' ? shadowProjection.get(job.id) : null;
-        if (proj && proj.instruction) detail = `${detail} ${proj.instruction}`;
+        if (job.state === 'accepted' && dossier?.instruction) {
+          const instruction = dossier.instruction.replace(dossier.deep?.terms || '', '').trim();
+          if (instruction) detail = `${detail} ${instruction}`;
+        }
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = jobSlotOf(job);
@@ -6966,7 +6969,6 @@ export function initStation(ctx) {
         rewardLine = job.state === 'accepted'
           ? `File the shadow report at ${homeName} — pays ${est} UU`
           : `File the shadow report here — pays ${est} UU`;
-        const dossier = peekShadow(job);
         if (dossier?.deep?.terms) rewardLine += '. ' + dossier.deep.terms;
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
