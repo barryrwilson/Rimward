@@ -834,6 +834,22 @@ body.rw-colorblind .rw-facing-end.is-dim {
   white-space: nowrap;
 }
 
+/* Issue #234: the two dock-cancellation comm lines only. The shared .rw-toast
+   nowrap above runs them off the left edge at 800x600 (the column is anchored
+   right:168px). Wrapping alone is not enough: the toast column starts at
+   top:14px, where the centered persistent receipt (measured 400x32) and the
+   onboarding hint (top:48px) already sit, so this class also drops below both.
+   margin-top, not `top`, so the shift stays in flow and cannot land on a
+   following toast or on a second cancellation toast. */
+.rw-toast.rw-toast-dock-failure {
+  max-width: min(360px, calc(100vw - 184px));
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  margin-top: 68px;
+}
+
 .rw-toast.show { opacity: 1; transform: translateY(0); }
 .rw-toast:not(.show) { visibility: hidden; }
 .rw-toast.comm { border-left-color: var(--cyan); color: var(--cyan); }

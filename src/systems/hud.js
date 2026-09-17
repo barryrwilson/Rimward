@@ -651,7 +651,17 @@ function toastForEvent(e, ctx, mem) {
       // matches an already-toasted line this frame is skipped, so each
       // discovery line surfaces exactly once (with its ✧ glyph).
       if (e.text && mem.frameLines.includes(e.text)) return null;
-      return { text: e.text ?? e.line ?? '', cls: 'comm' };
+      {
+        const line = e.text ?? e.line ?? '';
+        // Issue #234: the two dock-cancellation lines carry a cause plus a
+        // recovery instruction, so they are far longer than any other comm
+        // line and a nowrap toast ran off the left edge at 800x600. Only
+        // those two exact shared strings take the dedicated class; every
+        // other commLine keeps 'comm' and its existing presentation.
+        const dockFailure = line === DOCK_APPROACH_LINES.blocked
+          || line === DOCK_APPROACH_LINES.impact;
+        return { text: line, cls: dockFailure ? 'comm rw-toast-dock-failure' : 'comm' };
+      }
     case 'clueFound':
       mem.frameLines.push(e.line ?? '');
       return { text: '✧ ' + (e.line ?? 'An echo answers.'), cls: 'comm' };
