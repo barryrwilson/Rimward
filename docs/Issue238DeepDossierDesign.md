@@ -4,7 +4,7 @@
 
 Design by Sloane for [#238](https://github.com/barryrwilson/Rimward/issues/238), within tracker #233. Baseline: `a983981b73fa6ae99999a003a92a8848d8df89ee` (merged #236/#237). This document proposes the bounded implementation contract and initial playtest tuning; it does not claim user approval of balance, completed implementation, QA PASS, or deployment authority. Base contracts are settled. After independent design review, this is a concrete handoff under the user's “Next issue” request; no generic additional approval gate is implied.
 
-Discovery used the everyday checkout's existing Graft graph before source reads. The isolated worktree initially had no graph; its source baseline is identical. Root subsequently regenerated its graph for implementation discovery. The approved historical [base design](Issue236237CourierShadowingDesign.md) explains intent; current code below governs where that older document differs.
+Discovery used the everyday checkout's existing Graft graph before source reads. The isolated worktree initially had no graph; its source baseline is identical. The installed Graft tool subsequently built the isolated worktree graph for implementation discovery. The approved historical [base design](Issue236237CourierShadowingDesign.md) explains intent; current code below governs where that older document differs.
 
 | Current behavior | Exact baseline evidence |
 | --- | --- |
@@ -121,3 +121,17 @@ Acceptance tests must prove:
 
 No unresolved product decision blocks the recommended implementation. Premium, deep seconds and deep suspicion gain above are explicit initial proposals subject to the bounded playtest, not silently approved balance. Independent review may uncover a concrete conflict; amend this document before implementing a conflicting alternative.
 
+
+## Issue acceptance traceability
+
+The seven acceptance criteria below are copied verbatim from issue #238 (`gh issue view 238 --json body`, retrieved 2026-09-17). Pointers identify the design contract and the numbered acceptance tests under “Settlement, scope and verification handoff”; these are planned verification, not claims of passing implementation.
+
+| Exact issue acceptance criterion | Contract and verification pointers |
+| --- | --- |
+| Reaching basic completion explicitly says the report can be filed now, names the payment, and explains the optional next step. | “Player outcome and deliberate choice”: basic-completion message names employer, B, D, requirement and Galaxy Chart entry. Acceptance tests 1 and 10. |
+| The player knowingly opts into greater exposure through a clear existing control/interaction; no hidden automatic loss of a completed basic report. | “Player outcome and deliberate choice”: explicit chart button, terms and eligibility; “State and lifecycle”: binary progress and banked basic. Acceptance tests 1, 2 and 5. |
+| The premium, additional requirement and detection consequences are explained before commitment. Decide and document what evidence survives an interrupted attempt. | “Player outcome and deliberate choice”: precommitment terms; “State and lifecycle”: interruption table; “Proposed playtest tuning and risk”: bounded premium and additional exposure. Acceptance tests 1, 4, 5 and 8. |
+| Basic and deep outcomes pay their own accepted/communicated amounts once, only at the employer; repeated observation and reload cannot multiply payouts. | “Explicit JSON-safe additions and migration”: frozen amounts; “Settlement, scope and verification handoff”: earned-tier selection, terminal-before-effects and coherent snapshot rules. Acceptance tests 6, 7 and 8. |
+| Mission-local suspicion provides readable risk and an escape opportunity. | “Proposed playtest tuning and risk”: warning/grace presentation, independent proximity risk, withdrawal beyond 400 or broken sight, persistent warning history. Acceptance tests 4, 5 and 10. |
+| Deadline, target loss, abandonment and transition behavior remain coherent with the base mission. | “State and lifecycle”: explicit interruption/outcome table; “Explicit JSON-safe additions and migration”: save/death compatibility. Acceptance tests 5, 6 and 8. |
+| UI and API distinguish basic-ready, pursuing-deep and deep-ready states. | “State and lifecycle”: durable/public phase table; “API and UI contract”: shared projection and action parity. Acceptance tests 2, 8 and 10. |
