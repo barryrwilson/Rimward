@@ -2122,7 +2122,10 @@ export function initWorld(ctx) {
     let chosen = null;
     let count = 0;
     for (const rec of ctx.world.records) {
-      if (rec.role === 'trader' && rec.state === 'enroute' && !rec.live) {
+      // A restore clears live flags before traffic can rematerialize hulls.
+      // The bound courier must not become an abstract offscreen casualty in
+      // that gap. Live combat and genuine terminal record states still apply.
+      if (rec.role === 'trader' && rec.state === 'enroute' && !rec.live && !shadowOwnedRecord(ctx, rec)) {
         count++;
         if (Math.random() < 1 / count) chosen = rec; // reservoir pick, no alloc
       }

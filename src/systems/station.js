@@ -3824,7 +3824,7 @@ function shadowFrameInputs(ctx, job) {
 
 function shadowChartBinding(ctx) {
   const code = codeOf(ctx, 'chart');
-  return typeof code === 'string' ? shortLabel(code) : 'M';
+  return typeof code === 'string' && code ? shortLabel(code) : 'M';
 }
 
 /**
@@ -6966,7 +6966,8 @@ export function initStation(ctx) {
         rewardLine = job.state === 'accepted'
           ? `File the shadow report at ${homeName} — pays ${est} UU`
           : `File the shadow report here — pays ${est} UU`;
-        rewardLine += '. ' + peekShadow(job).deep.terms;
+        const dossier = peekShadow(job);
+        if (dossier?.deep?.terms) rewardLine += '. ' + dossier.deep.terms;
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = jobSlotOf(job);

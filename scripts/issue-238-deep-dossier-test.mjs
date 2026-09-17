@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { seedBootRandom, installDomStubs, bootGameSystems } from './lib/boot-harness.mjs';
 import { COURIER_SHADOW as T } from '../src/game/state.js';
 import { freshShadowState, sanitizeShadowState, stepShadow, shadowDossierBlocked,
-  shadowEarnedPay, isShadowJob } from '../src/game/courier-shadow.js';
+  shadowEarnedPay, isShadowJob, shadowDossierTerms, guardShadowDossierSpace } from '../src/game/courier-shadow.js';
+import { readFileSync } from 'node:fs';
 import { snapshot, restore } from '../src/game/save.js';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -43,6 +44,25 @@ for (const payQuoted of [undefined, NaN, 0, '200', 200.5, 20001]) {
 }
 assert.equal(sanitizeShadowState(basic(), { ...contract, state: 'offered', progress: 0 }), null);
 pass('strict v2 phase/quote invariants and literal v1 migration');
+for (const state of ['available', 'pursuing', 'ready', 'closed']) {
+  const shadow = basic(); shadow.deep.state = state;
+  if (state === 'closed') shadow.deep.closedReason = 'exposed';
+  const terms = shadowDossierTerms(shadow, input());
+  assert.equal(terms.includes('Optional:'), state === 'available');
+  if (state === 'closed') { assert.ok(terms.includes('Tail identified; dossier opportunity lost.')); assert.ok(terms.includes('cannot be retried')); }
+  if (state === 'ready') assert.ok(terms.includes('banked. File at Home for 300 UU total'));
+  if (state === 'pursuing') assert.ok(terms.includes('attempt in progress'));
+}
+for (const code of ['Escape', 'Enter', 'KeyM', 'KeyN', 'Space']) {
+  let stopped = 0, cancelled = 0;
+  guardShadowDossierSpace({ code, stopPropagation() { stopped++; }, preventDefault() { cancelled++; } });
+  assert.equal(stopped, code === 'Space' ? 1 : 0);
+  assert.equal(cancelled, 0, 'native button activation is retained');
+}
+const chartSource = readFileSync(new URL('../src/systems/galaxychart.js', import.meta.url), 'utf8');
+assert.equal(chartSource.includes('preventDefault(') || chartSource.includes('stopPropagation('), false,
+  'existing wave85 chart noPrevent contract stays intact');
+pass('phase-specific terms and Space-only native keyboard guard preserve chart close keys');
 
 assert.deepEqual(run(basic(), 60).shadow, basic(), 'no opt-in means no evidence or risk');
 let s = pursuing();
@@ -166,9 +186,29 @@ restore(ctx, clone(starting)); job = ctx.world.jobs.find(j => j.id === startJob.
 pass('real offer freeze, basic completion, API refusal/availability, fresh readonly projection');
 
 // Native chart callback and API use the same expected-row mutation gate.
+const otherJob = { ...clone(job), id: 'spy-ferrous-909', originSystem: 'ferrous',
+  recordId: 'courier-spy-ferrous-909', target: 'Other courier' };
+ctx.world.jobs.push(otherJob);
 dom.dispatchKey('KeyM'); chart.update(0);
 const beginButton = [...dom.walkDom(document.body)].find(e => e.dataset?.choice === 'begin' && e.textContent.includes(String(D)));
-assert.ok(beginButton); beginButton.click();
+assert.ok(beginButton);
+const dossierSection = [...dom.walkDom(document.body)].find(e => e.className === 'rw-shadow-assignment');
+beginButton.dataset.choice = 'invalid'; beginButton.click();
+assert.equal([...dom.walkDom(dossierSection)].filter(e => e.textContent?.includes('Dossier choice refused:')).length, 1,
+  'a refusal notice appears on its own row only');
+ctx.elapsed += 5.1; chart.update(0);
+assert.equal([...dom.walkDom(dossierSection)].filter(e => e.textContent?.includes('Dossier choice refused:')).length, 0,
+  'row notice expires');
+let projectionReads = 0;
+const originalPeek = ctx.stationDesk.peekShadow;
+ctx.stationDesk.peekShadow = (...args) => { projectionReads++; return originalPeek(...args); };
+for (let n = 0; n < 5; n++) { ctx.elapsed += .01; chart.update(0); }
+assert.equal(projectionReads, 0, 'dossier raycasts are throttled between UI refreshes');
+ctx.elapsed += .2; chart.update(0);
+assert.equal(projectionReads, 2, 'one projection read per accepted row per paint');
+ctx.stationDesk.peekShadow = originalPeek;
+ctx.world.jobs = ctx.world.jobs.filter(j => j !== otherJob);
+beginButton.click();
 assert.equal(job.shadow.deep.state, 'pursuing'); assert.equal(ctx.flags.chartOpen, false);
 unchanged(() => act(job.id, 'begin'));
 tick(140); const kept = job.shadow.deep.observedSeconds;
@@ -206,6 +246,11 @@ for (const outcome of ['ignore', 'pursuing', 'end', 'exposed', 'target-lost']) {
   assert.equal(ctx.world.credits - paidBefore, B, outcome + ' files basic only');
 }
 pass('ignoring, unfinished attempt, explicit end, exposure and permanent target loss all preserve B');
+for (const terminal of ['dead', 'captured', 'derelict', 'inTransit']) {
+  resetAttempt(); assert.equal(act(job.id, 'begin').ok, true);
+  live.record.state = terminal; tick(8);
+  assert.equal(job.shadow.deep.closedReason, 'target-lost', terminal + ' still permanently closes deep');
+}
 
 resetAttempt();
 for (const mutate of [j => { delete j.payQuoted; }, j => { j.payQuoted = 'bad'; }, j => { j.payQuoted = 20001; },
@@ -223,4 +268,53 @@ assert.equal(ctx.stationDesk.acceptJob(job.id).ok, true);
 assert.equal(job.shadow.v, 2); assert.equal(job.shadow.deep.state, 'legacy'); assert.equal(job.shadow.deep.payQuoted, 0);
 assert.equal(job.payQuoted, B);
 pass('save rejects corrupt supported quotes; old offered v1 accepts as basic-only legacy');
+
+// Cold page reload: initialize the real system graph around an existing save,
+// then consume the queued systemLoaded events in production update order.
+const coldSave = clone(starting);
+coldSave.world.time = 246;
+coldSave.world.activeEvent = { kind: 'pirateBlockade', endsAt: 1000 };
+const ordinaryAliveIds = coldSave.world.records.filter(r => r.role === 'trader' && r.state === 'enroute'
+  && r.id !== startJob.recordId).map(r => r.id);
+const coldRow = coldSave.world.jobs.find(j => j.id === startJob.id);
+coldRow.shadow.deep.state = 'pursuing';
+coldRow.shadow.deep.observedSeconds = 20.1414;
+coldRow.shadow.warned = true; coldRow.shadow.warningSeconds = 8; coldRow.shadow.suspicion = 0;
+installDomStubs();
+localStorage.setItem('rimward-save-v1', JSON.stringify(coldSave));
+const cold = await bootGameSystems();
+cold.ctx.flags.paused = false;
+const coldJob = cold.ctx.world.jobs.find(j => j.id === startJob.id);
+const savedRandom = Math.random;
+Math.random = () => 0; // deterministic reservoir would select the last trader (courier)
+for (let frame = 0; frame < 40; frame++) {
+  cold.ctx.world.time += .02; cold.ctx.elapsed += .02;
+  for (const [name, sys] of cold.systems) {
+    sys.update?.(.02, cold.ctx);
+    assert.ok(cold.ctx.world.recordBanks[coldJob.destSystem].some(r => r.id === coldJob.recordId),
+      `cold restore retains bound record after ${name}, frame ${frame}`);
+    assert.equal(cold.ctx.world.recordBanks[coldJob.destSystem].find(r => r.id === coldJob.recordId).state, 'enroute',
+      `cold restore retains courier life after ${name}, frame ${frame}`);
+  }
+  cold.ctx.lastEvents = cold.ctx.events; cold.ctx.events = [];
+}
+Math.random = savedRandom;
+assert.equal(coldJob.shadow.deep.state, 'pursuing');
+assert.equal(coldJob.shadow.deep.observedSeconds, 20.1414);
+assert.equal(coldJob.shadow.warningSeconds, 8);
+assert.ok(cold.ctx.world.records.some(r => ordinaryAliveIds.includes(r.id) && r.state === 'dead'),
+  'unrelated offscreen traders remain eligible for abstract blockade casualties');
+const ownedRec = cold.ctx.world.records.find(r => r.id === coldJob.recordId);
+const ownedLive = cold.ctx.ships.find(l => l.record === ownedRec);
+if (ownedLive) {
+  cold.binds.removeLiveShip(cold.ctx, ownedLive);
+  cold.ctx.ships = cold.ctx.ships.filter(l => l !== ownedLive);
+}
+coldJob.state = 'failed'; ownedRec.live = false;
+cold.ctx.world.time += 100;
+Math.random = () => 0;
+cold.systems.find(([name]) => name === 'world')[1].update(0);
+Math.random = savedRandom;
+assert.equal(ownedRec.state, 'dead', 'released courier regains ordinary abstract casualty eligibility');
+pass('cold page reload preserves the same courier and partial dossier through actual system order');
 console.log(`All ${checks} issue-238 contract groups passed (synthetic; live playtest required).`);

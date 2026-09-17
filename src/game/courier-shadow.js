@@ -669,14 +669,32 @@ export function shadowDossierTerms(shadow, inp) {
   if (!deep || deep.state === 'legacy') return 'Basic-only contract; no optional dossier was offered.';
   const b = inp.payQuoted, d = deep.payQuoted;
   const grace = Math.max(0, COURIER_SHADOW.graceSeconds - shadow.warningSeconds);
-  return `Basic report files at ${inp.employerStation || 'the employer dock'} for ${b} UU before the deadline (${Math.max(0, Math.ceil(inp.secondsLeft || 0))} s left). `
-    + `Optional: open Galaxy Chart (${inp.chartBinding || 'M'}) → Shadow assignment. Complete dossier: ${d} UU total (+${d - b}). `
+  const home = inp.employerStation || 'the employer dock';
+  const deadline = `before the deadline (${Math.max(0, Math.ceil(inp.secondsLeft || 0))} s left)`;
+  const forfeit = 'The original deadline still applies; whole-job abandonment forfeits all payment.';
+  if (deep.state === 'ready') return `Complete dossier banked. File at ${home} for ${d} UU total (+${d - b}) ${deadline}. No further observation or risk is required. ${forfeit}`;
+  if (deep.state === 'closed') {
+    const reason = deep.closedReason === 'exposed' ? 'Tail identified; dossier opportunity lost.'
+      : deep.closedReason === 'withdrawn' ? 'Dossier attempt ended by choice.' : 'Courier lost; dossier opportunity ended.';
+    return `${reason} Basic report still files for ${b} UU ${deadline} at ${home}. This attempt cannot be retried. ${forfeit}`;
+  }
+  const choice = deep.state === 'pursuing'
+    ? `Complete dossier attempt in progress: ${deep.observedSeconds.toFixed(1)}/${COURIER_SHADOW.deepSeconds} s gathered. Complete dossier: ${d} UU total (+${d - b}). `
+      + `Open Galaxy Chart (${inp.chartBinding || 'M'}) → Shadow assignment to end the attempt and keep basic. `
+    : `Optional: open Galaxy Chart (${inp.chartBinding || 'M'}) → Shadow assignment. Complete dossier: ${d} UU total (+${d - b}). `;
+  return `Basic report files at ${home} for ${b} UU ${deadline}. ` + choice
     + 'Basic records identity and the observed local route; the dossier corroborates that courier’s route and traffic pattern. '
     + `${COURIER_SHADOW.deepSeconds} additional selected seconds at 150–400 units with clear sight are required. `
     + 'While pursuing, staying within 400 units attracts attention even without selection. Open beyond 400 or break sight to cool off; evidence is retained. '
     + (inp.accepted ? `Warning history: ${shadow.warned ? 'already warned' : 'not warned'}; ${grace.toFixed(1)} s of warned danger grace remain. Starting never resets risk or grace. ` : '')
     + 'Exposure or ending the attempt permanently loses incomplete dossier evidence; the basic report survives. '
-    + 'The original deadline still applies; whole-job abandonment forfeits all payment.';
+    + forfeit;
+}
+
+/** Preserve native Space activation without the window flight-key handler
+ * cancelling its default. Escape, Enter and the chart binding still bubble. */
+export function guardShadowDossierSpace(e) {
+  if (e?.code === 'Space') e.stopPropagation();
 }
 
 export function shadowDossierBlocked(shadow, inp) {
