@@ -267,6 +267,13 @@ const cond = (body) => `(function(){try{${body}}catch(e){try{window.__i234.error
 
 const N = (n, d = 1) => `(Number.isFinite(${n})?+(${n}).toFixed(${d}):String(${n}))`;
 const V = (v) => `(${v}&&Number.isFinite(${v}.x)?[+(${v}.x).toFixed(1),+(${v}.y).toFixed(1),+(${v}.z).toFixed(1)]:null)`;
+// A heading is a unit vector, so the 0.1 u position precision of V() would
+// quantise it to ~6 degrees and make any replay of the flown pose a guess.
+// VU/Q carry enough digits that the recorded attitude is the ACTUAL flown one
+// and needs no synthetic reconstruction.
+const VU = (v) => `(${v}&&Number.isFinite(${v}.x)?[+(${v}.x).toFixed(6),+(${v}.y).toFixed(6),+(${v}.z).toFixed(6)]:null)`;
+const Q = (q) => `(${q}&&Number.isFinite(${q}.x)&&Number.isFinite(${q}.w)`
+  + `?[+(${q}.x).toFixed(6),+(${q}.y).toFixed(6),+(${q}.z).toFixed(6),+(${q}.w).toFixed(6)]:null)`;
 
 /**
  * Logpoints. Each anchor is matched against the SERVED module text, so the
@@ -299,7 +306,16 @@ const LOGPOINTS = [
   {
     key: 'cruise',
     anchor: 'const cruiseRemaining = stationBlocked',
-    note: 'cruise branch: braking/escape-hold decision and the aim actually flown',
+    // The pose fields below are the ACTUAL flown attitude, not a reconstruction.
+    // `_fwd` at this line is the very vector aimDockShip just wrote from
+    // live.obj.quaternion (src/game/autopilot.js:L1399 -> L955), and it is the
+    // same object handed to dockTurnCredit as `turn.fwd` a few lines later
+    // (L1432), so `fwd` here is the exact input the credit is measured from.
+    // `q` is its source quaternion. The turn-budget scalars are read BEFORE
+    // this tick's dockMakingProgress runs, so they are the values carried in
+    // from the previous tick; the `watch` sample carries the post-credit ones.
+    note: 'cruise branch: braking/escape-hold decision, the aim actually flown, '
+      + 'and the real pose and turn-credit budget behind it',
     condition: cond(`window.__i234.rec('cruise',{
       ph:ap.phase,idle:ap.idle===true,thr:${N('ap.throttle', 2)},
       rng:${N('range')},sd:${N('stageDistance')},spd:${N('speed', 2)},
@@ -309,6 +325,10 @@ const LOGPOINTS = [
       sb:stationBlocked===true,ceb:cruiseExitBlocked===true,
       brk:braking===true,esc:escapeHold===true,al:${N('steer.align', 4)},yaw:${N('steer.yawAbs', 3)},
       rec:dockRecovering===true,dv:dockDetourValid===true,
+      fwd:${VU('_fwd')},q:${Q('live.obj.quaternion')},
+      tcuPre:${N('dockTurnCreditUsed', 3)},tbestPre:${N('dockTurnBest', 5)},
+      trefSet:dockTurnRefSet===true,
+      tref:(dockTurnRefSet?[+dockTurnRefX.toFixed(6),+dockTurnRefY.toFixed(6),+dockTurnRefZ.toFixed(6)]:null),
       best:${N('dockBestRange')},bh:${N('dockBestHeading', 3)},
       pa:${N('dockProgressAt', 2)},stall:${N('(ctx.world.time-dockProgressAt)', 2)},
       rp:dockReplans,twu:${N('dockTrafficWaitUsed', 2)},
@@ -349,11 +369,32 @@ const LOGPOINTS = [
     },true)`),
   },
   {
+    // Root correction: this logpoint used to sit on
+    // `const settleDistance = dockDistance(p, points.settle)`
+    // (src/game/autopilot.js:L1504), which is BEFORE `ap.idle = braking` and
+    // `ap.throttle = 0` (L1534-L1535). Its `idle`/`thr` fields were therefore
+    // the PREVIOUS tick's helm state while the row claimed to describe this
+    // tick's final braking decision. The anchor is now the last statement of
+    // the corridor/settle tail, after both assignments and immediately before
+    // the final dockMakingProgress call, so `idle`/`thr`/`brk` are this tick's
+    // committed values as intended and `settleDistance` is in scope.
+    //
+    // That served line occurs exactly once (the other two dockMakingProgress
+    // call sites pass `distance` and `stageDistance`), so no `occurrence` is
+    // declared and the resolver still fails closed if it ever becomes
+    // ambiguous. It is also a location no other logpoint resolves to, so it
+    // adds no served-breakpoint collision; the grouping pass is unchanged.
+    //
+    // Cost of the move, stated rather than hidden: a corridor/settle tick that
+    // early-returns before this line no longer produces a `corridor` row. Plan
+    // rejection is still captured by `reject-corridor`, and the dock-request
+    // handoff is still captured by the receipts and the `off` tap.
     key: 'corridor',
-    anchor: 'const settleDistance = dockDistance(p, points.settle)',
-    note: 'corridor/settle tail: the local planner, the aim flown and the final braking decision',
+    anchor: 'if (!dockMakingProgress(ctx, ap, settleDistance, steer.yawAbs)) return;',
+    note: 'corridor/settle tail: the local planner, the aim flown and this tick\'s committed final braking decision',
     condition: cond(`window.__i234.rec('corridor',{
       ph:ap.phase,idle:ap.idle===true,thr:${N('ap.throttle', 2)},
+      brk:braking===true,sd:${N('settleDistance')},
       rng:${N('range')},spd:${N('speed', 2)},
       inZone:!!(ctx.station&&ctx.station.inZone===true),
       pok:planned.ok===true,hold:planned.hold||null,
@@ -375,6 +416,17 @@ const LOGPOINTS = [
     // own predicate and records nothing unless the rejection really happens.
     // The anchors carry their indentation because three dock branches share
     // the same `!planned.ok` wording.
+    //
+    // Root correction: reject-stage (served L1293) and reject-transit (L1365)
+    // both sit ABOVE `const stageDistance = dockDistance(p, points.stage)`
+    // (L1387). Reading `stageDistance` there is a temporal-dead-zone
+    // ReferenceError, and because it is thrown while the record object literal
+    // is still being built, cond()'s catch swallowed the WHOLE row: every
+    // rejection capture was lost and only surfaced as a pageError. Both now
+    // call the pure module-scope `dockDistance(p, points.stage)` instead
+    // (src/game/dock-approach.js:L78 — it only reads and returns, and returns
+    // null on a stale pose, which N() renders as "null"). No other field in
+    // either body reads a local declared later than its own anchor.
     key: 'reject-stage',
     anchor: '    if (!planned.ok || !Number.isFinite(planned.ax)',
     note: 'primary stage/cruise plan rejection: disengages blocked before the instrumented tail',
@@ -382,7 +434,7 @@ const LOGPOINTS = [
       &&Number.isFinite(planned.ay)&&Number.isFinite(planned.az)))window.__i234.rec('reject-stage',{
       ph:ap.phase,pok:planned.ok===true,hold:planned.hold||null,
       ax:${N('planned.ax')},ay:${N('planned.ay')},az:${N('planned.az')},
-      rng:${N('range')},sd:${N('stageDistance')},spd:${N('speed', 2)},
+      rng:${N('range')},sd:${N('dockDistance(p, points.stage)')},spd:${N('speed', 2)},
       pos:${V('p')},stage:${V('points.stage')},
       st:stageTransit===true,nb:planningBodies?planningBodies.count:null,ab:_apBodies.count
     })`),
@@ -393,7 +445,7 @@ const LOGPOINTS = [
     note: 'stage traffic transit plan rejection: disengages blocked before the instrumented tail',
     condition: cond(`if(transit.ok!==true)window.__i234.rec('reject-transit',{
       ph:ap.phase,tok:transit.ok===true,hold:transit.hold||null,
-      rng:${N('range')},sd:${N('stageDistance')},spd:${N('speed', 2)},
+      rng:${N('range')},sd:${N('dockDistance(p, points.stage)')},spd:${N('speed', 2)},
       pos:${V('p')},aim:${V('_aim')},
       nb:planningBodies?planningBodies.count:null,tbod:_stageTrafficBodies.count
     })`),
@@ -415,11 +467,27 @@ const LOGPOINTS = [
   {
     key: 'watch',
     anchor: 'if (now - dockProgressAt >= DOCK_BLOCK_SECONDS / 2',
-    note: 'dockMakingProgress: the progress-watchdog state that decides blocked',
+    // `turnCredit` is a local of dockMakingProgress declared at
+    // src/game/autopilot.js:L1103, above this anchor, so it is genuinely in
+    // scope here and is the credit THIS frame actually granted — no TDZ, and
+    // no inference from the budget delta. `tcu`/`tbest`/`tref` are read after
+    // dockTurnCredit has already run for this frame, so they are the
+    // POST-credit values (the cruise sample carries the pre-credit ones).
+    // `turn` is null on every non-cruise call site, so its fields are read
+    // defensively; `_fwd` is module scope and is the same heading the credit
+    // was measured from on the cruise path.
+    note: 'dockMakingProgress: the progress-watchdog state that decides blocked, '
+      + 'with the turn credit this frame really granted and the pose behind it',
     condition: cond(`window.__i234.rec('watch',{
       ph:ap.phase,idle:ap.idle===true,
       rng:${N('range')},yaw:${N('yawAbs', 3)},
       ty:trafficYield===true,arc:${N('arcCredit', 3)},imp:improved===true,
+      tc:${N('turnCredit', 4)},tcu:${N('dockTurnCreditUsed', 3)},tbest:${N('dockTurnBest', 5)},
+      trefSet:dockTurnRefSet===true,
+      tref:(dockTurnRefSet?[+dockTurnRefX.toFixed(6),+dockTurnRefY.toFixed(6),+dockTurnRefZ.toFixed(6)]:null),
+      fwd:${VU('_fwd')},q:${Q('ctx.ship&&ctx.ship.object&&ctx.ship.object.quaternion')},
+      turnFwd:${VU('(turn&&turn.fwd)')},turnAim:${V('(turn&&turn.aim)')},
+      elapsed:${N('elapsed', 4)},
       best:${N('dockBestRange')},bh:${N('dockBestHeading', 3)},
       now:${N('now', 2)},pa:${N('dockProgressAt', 2)},stall:${N('(now-dockProgressAt)', 2)},
       twu:${N('dockTrafficWaitUsed', 2)},rp:dockReplans,dph:dockPhase
