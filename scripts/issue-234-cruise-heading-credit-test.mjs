@@ -144,15 +144,19 @@ function makeCtx() {
 // steer's yawAbs), the hull position and the steering aim.
 //
 // What the capture does NOT hold: the hull quaternion. `fwd` is therefore
-// RECONSTRUCTED, and the replay is honest about that:
+// SYNTHESISED, and the replay is honest about that:
 //
-//   * The baseline side needs no reconstruction at all. Without a turn the
-//     watchdog reads only `range` and `yawAbs`, both recorded, so the negative
-//     verdict is an exact replay of recorded inputs.
+//   * The baseline side needs no pose at all. Without a turn the watchdog
+//     reads only `range` and `yawAbs`, both recorded, so the negative verdict
+//     is an exact replay of recorded inputs.
 //   * The candidate side needs `fwd`. The recorded `align` pins its angle to
-//     the aim exactly wherever it was not clamped; the clamp interval and the
-//     unrecorded azimuth are both swept. The verdict must be identical under
-//     every combination, so it cannot rest on the choice.
+//     the aim exactly wherever it was not clamped; elsewhere the angle and the
+//     unrecorded azimuth are chosen. The 16 combinations are SENSITIVITY
+//     FIXTURES: a spread of synthetic pose sequences, not the recovered pose,
+//     not a physical reconstruction of the hull, and not an exhaustive or
+//     conservative bound over every pose the episode could have had. Agreement
+//     across them shows the verdict is not an artefact of one arbitrary choice;
+//     it does not by itself show the recorded hull would have survived.
 //
 // The episode is COMMITTED, at scripts/issue-234-cruise-heading-fixture.json:
 // just the 106 cruise ticks and the fields the watchdog is handed, carved out
@@ -193,21 +197,25 @@ function loadEpisode() {
   return rows;
 }
 
-// Pose reconstruction.
+// Synthetic pose fixtures.
 //
 // The guard needs only the hull's forward unit vector, not its full
-// orientation, and the capture pins that vector down almost completely:
+// orientation. The capture pins that vector exactly on some rows and not at
+// all on the rest:
 //
 //   * `al` is the product's own `align`, i.e. fwd . dir exactly. Where it was
 //     recorded unclamped it gives the angle between fwd and the aim direction
 //     EXACTLY: theta = acos(al). No model and no assumption is involved.
 //   * The product clamps align at 0 (`Math.max(0, ...)`), so a heading error
 //     past 90 deg is recorded as 0 and loses its magnitude. For those rows the
-//     capture bounds theta to [yawAbs, pi]: the recorded yawAbs is a component
-//     of the total error, so it is a floor. CLAMP MODES pick a point in that
-//     interval, and the verdict is required to hold for each.
-//   * The AZIMUTH of fwd around dir is not recorded at all. AZIMUTH MODES
-//     sweep it, and the verdict is required to hold for each.
+//     capture does NOT bound theta: yawAbs is only the yaw component, and with
+//     pitch present the total error acos(cos pitch * cos yaw) can be smaller
+//     than yawAbs, so yawAbs is not a floor. CLAMP MODES simply pick two
+//     values, and the verdict is checked for each.
+//   * The AZIMUTH of fwd around dir is not recorded at all. AZIMUTH MODES pick
+//     eight values, and the verdict is checked for each. A chosen azimuth is
+//     not required to reproduce the recorded yawAbs or the hull's real turn
+//     rate; these are fixtures, not candidate poses of the recorded hull.
 //
 // Azimuth is held constant across an episode rather than shuffled per tick,
 // because a real hull's forward vector moves continuously; a per-tick shuffle
@@ -228,7 +236,8 @@ function reconstruct(rows, clampMode, azimuth) {
     if (r.al > 0) { theta = Math.acos(Math.min(1, r.al)); exactRows++; }
     else {
       clampedRows++;
-      // theta is known only to lie in [yawAbs, pi].
+      // theta is unrecorded here; these two values are fixture choices, not
+      // the ends of a derived interval.
       theta = clampMode === 'floor' ? r.yaw : (r.yaw + Math.PI) / 2;
     }
     const u = new THREE.Vector3().crossVectors(dir, Math.abs(dir.y) > 0.9 ? alt : up).normalize();
@@ -280,10 +289,12 @@ async function replayCase() {
     medianTickSeconds: +((rows[rows.length - 1].t - rows[0].t) / (rows.length - 1)).toFixed(4),
   }));
   // The capture samples the controller at ~0.1 s while the sim ticks at 1/60 s.
-  // The watchdog measures elapsed time from the timestamps it is given, so the
-  // total accounted time is unaffected; what a coarser sample can do is MISS an
-  // improvement between samples, which can only make credit scarcer. The
-  // replay therefore understates, never overstates, the candidate's credit.
+  // The watchdog measures elapsed time from the timestamps it is given, so a
+  // coarse sample cuts both ways: it can MISS an improvement that happened
+  // between samples, and it can OVER-credit, because a single converging
+  // sample credits the whole ~0.1 s gap even if the real sim converged only on
+  // its final frame. The replay is therefore not a lower bound on the
+  // candidate's credit in the live sim.
 
   // --- NEGATIVE BASELINE (durable, needs no history) -----------------------
   // The current module driven WITHOUT the cruise turn argument. Every other
@@ -321,14 +332,14 @@ async function replayCase() {
   }
   console.log('ATTRIBUTION OK — the candidate only differs when the cruise turn is supplied');
 
-  // --- POSITIVE CANDIDATE: real guard, recorded inputs, reconstructed pose --
+  // --- POSITIVE CANDIDATE: real guard, recorded inputs, synthetic pose ------
   const variants = [];
   for (const clampMode of ['floor', 'mid']) {
     for (let k = 0; k < 8; k++) {
       const azimuth = k * Math.PI / 4;
       const built = reconstruct(rows, clampMode, azimuth);
-      // Where align was recorded unclamped the reconstruction is exact, not
-      // fitted. Assert that rather than assume it.
+      // Where align was recorded unclamped the fixture reproduces the recorded
+      // angle exactly, not by fitting. Assert that rather than assume it.
       assert.ok(built.maxAlignResidual < 1e-9,
         `the reconstruction must reproduce the recorded align exactly (${built.maxAlignResidual})`);
       assert.ok(built.exactRows > 0, 'the episode must contain exactly-pinned rows');
@@ -345,7 +356,7 @@ async function replayCase() {
       + ' back onto its line must keep the helm through the recorded episode');
   }
   // Observation, not a requirement. The controller's mid-window replan fires
-  // at half the watchdog window. Under some reconstructions the credit holds
+  // at half the watchdog window. Under some pose fixtures the credit holds
   // the stall below that, so the replan never becomes necessary; under others
   // it still fires. Both are correct: the credit does not touch dockReplans,
   // it only keeps the deadline from expiring on a hull that is turning.
@@ -354,8 +365,8 @@ async function replayCase() {
     variantsThatStillReplanned: variants.filter(v => v.replanAt !== null).length,
     variantsTotal: variants.length,
   }));
-  console.log('POSITIVE CANDIDATE OK — every reconstruction variant survives the recorded'
-    + ' episode under the real watchdog');
+  console.log('POSITIVE CANDIDATE OK — every synthetic pose fixture survives the recorded'
+    + ' watchdog inputs; a sensitivity spread, not a pose replay or live proof');
 }
 
 // ---------------------------------------------------------------------------
@@ -466,8 +477,9 @@ async function guardCase() {
 // CASE=budget — hard bounds on the real dockMakingProgress accounting
 // ---------------------------------------------------------------------------
 // The guard case bounds the credit function. This case bounds the WATCHDOG,
-// which is what actually cancels an approach: it measures how long a hull that
-// never closes range can survive, and proves a range gain is the only refill.
+// which is what actually cancels an approach: it measures how long these
+// specific fixed-yaw fixtures survive without closing range, and proves a
+// range gain is the only refill of the turn credit.
 async function budgetCase() {
   const api = autopilot;
   const DT = 1 / 60;
@@ -514,8 +526,12 @@ async function budgetCase() {
   assert.equal(adversary.reason, 'blocked',
     'an oscillating aim with no real range gain must still be cancelled');
   assert.ok(adversary.cancelledAt !== null, 'the adversary must terminate');
-  // The measured worst case, stated as a bound instead of implied by the
-  // unchanged DOCK_BLOCK_SECONDS: one extra watchdog window, no more.
+  // The measured cost for THIS fixture, stated as a number instead of implied
+  // by the unchanged DOCK_BLOCK_SECONDS. The new turn credit adds at most one
+  // watchdog window (10 s) per real range episode. It is not a universal
+  // "no range gain means at most 20 s" guarantee: this fixture holds yawAbs
+  // fixed, and the watchdog's pre-existing heading credit can reset the stall
+  // on its own whenever yawAbs improves against dockBestHeading.
   const extra = adversary.cancelledAt - stuck.cancelledAt;
   console.log('BUDGET MEASURED EXTRA SECONDS', JSON.stringify({
     extra: +extra.toFixed(3), cap: DOCK_BLOCK_SECONDS }));
@@ -533,8 +549,8 @@ async function budgetCase() {
   console.log('BUDGET CLOSING', JSON.stringify(closing));
   assert.equal(closing.cancelledAt, null,
     'a hull genuinely closing range must never be cancelled');
-  console.log('BUDGET OK — stuck times out, the adversary is finitely bounded at'
-    + ` +${extra.toFixed(2)} s, and only real range progress refills`);
+  console.log('BUDGET OK — stuck times out, this fixed-yaw adversary costs'
+    + ` +${extra.toFixed(2)} s, and only real range progress refills the turn credit`);
 }
 
 // ---------------------------------------------------------------------------

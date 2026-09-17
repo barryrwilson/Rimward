@@ -166,15 +166,17 @@ The progress watchdog, `dockMakingProgress` in `src/game/autopilot.js`, credits
 heading progress only against `dockBestHeading`, an engagement-global best that
 is reset only on a phase change. A yaw error is meaningful only relative to the
 aim it was measured against, so when a traffic detour moves the aim point, the
-old best describes a different target and becomes permanently unreachable. The
-hull is then required to point at an abandoned waypoint to prove progress.
+old best describes a different target. It is not permanently unreachable: once
+the hull swings onto the new aim, a later yaw error can beat it. During the
+reorientation, though, it is a stale and low threshold, so it withholds credit
+for as long as the watchdog is counting down.
 
 Three credit paths exist. In this episode all three are closed:
 
 | Credit | Why it is unavailable |
 | --- | --- |
 | Range | The turn hold sets `ap.throttle = 0`, so the hull sits at exactly 0 speed and the stage distance never moves. |
-| Heading | `dockBestHeading` is stale against the pre-detour aim, and unreachable. |
+| Heading | `dockBestHeading` is stale against the pre-detour aim, and no tick in this episode beat it. |
 | Traffic / arc | The cruise call site passes neither `trafficYield` nor `arcCredit`; both are stage-phase only. |
 
 With no credit path at all, the 10s `DOCK_BLOCK_SECONDS` deadline expires.
@@ -212,9 +214,10 @@ recorded the cruise branch's final `ap.idle` but not its separate terms, so the
 direct `dockCruiseShouldBrake(p, velocity, acceleration, planningBodies)` call
 inside the cruise hold was never measured on its own. What run 1 establishes is
 that `braking`, `cruiseExitBlocked`, `stationBlocked` and `escapeHold` were
-false, and that the hull was stationary with `align` at 0. That is consistent
-with the align term alone forcing the hold, but it is not a measurement of the
-direct predicate. The probe now captures every term of `ap.idle` separately.
+false, and that the hull was stationary with `align` at 0. Misalignment alone is
+enough to set `ap.idle`, so the recorded hold proves neither that the direct
+brake predicate was false nor that the turn hold was the only term asserting.
+The probe now captures every term of `ap.idle` separately.
 
 ## The fix
 
@@ -259,9 +262,14 @@ against the real watchdog:
 | Wholly stuck hull, no credit offered | 10.017s |
 | Adversarial oscillating aim, never closing 1u of range | 20.017s |
 
-A hull that never closes range now survives at most one extra watchdog window:
-10.00s more, 20.0s in total. A hull that keeps genuinely closing range is never
-cancelled, which is what the watchdog always intended.
+The new credit adds at most one watchdog window, 10.00s, for each real range
+episode. The 10.017s and 20.017s numbers are the measured times of these two
+specific fixtures, which hold `yawAbs` fixed; they are not a general guarantee
+that a hull with no range gain always dies by 20s. The watchdog's pre-existing
+heading credit can reset the deadline on its own whenever the yaw error beats
+`dockBestHeading`, independently of the new turn credit. A hull that keeps
+genuinely closing range is never cancelled, which is what the watchdog always
+intended.
 
 ## Evidence
 
@@ -282,29 +290,38 @@ the raw capture and is how the committed fixture is audited. Both agree.
 | --- | --- |
 | Negative baseline: real watchdog, no turn offered. Every other caller still passes none, so this is the pre-fix accounting. | cancelled `blocked` at t=45.614, matching the recorded cancellation |
 | Historical confirmation: the shipped pre-fix blob at `5cc51d58`, loaded from git | cancelled `blocked` at t=45.614, agreeing tick for tick |
-| Positive candidate: real watchdog, cruise turn offered | survives the whole episode, 16 of 16 reconstruction variants |
+| Positive candidate: real watchdog, cruise turn offered | survives the whole episode under all 16 synthetic pose fixtures |
 
 The historical side is optional by design. A checkout without that commit still
 runs every assertion, because the durable negative needs no history.
 
-Honesty about the pose. The capture holds the watchdog's two arguments
-(`range`, `yawAbs`), the hull position and the aim exactly. It does not hold
-the hull quaternion. The baseline needs no pose at all. The candidate needs
-`fwd`, and the capture pins it down as follows:
+Honesty about the pose. The baseline is exact: it replays the recorded `range`
+and `yawAbs` scalars and needs no pose at all. The capture also holds the hull
+position and the aim exactly, but not the hull quaternion. The candidate needs
+`fwd`, so the 16 variants are SYNTHETIC SENSITIVITY FIXTURES, built as follows:
 
 - The recorded `align` is `fwd . dir`. Where it was recorded unclamped it gives
   the angle between `fwd` and the aim direction exactly: no model, no fit. That
   is 36 of the 106 rows.
 - The product clamps `align` at 0, so an error past 90 degrees records as 0 and
-  loses its magnitude. For those 70 rows the capture bounds the error to
-  `[yawAbs, pi]`. Two clamp modes sample that interval.
+  loses its magnitude. For those 70 rows the capture does not bound the error.
+  `yawAbs` is only the yaw component, and with pitch present the total error
+  `acos(cos(pitch) * cos(yaw))` can be smaller than `yawAbs`, so `yawAbs` is not
+  a floor. Two clamp modes pick two values; they do not sample an interval.
 - The azimuth of `fwd` around `dir` is not recorded at all. Eight azimuths are
-  swept, held constant across the episode because a real hull's forward vector
-  moves continuously.
+  used, held constant across the episode because a real hull's forward vector
+  moves continuously. An arbitrary azimuth need not match the recorded `yawAbs`
+  or the hull's real turn rate.
 
-All 2 x 8 = 16 variants survive. This is not an exact pose replay and is not
-presented as one. It is a replay of exactly-recorded watchdog inputs with the
-unrecorded quantities swept across their admissible range.
+All 2 x 8 = 16 fixtures survive. These are not the recovered pose, not a
+physical reconstruction of the hull, and not a conservative or exhaustive bound
+over the poses the episode could have had. Their agreement shows the verdict
+does not rest on one arbitrary pose choice. It is not proof that the recorded
+hull would have survived, and it is not live efficacy evidence.
+
+Sampling caveat: the capture is at about 0.1s while the sim ticks at 1/60s, so
+the replay can also OVER-credit. One converging sample credits the whole gap
+even if the live sim converged only on its final frame.
 
 ### CASE=guard, bounds on the real dockTurnCredit
 
@@ -396,7 +413,39 @@ zero-damage-touch contract are preserved as requirements.
 
 ## Natural candidate run
 
-A natural live re-run of the probe against the committed candidate, on the same
-route and under the same conditions as run 1, is recorded separately once it
-completes. Until that run is recorded, the evidence above is trace-replay and
-harness evidence, not live-candidate evidence.
+The natural live re-run is done, at commit `9a46a8e8`, with evidence at
+`out/issue-234/candidate-live-final/natural-planner/result.json` (untracked).
+Runtime `src` SHA-256
+`742d4a247ebcb8bf5bf83f19910ed209c50e7bd5d301d1b9ca6133154a104aa3` was
+identical at run start and run end. All commands were public Agent API calls;
+traffic, collision and clocks were intact, with no teleport, no suppression and
+no clock edit. 213 wall seconds, 813 flight samples, 2,752 decision samples.
+
+| Measure | Result |
+| --- | --- |
+| Destinations | 3 of 3 docked |
+| `blocked` / `impact` cancellations | 0 |
+| Contacts | one harmless touch, speed 0 and damage 0 |
+| Capture verdict | PASS |
+| Console errors, exceptions, debugger pauses, instrumentation errors, dropped samples, unknown NPC speeds | 0 |
+
+The probe captured the actual `fwd` / quaternion this time, so the turn credit
+is measured rather than synthesised: 101 sampled frames took positive turn
+credit, the largest total used in one episode was 3.187s of the 10s window, and
+the largest single frame was 0.0226s. Chrome (pid 128308) and Vite (pid 130488)
+exited and the ports were verified closed. A dock screenshot was inspected
+independently.
+
+This is live-candidate runtime evidence for the traced cruise turn-hold class.
+It is not a repeat of run 1's exact random trajectory, so it does not re-fly
+that individual failure. The four original historical failures in the table near
+the top of this document remain unproven and unresolved, the separate route-
+autopilot collisions are not claimed fixed, and issue #234 stays open as a
+partial outcome.
+
+Build and boot gates: build PASS in 8.79s and boot unchanged PASS, logged at
+`out/mission-234/build.log` and `out/mission-234/boot.log`; runtime source is
+unchanged from `eadcca5` through the final commits. The focused suites remain
+11 PASS, and `CASE=all` passes: the exact recorded-scalar negative baseline
+replay, the 16 synthetic sensitivity fixtures (not physical proof), the bounded
+added-10s budget fixture, and the 36.5s physical control dock with no contacts.

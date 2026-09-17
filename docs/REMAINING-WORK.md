@@ -26,9 +26,14 @@ to wait for clearance or steer clear, then retry the approach. The distinct
 reason tokens and cancellation behavior remain intact. A natural browser route
 reproduced ship/gate impacts and repeated blocked approaches with traffic and
 safety checks enabled; the recovery wording does not fix those arrival failures.
-Collision avoidance and blocked-approach reliability remain open pending a
-bounded diagnosis of planner decisions and moving traffic. Issue #234 is not
-complete; final verification, merge and deployment remain separate. See
+One class is now traced and fixed: the cruise turn-progress defect that
+cancelled `blocked` while a light hull was turning back onto a clear line. A
+natural live run at `9a46a8e8` docked 3 of 3 destinations with no `blocked` or
+`impact` cancellation and one harmless zero-damage touch. The broader #234
+arrival impacts and the remaining blocked cases stay under investigation:
+collision avoidance and blocked-approach reliability remain open, and the four
+original failures are unproven. Issue #234 is not complete; final verification,
+merge and deployment remain separate. See
 [diagnosis and evidence limits](Issue234LightDocking.md).
 
 ## Collected spy intel status — #235
