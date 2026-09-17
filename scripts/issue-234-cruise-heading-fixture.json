@@ -20,7 +20,7 @@
    "rp": "recorded dockReplans",
    "ph": "ap.phase"
   },
-  "note": "Sampled at ~0.1 s while the sim ticks at 1/60 s. The watchdog derives elapsed time from the timestamps it is handed, so total accounted time is unchanged; a coarser sample can only MISS an improvement, never invent one."
+  "note": "Timestamps and recorded scalar inputs support exact replay of the old watchdog cancellation, but coarse sampling can OVER-CREDIT candidate turn time when only part of a sample interval actually converged. Candidate-generated attitudes are synthetic sensitivity inputs, not recorded poses."
  },
  "rows": [
   {
