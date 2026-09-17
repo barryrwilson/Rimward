@@ -12,8 +12,11 @@ Independent review of `558a1a90` found slot/cap and lifecycle contract gaps;
 the revised design specifies subtype dispatch, save limits, creation identity,
 and numeric public rendezvous data. A second review closed those findings and
 identified unsafe route geometry; the new revision specifies a perpendicular
-off-lane route with full observation-envelope clearance. Next: narrow independent re-review of the revised
-artifact, then explicit implementation-scope approval. No product code or implementation QA is claimed; optional deep
+off-lane route with full observation-envelope clearance. Independent Claude
+design review passed on `45f08800c701578f94820604338fb8d4b5049eed`.
+See [verdict, limits and implementation clarifications](Issue236237DesignReview.md).
+Next: explicit implementation-scope approval, then implementation and gameplay
+verification. No product code or implementation QA is claimed; optional deep
 intelligence (#238) remains parked.
 
 ## Light-hull arrival diagnosis and recovery guidance — #234
