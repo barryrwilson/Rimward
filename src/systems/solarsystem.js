@@ -230,6 +230,12 @@ export function initSolarSystem(ctx) {
   let root = null;
   let sun = null;
   let planets = [];
+  // Issue #236: courier shadowing certifies its observation envelope against
+  // REAL planet bounds, and planets are the one solid body that moves. Publish
+  // the live world-space centres and radii as a session-only read-only list
+  // (preallocated, rewritten in place, zero per-frame allocation). Nothing is
+  // persisted, no gauge or event is added, and no existing behaviour changes.
+  const bodies = [];
 
   function build(def) {
     root = new THREE.Group();
@@ -297,6 +303,7 @@ export function initSolarSystem(ctx) {
       root.add(makeOrbitRing(slot.orbitRadius));
 
       const rng = makeRng(seed * 7919);
+      bodies.push({ x: 0, y: 0, z: 0, radius: slot.radius });
       planets.push({
         mesh,
         tiltGroup,
@@ -311,10 +318,31 @@ export function initSolarSystem(ctx) {
   function rebuild(to) {
     ctx.config.world.sunRadius = 0;
     disposeObject(root);
+    bodies.length = 0;
     build(SYSTEMS[to]);
+    syncBodies();
+  }
+
+  /**
+   * Rewrite the published bodies in place from the CURRENT orbit phase.
+   * Derived from `angle`/`orbitRadius` — the same expression the update loop
+   * writes into the tilt group — so the list is exact from the first build,
+   * before any frame has run, and never reads a not-yet-written transform.
+   */
+  function syncBodies() {
+    const base = root ? root.position : null;
+    for (let i = 0; i < planets.length && i < bodies.length; i++) {
+      const p = planets[i];
+      const body = bodies[i];
+      body.x = (base ? base.x : 0) + Math.cos(p.angle) * p.orbitRadius;
+      body.y = (base ? base.y : 0);
+      body.z = (base ? base.z : 0) + Math.sin(p.angle) * p.orbitRadius;
+    }
   }
 
   build(SYSTEMS[ctx.world.currentSystem]);
+  ctx.planetBodies = bodies;
+  syncBodies();
 
   // --- Per-frame update: revolve + spin. Zero allocations. ---
   function update(dt) {
@@ -340,6 +368,7 @@ export function initSolarSystem(ctx) {
     // Slow sun rotation (subtle surface shimmer via the glow is billboarded,
     // so this is purely cosmetic on the sphere itself).
     sun.rotation.y += 0.05 * dt;
+    syncBodies();
   }
 
   return { update };

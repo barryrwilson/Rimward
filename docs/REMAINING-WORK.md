@@ -15,8 +15,33 @@ identified unsafe route geometry; the new revision specifies a perpendicular
 off-lane route with full observation-envelope clearance. Independent Claude
 design review passed on `45f08800c701578f94820604338fb8d4b5049eed`.
 See [verdict, limits and implementation clarifications](Issue236237DesignReview.md).
-Next: explicit implementation-scope approval, then implementation and gameplay
-verification. No product code or implementation QA is claimed; optional deep
+The owner confirmed implementation scope on 2026-09-17; see
+[implementation mission](missions/issue-236-237.md).
+
+Implementation is now complete on the isolated branch `codex/issues-236-237-courier`.
+It adds the slot-2 `courier-shadow` espionage subtype: one extra Jobs posting per
+employer with its own capacity, a deterministic perpendicular off-lane courier
+route certified against every gate and hub body, the station cylinder, the
+authored asteroid field and real seeded planet bounds; a dedicated bound
+freighter with mission-local route, migration, offline-drift and cruise guards
+and a pivoting end turn that keeps its actual hull inside the 50-unit corridor;
+one shared evaluator for observation seconds, mission-local suspicion, the
+warning and its eight-second grace, withdrawal and exposure; strict save
+normalization that rejects every malformed subtype payload; employer-only
+exactly-once settlement; and a read-only `shadow` projection shared by the Jobs
+card, the HUD status line and `observe()`. Introductory espionage, its standing
+effects and #235's filing status are unchanged. No new event, key, gauge,
+equipment SKU or currency was added.
+
+Evidence so far is automated only: 44 focused contract checks, `npm run build`,
+and an unchanged `npm run test:boot`, all passing. The corridor measurement comes
+from the real NPC update over 240 simulated seconds and ten end turns.
+
+Next: independent security and regression review naming the exact commit, then
+the natural live-browser runs the design requires (accept, find by name, follow,
+acquire, file; loss and reacquisition; withdrawal after warning; reload
+mid-warning; deliberate exposure; and a mixed career sequence). No live-browser
+success, balance conclusion, merge or deployment is claimed. Optional deep
 intelligence (#238) remains parked.
 
 ## Light-hull arrival diagnosis and recovery guidance — #234

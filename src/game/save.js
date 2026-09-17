@@ -1,5 +1,7 @@
 import '../ui/screens.css';
 import { createShipState, SHIP_CLASSES, SYSTEMS, FACTIONS, U, JUMP, COMMODITIES, ORE_TYPES } from './state.js';
+import { COURIER_SHADOW } from './state.js';
+import { sanitizeShadowState, isShadowRecordId, shadowRecordId } from './courier-shadow.js';
 import {
   sanitizeHangar,
   parkMounted,
@@ -190,6 +192,10 @@ const HUNT_SLOTS_PER_SYSTEM = 2;
 const PASSENGER_SLOTS_PER_SYSTEM = 2;
 const EXPLORE_SLOTS_PER_SYSTEM = 2;
 const ESPIONAGE_SLOTS_PER_SYSTEM = 2;
+// Issue #236: the courier-shadow subtype owns slot 2 and its OWN room, so a
+// full board of introductory spy work plus one shadow posting per system
+// round-trips without truncating either family.
+const SHADOW_SLOTS_PER_SYSTEM = COURIER_SHADOW.slotsPerSystem;
 const WAR_SLOTS_PER_SYSTEM = 2;
 const JOBS_OVERLAY_HEADROOM = 16;
 const CHAIN_ROOM = 7; // UNIQUE_FOUR_HEADROOM + CHAIN_STEPS; do not reset spy/war rooms
@@ -202,6 +208,7 @@ const JOBS_SANITIZE_MAX = 4
   + PASSENGER_SLOTS_PER_SYSTEM * N_SYSTEMS
   + EXPLORE_SLOTS_PER_SYSTEM * N_SYSTEMS
   + ESPIONAGE_SLOTS_PER_SYSTEM * N_SYSTEMS
+  + SHADOW_SLOTS_PER_SYSTEM * N_SYSTEMS
   + WAR_SLOTS_PER_SYSTEM * N_SYSTEMS
   + JOBS_OVERLAY_HEADROOM
   + CHAIN_ROOM;
@@ -228,7 +235,7 @@ const JOB_FIELD_ALLOW = new Set([
   'id', 'kind', 'state', 'title', 'detail', 'reward', 'need', 'progress',
   'originSystem', 'destSystem', 'system', 'payQuoted', 'originPrice',
   'target', 'wreckId', 'collected', 'commodity', 'deadline', 'slot',
-  'recordId',
+  'recordId', 'mission', 'shadow',
 ]);
 const CHAIN_ORIGIN = Object.freeze({
   freehold: 'freehold',
@@ -430,6 +437,10 @@ function sanitizeOneJob(raw) {
   const kind = src.kind;
   const state = src.state;
   if (!JOB_KINDS.has(kind) || !JOB_STATES.has(state)) return null;
+  // Issue #236: the subtype markers exist for the espionage family only. A
+  // stuffed `mission`/`shadow` on any other kind is malformed input, never a
+  // silent upgrade — and it can never become a payable introductory job.
+  if (kind !== 'espionage' && (src.mission !== undefined || src.shadow !== undefined)) return null;
   const tokens = jobIdTokens(src.id);
   if (!tokens) return null;
   const id = src.id;
@@ -554,12 +565,45 @@ function sanitizeOneJob(raw) {
     job.slot = src.slot;
   } else if (kind === 'espionage') {
     if (origin !== tokens[1]) return null;
-    if (src.slot !== 0 && src.slot !== 1) return null;
     if (!Number.isInteger(src.slot)) return null;
     if (!dest || !espionageDestEligible(origin, dest)) return null;
-    job.originSystem = origin;
-    job.destSystem = dest;
-    job.slot = src.slot;
+    if (src.mission !== undefined) {
+      // Issue #236/#237 courier-shadow subtype. An unknown mission value FAILS
+      // rather than degrading into an introductory job, and every bounded
+      // field below must agree with THIS job before the row is preserved.
+      if (src.mission !== COURIER_SHADOW.mission) return null;
+      if (src.slot !== COURIER_SHADOW.slot) return null;
+      const wantRecord = shadowRecordId(id);
+      const recordId = typeof src.recordId === 'string' ? src.recordId : '';
+      if (!wantRecord || !isShadowRecordId(recordId) || recordId !== wantRecord) return null;
+      const target = jobText(src.target, NAME_MAX);
+      if (!target) return null;
+      if (progress !== 0 && progress !== 1) return null;
+      const shadow = sanitizeShadowState(src.shadow, { state, progress });
+      if (!shadow) return null;
+      job.originSystem = origin;
+      job.destSystem = dest;
+      job.slot = src.slot;
+      job.mission = COURIER_SHADOW.mission;
+      job.recordId = recordId;
+      job.target = target;
+      job.shadow = shadow;
+    } else {
+      // Old espionage validation is NOT relaxed: slots 0/1 only. `target` and
+      // `recordId` stay INERT here exactly as they were before the subtype
+      // existed — stripped, never a reason to drop a legacy row.
+      //
+      // `shadow` is different. It is a newly reserved subtype marker, so a row
+      // carrying one without the `mission` that explains it is malformed
+      // subtype input, not a legacy field: reject the whole job rather than
+      // let a half-written subtype downgrade into a payable introductory spy
+      // contract.
+      if (src.slot !== 0 && src.slot !== 1) return null;
+      if (src.shadow !== undefined) return null;
+      job.originSystem = origin;
+      job.destSystem = dest;
+      job.slot = src.slot;
+    }
   } else if (kind === 'war') {
     if (origin !== tokens[1]) return null;
     if (src.slot !== 0 && src.slot !== 1) return null;

@@ -73,6 +73,33 @@ blocked cases stay under investigation: no collision-avoidance or general
 blocked-reliability fix is claimed, and safety cancellation still relinquishes
 the helm. Final verification, merge and deployment remain separate. See [diagnosis and evidence limits](Issue234LightDocking.md).
 
+## Following a courier is its own kind of work — 2026-09-17
+
+Issues #236/#237 are implemented on an isolated candidate, pending independent
+review and live verification. A Jobs desk now carries one extra clearly titled
+**Shadow courier** posting beside the introductory spy work. The briefing names
+the courier, the rival system, a fixed off-lane rendezvous 900 units square
+across the station-to-gate lane, the 150–400 unit observation band, thirty
+accumulated seconds, the filing dock and the exact quote — and it says plainly
+that docking does not gather this report and that crowding inside 150 units
+attracts attention.
+
+The pilot flies there, finds the name with ordinary targeting, and holds station
+with normal throttle and match-speed. Getting greedy is the interesting part:
+inside 150 units with clear sight the courier's patience runs down, it warns the
+pilot by name, and only after that warning has actually been shown on screen does
+the eight-second grace start to burn. Opening the range or breaking sight stops
+it immediately and the attention falls away. Persisting loses the assignment and
+nothing else — no police, no wanted state, no faction penalty, no forced fight
+for a starter hull. Withdrawing is always a real option, and the report, once
+acquired, cannot be taken back.
+
+Evidence is automated only: focused contract checks, build and boot all pass. The
+provisional tuning is not a balance conclusion, and no natural browser run is
+claimed yet. See [contract](Issue236237CourierShadowingDesign.md),
+[design review](Issue236237DesignReview.md) and
+[implementation mission](missions/issue-236-237.md).
+
 ## Collected spy intel reads as ready to file — 2026-09-16
 
 Issue #235 is implemented on an isolated candidate, pending independent QA: once

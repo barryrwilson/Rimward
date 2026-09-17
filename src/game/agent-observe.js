@@ -504,6 +504,13 @@ function jobRow(ctx, j) {
   if (typeof destination === 'string' && destination) row.destination = destination;
   const target = own(j, 'target');
   if (typeof target === 'string' && target) row.target = target;
+  // Issue #236/#237: the read-only courier-shadow projection. Same evaluator
+  // the Jobs card and the HUD status line read — never a second rule set, and
+  // never the hidden record position, occluder identity or NPC intent.
+  const shadow = ctx.stationDesk && typeof ctx.stationDesk.peekShadow === 'function'
+    ? ctx.stationDesk.peekShadow(j)
+    : null;
+  if (shadow && typeof shadow === 'object') row.shadow = shadow;
   if (own(j, 'collected') === true) row.collected = true;
   const payQuoted = own(j, 'payQuoted');
   if (typeof payQuoted === 'number' && Number.isFinite(payQuoted)) row.payQuoted = payQuoted;

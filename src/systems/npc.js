@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   SHIP_CLASSES,
+  COURIER_SHADOW,
   FACTIONS,
   U,
   WEAPONS,
@@ -40,7 +41,7 @@ import {
   escapePublicIdentity,
 } from '../game/npc-escape.js';
 import {
-  beginEscapeTransit, systemDisplayName, resumeEscapeRoute, emitSheltered,
+  beginEscapeTransit, systemDisplayName, resumeEscapeRoute, emitSheltered, shadowOwnedRecord,
 } from '../game/world.js';
 import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } from './ship-assets.js';
 import { epicEffects } from '../game/epics.js';
@@ -50,7 +51,7 @@ import { rollPrizeChoice, prizeEligible, captivesRowFor, takePrizeHull, owesPriz
 import { cargoValueSafe, isDataCommodity, maybeSpawnDataFromWreck } from '../game/data-trade.js';
 import { applyPlayerKillStanding } from '../game/kill-standing.js';
 import { maybeGrantPirateSeed } from '../game/bio-seed.js';
-import { turnRateFor } from '../game/flight-feel.js';
+import { turnRateFor, hoverTurnRateFor } from '../game/flight-feel.js';
 import { scaleFor } from '../game/ship-scale.js';
 import { PHY } from '../game/physics.js';
 import { collectBodies, resolveMover } from '../game/collision.js';
@@ -1276,14 +1277,22 @@ function steer(object, targetPos, speed, turnRate, dt) {
   return dist;
 }
 
-function steerLive(live, targetPos, speed, dt) {
+/**
+ * `turnRate` is an OPTIONAL override, used only by a station-keeping hull that
+ * is pivoting at ~0 forward speed (issue #236's courier end turns). Every
+ * existing caller passes four arguments and keeps the ordinary dogfight law.
+ */
+function steerLive(live, targetPos, speed, dt, turnRate) {
   let dest = targetPos;
   if (_phyOn) {
     dest = writeFrameHold(live, targetPos, _aimAvoid);
     dest = applyAvoidBias(live, dest, _aimAvoid);
   }
   const aim = dest;
-  const dist = steer(live.object, aim, speed, turnRateFor(live.state.classKey, speed), dt);
+  const rate = Number.isFinite(turnRate) && turnRate > 0
+    ? turnRate
+    : turnRateFor(live.state.classKey, speed);
+  const dist = steer(live.object, aim, speed, rate, dt);
   _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
   const vel = live.ai && live.ai.velocity;
   if (vel && typeof vel.copy === 'function') vel.copy(_fwd).multiplyScalar(speed);
@@ -2677,7 +2686,13 @@ function completeBoarding(ctx, live, prize, choice, now) {
 // ---------- movement modes ----------
 function updateRoute(ctx, live, dt, now, reducedMotion) {
   const ai = live.ai;
-  const cap = speedCap(live);
+  let cap = speedCap(live);
+  // Issue #236: a bound shadow courier keeps a mission-local cruise cap no
+  // faster than the starter light hull's sustainable speed, so a new pilot can
+  // always hold the observation band with ordinary throttle and match-speed.
+  // Nothing else about its flight changes, and an unbound hull is untouched.
+  const shadowBound = shadowOwnedRecord(ctx, live.record);
+  if (shadowBound && cap > COURIER_SHADOW.cruiseCap) cap = COURIER_SHADOW.cruiseCap;
   const glow = live.object.userData.glow;
   const wp = ai.waypoints[ai.wp];
   let speed = cap * 0.85;
@@ -2699,7 +2714,29 @@ function updateRoute(ctx, live, dt, now, reducedMotion) {
   } else {
     glow.scale.setScalar(1);
   }
-  const dist = steerLive(live, _aim, speed, dt);
+  // Issue #236 end turns: an ordinary route reversal is a 200 u radius arc,
+  // which would carry the courier's hull far outside the frozen 50 u motion
+  // corridor and pause the mission for most of every lap. A BOUND courier
+  // holds station instead and pivots on the existing hover/station-keep rate
+  // until it is pointed at the next waypoint, then flies the leg normally.
+  // Nothing is teleported, no global flight law changes, and an unbound hull
+  // never reaches this branch.
+  let turnOverride;
+  if (shadowBound) {
+    _v2.subVectors(_aim, live.object.position);
+    if (_v2.lengthSq() > 1e-6) {
+      _v2.normalize();
+      _v3.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+      let dot = _v3.dot(_v2);
+      if (dot > 1) dot = 1;
+      else if (dot < -1) dot = -1;
+      if (Math.acos(dot) > COURIER_SHADOW.turnHoldAngle) {
+        speed = 0;
+        turnOverride = hoverTurnRateFor(live.state.classKey, 0);
+      }
+    }
+  }
+  const dist = steerLive(live, _aim, speed, dt, turnOverride);
   if (dist < 25) ai.wp = (ai.wp + 1) % ai.waypoints.length;
 }
 
