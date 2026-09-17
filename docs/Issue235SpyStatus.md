@@ -56,8 +56,13 @@ The focused test was extended rather than duplicated:
   further credits;
 - **lapsed**: a third accepted contract with an expired deadline closes with no
   payment and is noted `lapsed`;
-- **two employers**: fixture rows at `veridian` prove the collected wording names
-  Veridian's station and never Freehold's, alongside the real Freehold contract;
+- **two employers, in sequence**: the generated Freehold contracts are checked
+  earlier in the same run, above; after those records have reached their
+  respective abandoned, delivered or lapsed states, a
+  separate helper fixture row at `veridian` proves the collected wording names
+  Veridian's station and never Freehold's. The two employers are covered one
+  after the other, not at the same time, and no accepted Freehold contract
+  remains when the Veridian fixture is built;
 - **other families**: collected (`progress: 1`) mining, explore and recovery
   fixtures keep the generic briefing line.
 
@@ -68,6 +73,19 @@ dock and filed at home: `spy-accepted.png`,
 refusal checkpoints the shared probe already covered, and `result.json` with the
 full observations. `result.json` records `spy.wording`, the before/after rows and
 `spy.settlement = { reward: 420, paidOnce: true }`.
+
+Simultaneous two-employer coverage comes from supplemental independent QA, not
+from the focused test. The reviewer's untracked concurrent probe result,
+`out/issue-235/qa-concurrent-live/desk-clarity/result.json` (verdict `PASS`),
+records `qaConcurrent.first` and `qaConcurrent.second` as two generated
+espionage contracts accepted at the same time through the public API
+(`generated: true`, `acceptedThroughPublicAPI: true`): `spy-freehold-0` at
+`progress` 1 with `payAt: freehold` and `Intel acquired—return to Freehold
+Landing to file.`, beside `spy-veridian-1` at `progress` 0 with
+`payAt: veridian` and `Report at Veridian Spire for payment after completing the
+objective.` Each row names its own employer's station. That run mixes collection
+states — Freehold collected, Veridian uncollected; the collected Veridian
+wording stays fixture-only. See `out/issue-235/QA.md`.
 
 Reproduce with:
 
