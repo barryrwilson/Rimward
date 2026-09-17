@@ -2,72 +2,35 @@
 
 ## Courier shadowing and mission-local suspicion — #236 / #237
 
-Design drafted by Sloane on `codex/spy-shadowing-design-236-237`, based on
-`83ec515879ed116621ff843ddc382e341047e364`. The owner selected this batch;
-the issues' explicit schema/scope gate remains pending. The bounded proposal
-adds a named local courier, deliberate observation, warning and withdrawal,
-and employer-only basic payment while preserving introductory spy jobs.
-See [implementation contract and approval request](Issue236237CourierShadowingDesign.md).
-Independent review of `558a1a90` found slot/cap and lifecycle contract gaps;
-the revised design specifies subtype dispatch, save limits, creation identity,
-and numeric public rendezvous data. A second review closed those findings and
-identified unsafe route geometry; the new revision specifies a perpendicular
-off-lane route with full observation-envelope clearance. Independent Claude
-design review passed on `45f08800c701578f94820604338fb8d4b5049eed`.
-See [verdict, limits and implementation clarifications](Issue236237DesignReview.md).
-The owner confirmed implementation scope on 2026-09-17; see
-[implementation mission](missions/issue-236-237.md).
+Implemented and acceptance verified on isolated branch
+`codex/issues-236-237-courier`, runtime candidate
+`da1dc8cfa06e87eb0f3c16343b1e173bcd45e3c7`. The owner approved the schema and
+scope on 2026-09-17. The separate **Shadow courier** posting adds named-target
+observation, mission-local suspicion, warning/withdrawal, persisted grace,
+exposure and employer-only basic payment while preserving introductory spy jobs.
 
-Implementation is now complete on the isolated branch `codex/issues-236-237-courier`.
-It adds the slot-2 `courier-shadow` espionage subtype: one extra Jobs posting per
-employer with its own capacity, a deterministic perpendicular off-lane courier
-route certified against every gate and hub body, the station cylinder, the
-authored asteroid field and real seeded planet bounds; a dedicated bound
-freighter with mission-local route, migration, offline-drift and cruise guards
-and a pivoting end turn that keeps its actual hull inside the 50-unit corridor;
-one shared evaluator for observation seconds, mission-local suspicion, the
-warning and its eight-second grace, withdrawal and exposure; strict save
-normalization that rejects every malformed subtype payload; employer-only
-exactly-once settlement; and a read-only `shadow` projection shared by the Jobs
-card, the HUD status line and `observe()`. Introductory espionage, its standing
-effects and #235's filing status are unchanged. No new event, key, gauge,
-equipment SKU or currency was added.
+Independent code/regression and bounded security reviews PASS. All 52 focused
+grouped checks, build and unchanged boot pass. Natural starter-hull play verified
+30 seconds of observation, lost/reacquired contact, a mixed introductory/shadow
+career and exactly 840 UU combined settlement with no duplicate payment. A
+second successful session verified warning, safe withdrawal, exact grace across
+ordinary autosave reload, deliberate exposure and escape without forced combat.
+Both successful scenarios had zero console errors/exceptions. Desktop and narrow
+mission status were visually checked.
 
-Evidence so far is automated only: 44 focused contract checks, `npm run build`,
-and an unchanged `npm run test:boot`, all passing. The corridor measurement comes
-from the real NPC update over 240 simulated seconds and ten end turns.
+The courier's motion corridor, route/envelope clearance, strict save validation,
+identity/lifecycle and per-job isolation have focused automated coverage.
+Earlier review failures were repaired, including the HUD warning priority across
+employers. The successful career's delayed browser shutdown is recorded honestly
+with independent cleanup confirmation; the combined warning run completed with
+clean harness shutdown. Existing #234 docking failures and provisional balance
+remain separate limitations. Optional deep intelligence (#238) remains parked.
 
-Candidate `55e9244` failed independent review with five blocking findings, and
-its natural browser attempt stopped early on a sixth, visual one: the persistent
-mission status was obscured by the agent-play panel at 1440x900. All six are
-repaired on a new artifact with focused regression pins — materialization
-recertification against real gate and live planet geometry, detection-range
-eligibility for the published target id, rejection of an out-of-bound courier
-name, the final-warning distinction and remaining grace in the human status
-text, the unambiguous rendezvous side stated in an upright, world-up,
-facing-the-first-gate frame, and the status-line placement. The automated
-evidence is now 51 focused checks, `npm run build`, an unchanged
-`npm run test:boot` and the reviewer's own probes re-run unmodified. The HUD
-placement still needs live QA, and independent re-review plus the natural
-browser flows remain open.
-
-Candidate `fd099a66` then failed independent re-review on one new blocking
-finding: the single persistent HUD line showed the first accepted assignment, so
-an earlier employer's remote travel instruction hid a live local danger warning.
-It is repaired on `codex/issues-236-237-warning-priority` as display arbitration
-only — local danger first, ordered by estimated exposure rather than the warning
-label, then local observation and contact work, then remote and filed-report
-fallbacks, with stable ties. Per-job Jobs/API status, timers, risk, persistence
-and actions are unchanged. Automated evidence is now 52 focused checks,
-`npm run build`, an unchanged `npm run test:boot` and the reviewer's own repro
-re-run unmodified. Independent re-review and the live/natural flows stay open.
-
-Next: independent security and regression review naming the exact commit, then
-the natural live-browser runs the design requires (accept, find by name, follow,
-acquire, file; loss and reacquisition; withdrawal after warning; reload
-mid-warning; deliberate exposure; and a mixed career sequence). No live-browser
-success, balance conclusion, merge or deployment is claimed. Optional deep
-intelligence (#238) remains parked.
+See the [final implementation review](Issue236237ImplementationReview.md) for
+exact evidence and limits, the [implementation mission](missions/issue-236-237.md)
+for history, and the [approved contract](Issue236237CourierShadowingDesign.md)
+and [design review](Issue236237DesignReview.md) for scope. No merge or deployment
+is claimed; the everyday checkout remains unchanged.
 
 ## Light-hull arrival diagnosis and recovery guidance — #234
 
