@@ -8,8 +8,10 @@ the issues' explicit schema/scope gate remains pending. The bounded proposal
 adds a named local courier, deliberate observation, warning and withdrawal,
 and employer-only basic payment while preserving introductory spy jobs.
 See [implementation contract and approval request](Issue236237CourierShadowingDesign.md).
-Next: independent specification review, then explicit implementation-scope
-approval. No product code or implementation QA is claimed; optional deep
+Independent review of `558a1a90` found slot/cap and lifecycle contract gaps;
+the revised design specifies subtype dispatch, save limits, creation identity,
+and numeric public rendezvous data. Next: independent re-review of the revised
+artifact, then explicit implementation-scope approval. No product code or implementation QA is claimed; optional deep
 intelligence (#238) remains parked.
 
 ## Light-hull arrival diagnosis and recovery guidance — #234
