@@ -483,6 +483,12 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
   });
   await c.send('Debugger.enable');
 
+  // Resolve every anchor first. Two logical logpoints can legitimately share an
+  // anchor (cruise and cruisebrake both sit on `const cruiseRemaining = ...`),
+  // and CDP rejects a second breakpoint at a location that already carries one.
+  // So resolution and installation are separate passes: one CDP breakpoint per
+  // resolved location, carrying every logical condition that resolved there.
+  const resolved = [];
   for (const lp of LOGPOINTS) {
     // A condition that fails to compile would really pause the page, so each
     // one is parsed here before it is ever installed.
@@ -507,21 +513,52 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
     if (!Number.isInteger(idx)) {
       throw Error(`logpoint occurrence ${lp.occurrence} out of range (${hits.length}): ${lp.key}`);
     }
+    const columnNumber = Math.max(0, lines[idx].length - lines[idx].trimStart().length);
+    resolved.push({ lp, hits, idx, columnNumber });
+  }
+
+  // Group by resolved location, keeping the declared order of LOGPOINTS.
+  const byLocation = new Map();
+  for (const r of resolved) {
+    const at = `${r.idx}:${r.columnNumber}`;
+    if (!byLocation.has(at)) byLocation.set(at, []);
+    byLocation.get(at).push(r);
+  }
+
+  for (const group of byLocation.values()) {
+    const { idx, columnNumber } = group[0];
+    // Every logical condition already returns false and swallows its own
+    // throws, so the group condition just evaluates each in turn and returns
+    // false itself. The breakpoint still never pauses the page.
+    const condition = group.length === 1
+      ? group[0].lp.condition
+      : `(function(){${group.map((r) => `(${r.lp.condition});`).join('')}return false})()`;
+    try { new Function(`return ${condition};`); } catch (e) {
+      throw Error(`grouped logpoint condition does not parse at served line ${idx + 1}`
+        + ` (${group.map((r) => r.lp.key).join(', ')}): ${e.message}`);
+    }
     const set = await c.send('Debugger.setBreakpointByUrl', {
       urlRegex: 'src/game/autopilot\\.js',
       lineNumber: idx,
-      columnNumber: Math.max(0, lines[idx].length - lines[idx].trimStart().length),
-      condition: lp.condition,
+      columnNumber,
+      condition,
     });
-    result.logpoints.set.push({
-      key: lp.key, note: lp.note, anchor: lp.anchor,
-      anchorMatches: hits.length, occurrence: lp.occurrence ?? 0,
-      required: lp.required === true,
-      servedLine: idx + 1, servedText: lines[idx].trim(),
-      breakpointId: set.breakpointId,
-      locations: (set.locations || []).map((l) => ({ line: l.lineNumber + 1, col: l.columnNumber })),
-    });
-    console.log('LOGPOINT', lp.key, 'served line', idx + 1, 'resolved', (set.locations || []).length);
+    const locations = (set.locations || []).map((l) => ({ line: l.lineNumber + 1, col: l.columnNumber }));
+    // One row per LOGICAL tag, as before, so tag coverage and the report read
+    // the same whether or not a tag shares its location with another.
+    for (const { lp, hits } of group) {
+      result.logpoints.set.push({
+        key: lp.key, note: lp.note, anchor: lp.anchor,
+        anchorMatches: hits.length, occurrence: lp.occurrence ?? 0,
+        required: lp.required === true,
+        servedLine: idx + 1, servedText: lines[idx].trim(),
+        breakpointId: set.breakpointId,
+        sharesLocationWith: group.filter((r) => r.lp.key !== lp.key).map((r) => r.lp.key),
+        locations,
+      });
+    }
+    console.log('LOGPOINT', group.map((r) => r.lp.key).join('+'),
+      'served line', idx + 1, 'resolved', locations.length);
   }
   if (!result.logpoints.set.every((s) => s.locations.length > 0)) {
     throw Error('a logpoint did not resolve to a breakable location: ' + JSON.stringify(result.logpoints.set));
