@@ -467,6 +467,8 @@ pin('manifest roles explicit', Object.values(manifest.roles).every((r) => (
 pin('manifest services explicit', ['market', 'jobs', 'bar', 'feed', 'repair', 'outfitting', 'people', 'launch', 'epics', 'shipyard']
   .every((s) => manifest.services[s] && manifest.services[s].status === 'supported'));
 pin('manifest commands complete', COMMAND_NAMES.every((n) => manifest.commands[n]));
+pin('dossier has explicit action and mission parity', COMMAND_NAMES.includes('chooseShadowDossier')
+  && manifest.commands.chooseShadowDossier && manifest.roles.missions.commands.includes('chooseShadowDossier'));
 
 // Scoop receipts (issue #115): podCollected is keep-class and carries the
 // merged units/commodity; podBlocked is the previously silent capacity refusal.

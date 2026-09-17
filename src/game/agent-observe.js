@@ -942,6 +942,12 @@ function availabilityBlock(ctx, phase, control) {
       reason = 'paused';
     } else if (held && name !== 'ping' && name !== 'disable') {
       reason = 'held';
+    } else if (name === 'chooseShadowDossier') {
+      if (docked) reason = 'docked';
+      else if (ctx.gate?.jumping) reason = 'jumping';
+      else if (phase !== 'playing') reason = 'phase';
+      else if (!(ctx.world.jobs || []).some((j) => j.state === 'accepted'
+        && (ctx.stationDesk?.peekShadow?.(j)?.deep?.canStart || j.shadow?.deep?.state === 'pursuing'))) reason = 'no-eligible-assignment';
     } else if (name === 'dock') {
       if (!(ctx.station && ctx.station.inZone === true)) reason = 'range';
     } else if (name === 'undock' || name === 'openService' || name === 'acceptJob' || name === 'abandonJob'

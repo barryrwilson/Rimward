@@ -788,7 +788,10 @@ export const JUMP = {
  * subtype reuses the espionage job family, existing comms and the Jobs desk.
  */
 export const COURIER_SHADOW = Object.freeze({
-  version: 1,
+  version: 2,
+  deepSeconds: 30,
+  deepPremium: 0.50,
+  deepSuspicionGain: 4,
   slot: 2, // reserved for this subtype only; introductory spy keeps 0/1
   slotsPerSystem: 1,
   mission: 'courier-shadow',

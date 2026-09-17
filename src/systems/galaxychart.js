@@ -584,6 +584,61 @@ export function initGalaxyChart(ctx) {
 
   panel.appendChild(header);
   panel.appendChild(desc);
+  const shadowSection = document.createElement('section');
+  shadowSection.className = 'rw-shadow-assignment';
+  shadowSection.setAttribute('aria-label', 'Shadow assignment');
+  panel.appendChild(shadowSection);
+  const shadowRows = new Map();
+  let shadowNotice = '';
+  // Stable nodes preserve keyboard focus while evidence and eligibility refresh.
+  function paintShadowAssignments() {
+    const jobs = (ctx.world.jobs || []).filter((j) => {
+      const deep = ctx.stationDesk?.peekShadow?.(j)?.deep;
+      return j.state === 'accepted' && j.progress === 1 && deep && deep.state !== 'legacy';
+    });
+    for (const [job, row] of shadowRows) {
+      if (!jobs.includes(job)) { row.el.remove(); shadowRows.delete(job); }
+    }
+    shadowSection.hidden = jobs.length === 0;
+    for (const job of jobs) {
+      const projection = ctx.stationDesk.peekShadow(job);
+      if (!projection) continue;
+      let row = shadowRows.get(job);
+      if (!row) {
+        const el = document.createElement('div');
+        const title = document.createElement('h3');
+        const terms = document.createElement('p');
+        const status = document.createElement('p');
+        const button = document.createElement('button');
+        button.type = 'button';
+        // Space/Enter stay native button actions, never chart plotting/flight fire.
+        for (const event of ['keydown', 'keyup', 'pointerdown', 'pointerup']) button.addEventListener(event, (e) => e.stopPropagation());
+        button.addEventListener('click', (e) => {
+          e.stopPropagation?.();
+          const choice = button.dataset.choice;
+          const result = ctx.stationDesk.chooseShadowDossier({ id: job.id, choice }, job);
+          shadowNotice = result.notice;
+          paintShadowAssignments();
+          if (result.ok && choice === 'begin') setOpen(false);
+        });
+        for (const child of [title, terms, status, button]) el.appendChild(child);
+        shadowSection.appendChild(el);
+        row = { el, title, terms, status, button };
+        shadowRows.set(job, row);
+      }
+      const deep = projection.deep;
+      row.title.textContent = `Shadow assignment — ${job.target} · ${job.id} · ${SYSTEMS[job.originSystem]?.station?.name || job.originSystem}`;
+      row.terms.textContent = deep.terms;
+      row.status.textContent = `${projection.instruction} Dossier evidence: ${deep.observedSeconds.toFixed(1)}/${deep.requiredSeconds} s. ${shadowNotice}`;
+      const pursuing = deep.state === 'pursuing';
+      row.button.hidden = !pursuing && deep.state !== 'available';
+      row.button.dataset.choice = pursuing ? 'end' : 'begin';
+      row.button.disabled = !pursuing && !deep.canStart;
+      row.button.textContent = pursuing ? 'End dossier attempt; keep basic report' : `Attempt complete dossier — ${deep.payQuoted} UU total`;
+      row.button.setAttribute('aria-label', `${row.button.textContent} — ${job.target} · ${job.id}`);
+      if (!pursuing && !deep.canStart && deep.state === 'available') row.status.textContent += ` Start unavailable: ${deep.startBlockedReason}.`;
+    }
+  }
   panel.appendChild(destField);
   panel.appendChild(filterRow);
   panel.appendChild(itinerary);
@@ -961,6 +1016,7 @@ export function initGalaxyChart(ctx) {
       resetView();
       applyFilters();
       paintItinerary();
+      paintShadowAssignments();
     } else {
       resetView();
       clearHover();
@@ -1424,6 +1480,7 @@ export function initGalaxyChart(ctx) {
       }
     }
     if (open) {
+      paintShadowAssignments();
       const scale = ctx.settings.textScale;
       if (scale !== appliedScale) {
         appliedScale = scale;
@@ -1438,5 +1495,6 @@ export function initGalaxyChart(ctx) {
     }
   }
 
+  ctx.galaxyChart = { close: () => setOpen(false) };
   return { update };
 }

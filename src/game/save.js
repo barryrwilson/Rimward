@@ -584,7 +584,7 @@ function sanitizeOneJob(raw) {
       const target = jobText(src.target, NAME_MAX);
       if (!target) return null;
       if (progress !== 0 && progress !== 1) return null;
-      const shadow = sanitizeShadowState(src.shadow, { state, progress });
+      const shadow = sanitizeShadowState(src.shadow, { state, progress, reward: src.reward, payQuoted: src.payQuoted });
       if (!shadow) return null;
       job.originSystem = origin;
       job.destSystem = dest;
