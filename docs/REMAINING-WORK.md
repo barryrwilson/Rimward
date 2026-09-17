@@ -1,5 +1,26 @@
 # RIMWARD remaining work
 
+## Optional complete dossier — #238
+
+Implemented on `codex/issue-238-deep-dossier`, runtime
+`7838c9e21c7231dda5c77a853ebaefbf0e618edf`. The pilot explicitly chooses extra
+courier evidence through the existing Galaxy Chart. Interrupted deep exposure
+retains basic intelligence; complete evidence earns one frozen higher total at
+the employer. Strict versioned saves and one-shot UI/API actions preserve terms.
+
+Final independent code/security review, build, unchanged boot, 9 dossier groups
+and 52 base courier groups pass. Natural deep play verified warning, cooling,
+in-progress reload, reacquisition, 30/30 completion and 630 UU exactly once
+(350 → 980), retained after post-payment reload. Source/harness identities stayed
+stable; console/network checks and dedicated cleanup were clean. Earlier scoped
+basic and exposed-deep runs each verified 420 UU once plus reload negatives.
+The final native UI fixture passes held-Space release, explicit end/repeat
+negatives, multiple-row identity, remapped binding and single-copy Jobs terms,
+with clean console/network and cleanup. Implementation and acceptance are
+verified; ready for PR, with issue closure on merge. The narrow restore ownership
+repair is recorded and independently reviewed. Tuning remains provisional;
+#234 is separate. No merge/deployment is claimed. See
+[implementation evidence and limits](Issue238ImplementationReview.md).
 ## Courier shadowing and mission-local suspicion — #236 / #237
 
 Implemented and acceptance verified on isolated branch
@@ -24,7 +45,7 @@ Earlier review failures were repaired, including the HUD warning priority across
 employers. The successful career's delayed browser shutdown is recorded honestly
 with independent cleanup confirmation; the combined warning run completed with
 clean harness shutdown. Existing #234 docking failures and provisional balance
-remain separate limitations. Optional deep intelligence (#238) remains parked.
+remain separate limitations. Optional deep intelligence (#238) is now an implementation candidate; see its separate verified acceptance entry above.
 
 See the [final implementation review](Issue236237ImplementationReview.md) for
 exact evidence and limits, the [implementation mission](missions/issue-236-237.md)
