@@ -85,6 +85,78 @@ const MEASURE = `(() => {
   };
 })()`;
 
+/**
+ * Layout of every visible cancellation receipt against the HUD furniture it
+ * must not cover. Returns the persistent chip, every visible matching toast,
+ * and the obstacles: Controls (top-left), Manifest (top-right) and the
+ * onboarding hint. Intersections are computed here so the assertions below
+ * read from measured rects, not from a screenshot judgement.
+ */
+const LAYOUT = `(() => {
+  const r = (n) => { const b = n.getBoundingClientRect();
+    return { x: +b.x.toFixed(1), y: +b.y.toFixed(1), w: +b.width.toFixed(1), h: +b.height.toFixed(1),
+      right: +b.right.toFixed(1), bottom: +b.bottom.toFixed(1) }; };
+  const shown = (n) => { const cs = getComputedStyle(n); const b = n.getBoundingClientRect();
+    return cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity || '1') > 0.01
+      && b.width > 0 && b.height > 0; };
+  const hit = (a, b) => a.x < b.right - 0.5 && b.x < a.right - 0.5
+    && a.y < b.bottom - 0.5 && b.y < a.bottom - 0.5;
+  const describe = (n, role) => {
+    const cs = getComputedStyle(n);
+    const box = r(n);
+    return { role, text: (n.textContent || '').trim().slice(0, 200), rect: box,
+      scrollWidth: n.scrollWidth, clientWidth: n.clientWidth,
+      elementOverflowPx: n.scrollWidth - n.clientWidth,
+      clippedLeft: box.x < -0.5, clippedRight: box.right > innerWidth + 0.5,
+      clippedTop: box.y < -0.5, clippedBottom: box.bottom > innerHeight + 0.5,
+      style: { whiteSpace: cs.whiteSpace, maxWidth: cs.maxWidth, overflow: cs.overflow,
+        overflowWrap: cs.overflowWrap, marginTop: cs.marginTop } };
+  };
+
+  const persistNode = document.querySelector('#hud [data-dock-failure]:not(.is-hidden)');
+  const persist = persistNode && shown(persistNode) ? describe(persistNode, 'persistent') : null;
+  // Matched by class AND by copy, so a future comm line cannot be counted here
+  // by accident and a missing class cannot be hidden by the text match.
+  const toasts = [...document.querySelectorAll('.rw-toast')]
+    .filter((n) => shown(n) && /Dock approach cancelled/.test(n.textContent || ''))
+    .map((n, i) => ({ ...describe(n, 'toast-' + i),
+      hasDedicatedClass: n.classList.contains('rw-toast-dock-failure') }));
+
+  const OBSTACLES = [['.rw-controls', 'Controls'], ['.rw-resources', 'Manifest'],
+    ['.rw-onboard-hint', 'onboarding hint']];
+  const obstacles = [];
+  for (const [sel, label] of OBSTACLES) {
+    for (const n of document.querySelectorAll(sel)) {
+      if (shown(n)) obstacles.push({ label, selector: sel, rect: r(n) });
+    }
+  }
+
+  // Every visible cancellation receipt vs every obstacle, the persistent chip,
+  // and each other.
+  const boxes = [...(persist ? [persist] : []), ...toasts];
+  const intersections = [];
+  for (const b of boxes) {
+    for (const o of obstacles) {
+      if (hit(b.rect, o.rect)) intersections.push({ a: b.role, b: o.label, aRect: b.rect, bRect: o.rect });
+    }
+  }
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      if (hit(boxes[i].rect, boxes[j].rect)) {
+        intersections.push({ a: boxes[i].role, b: boxes[j].role, aRect: boxes[i].rect, bRect: boxes[j].rect });
+      }
+    }
+  }
+  const clipped = boxes.filter((b) => b.elementOverflowPx > 0 || b.clippedLeft || b.clippedRight
+    || b.clippedTop || b.clippedBottom)
+    .map((b) => ({ role: b.role, elementOverflowPx: b.elementOverflowPx, rect: b.rect,
+      clippedLeft: b.clippedLeft, clippedRight: b.clippedRight,
+      clippedTop: b.clippedTop, clippedBottom: b.clippedBottom, whiteSpace: b.style.whiteSpace }));
+
+  return { innerWidth, innerHeight, persistent: persist, toasts, obstacles, intersections, clipped,
+    documentOverflows: document.documentElement.scrollWidth > innerWidth + 0.5 };
+})()`;
+
 await runLive('dock-feedback', async ({ c, result, act, observe, wait, shot, folder }) => {
   result.fixture = true;
   result.method = 'DECLARED FIXTURE. Synthetic disengage(ctx,"blocked"|"impact") in open space, at two '
@@ -127,16 +199,43 @@ await runLive('dock-feedback', async ({ c, result, act, observe, wait, shot, fol
       const name = `${vp.label}-${reason}`;
       await shot(name);
 
-      const rec = { viewport: vp, reason, apAfterCancel: state, commLines: said, ...m, screenshot: `${name}.png` };
+      const layout = await c.eval(LAYOUT);
+      const rec = { viewport: vp, reason, apAfterCancel: state, commLines: said, ...m,
+        layout, screenshot: `${name}.png` };
       // A chip whose own box clips its text, or that leaves the viewport, is
       // not usable feedback however correct the copy is.
       rec.textFullyVisible = m.found && m.visible && m.elementOverflowPx <= 0
         && !m.overflowsViewportRight && !m.overflowsViewportBottom && !m.offscreenLeft;
+      // The transient toast is as much of the public feedback as the chip, so
+      // the run is only clean when NOTHING is clipped and NOTHING overlaps.
+      rec.layoutClean = layout.clipped.length === 0 && layout.intersections.length === 0
+        && !layout.documentOverflows;
       result.measurements.push(rec);
       console.log('MEASURE', name,
         'w=' + m.rect?.w, 'scrollW=' + m.scrollWidth, 'clientW=' + m.clientWidth,
         'overflowPx=' + m.elementOverflowPx, 'right=' + m.rect?.right + '/' + m.innerWidth,
         'ws=' + m.style?.whiteSpace, 'lines=' + m.lines, 'fullyVisible=' + rec.textFullyVisible);
+      console.log('LAYOUT', name, 'toasts=' + layout.toasts.length,
+        'clipped=' + JSON.stringify(layout.clipped),
+        'intersections=' + JSON.stringify(layout.intersections.map((i) => i.a + 'x' + i.b)),
+        'clean=' + rec.layoutClean);
+
+      // ---- the toast the QA screenshot caught running off the left edge
+      assert.ok(layout.toasts.length > 0, `${name}: a cancellation toast is visible to measure`);
+      for (const t of layout.toasts) {
+        assert.equal(t.hasDedicatedClass, true, `${name}/${t.role}: toast carries rw-toast-dock-failure`);
+        assert.ok(t.text.includes(NEXT_ACTION), `${name}/${t.role}: toast shows the whole next action`);
+        assert.ok(t.elementOverflowPx <= 0,
+          `${name}/${t.role}: toast text is not clipped by its own box (${t.elementOverflowPx}px)`);
+        assert.equal(t.clippedLeft || t.clippedRight || t.clippedTop || t.clippedBottom, false,
+          `${name}/${t.role}: toast is inside the viewport ${JSON.stringify(t.rect)} vs ${layout.innerWidth}x${layout.innerHeight}`);
+      }
+      // No receipt may cover Controls, Manifest, the hint, the persistent chip,
+      // or another cancellation receipt.
+      assert.deepEqual(layout.intersections, [],
+        `${name}: receipts must not overlap HUD furniture or each other`);
+      assert.deepEqual(layout.clipped, [], `${name}: nothing clipped`);
+      assert.equal(layout.documentOverflows, false, `${name}: no document overflow`);
 
       assert.equal(m.found, true, `${name}: receipt chip present`);
       assert.equal(m.visible, true, `${name}: receipt chip visible`);
@@ -177,6 +276,7 @@ await runLive('dock-feedback', async ({ c, result, act, observe, wait, shot, fol
 
   // ---- verdict on the CSS question this probe was launched to settle
   const clipped = result.measurements.filter((m) => !m.textFullyVisible);
+  const dirty = result.measurements.filter((m) => !m.layoutClean);
   result.overflow = {
     anyClipped: clipped.length > 0,
     clipped: clipped.map((m) => ({
@@ -186,11 +286,25 @@ await runLive('dock-feedback', async ({ c, result, act, observe, wait, shot, fol
       overflowsViewportRight: m.overflowsViewportRight,
       whiteSpace: m.style?.whiteSpace,
     })),
-    verdict: clipped.length > 0
-      ? 'OVERFLOW CONFIRMED — a narrow [data-dock-failure] wrapping/max-width rule is warranted.'
-      : 'NO OVERFLOW MEASURED — no CSS change is warranted on this evidence.',
+    // Both receipts, both viewports. A previous run reported "no CSS change is
+    // warranted" while the transient toast was running off the left edge,
+    // because only the persistent chip was measured and nothing was asserted.
+    anyLayoutProblem: dirty.length > 0,
+    layoutProblems: dirty.map((m) => ({
+      viewport: m.viewport.label, reason: m.reason,
+      clipped: m.layout.clipped,
+      intersections: m.layout.intersections,
+      documentOverflows: m.layout.documentOverflows,
+    })),
+    verdict: (clipped.length > 0 || dirty.length > 0)
+      ? 'LAYOUT PROBLEM MEASURED — see clipped / layoutProblems; this run does NOT clear the receipts.'
+      : 'CLEAN — persistent chip and cancellation toasts are whole, inside the viewport, '
+        + 'and clear of Controls, Manifest, the hint and each other at both viewports.',
   };
   console.log('OVERFLOW', JSON.stringify(result.overflow, null, 2));
+  // The verdict is now a gate, not a note: a layout problem fails the run.
+  assert.equal(result.overflow.anyClipped, false, 'no receipt may be clipped');
+  assert.equal(result.overflow.anyLayoutProblem, false, 'no receipt may overlap HUD furniture');
 
   await writeFile(resolve(folder, 'measurements.json'), JSON.stringify(result.measurements, null, 1));
 });
