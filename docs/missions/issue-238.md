@@ -154,3 +154,11 @@ checkout sync are not authorized or performed in this task. Retain previous
 runtime plus a coherent pre-v2 save snapshot for downgrade rollback. Source
 runtime stays at the independently reviewed and tested identity; final docs
 commit changes only evidence/status.
+
+## Pull request published
+
+[PR #245](https://github.com/barryrwilson/Rimward/pull/245) publishes the verified
+branch for #238. Runtime remains exactly 7838c9e2; subsequent commits contain
+only evidence/status. The implementation checkout is clean. Next owner/action:
+review the PR for separately authorized merge, then perform the designated local
+checkout handoff if merged. No merge or deployment is claimed.
