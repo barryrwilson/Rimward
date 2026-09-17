@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test:boot": "node --import ./scripts/with-css-stub.mjs scripts/boot-test.mjs && node --import ./scripts/with-css-stub.mjs scripts/issue-204-origin-discovery-test.mjs && node --import ./scripts/with-css-stub.mjs scripts/issue-224-pirate-comms-test.mjs && node --import ./scripts/with-css-stub.mjs scripts/issue-223-haul-quote-test.mjs && node --import ./scripts/with-css-stub.mjs scripts/issue-225-yard-hull-names-test.mjs",
     "test:courier-shadow": "node --import ./scripts/with-css-stub.mjs scripts/issue-236-237-courier-shadow-test.mjs",
+    "test:deep-dossier": "node --import ./scripts/with-css-stub.mjs scripts/issue-238-deep-dossier-test.mjs",
     "test:haul-quote": "node --import ./scripts/with-css-stub.mjs scripts/issue-223-haul-quote-test.mjs",
     "test:yard-hull-names": "node --import ./scripts/with-css-stub.mjs scripts/issue-225-yard-hull-names-test.mjs",
     "test:pirate-comms": "node --import ./scripts/with-css-stub.mjs scripts/issue-224-pirate-comms-test.mjs",

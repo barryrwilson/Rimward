@@ -8,6 +8,7 @@ import { tryEngage, disengage, apLine, apRefuseToken, guardAutopilotSpace } from
 import { canOpenPlayCard, playSurfaceBlocked, isTypingFocus, settingsOwnsScreen } from './overlay-policy.js';
 import { decodeKeyCode } from './key-code.js';
 import { codeOf } from './bindings.js';
+import { guardShadowDossierSpace } from '../game/courier-shadow.js';
 import '../ui/hud.css';
 
 /**
@@ -584,6 +585,66 @@ export function initGalaxyChart(ctx) {
 
   panel.appendChild(header);
   panel.appendChild(desc);
+  const shadowSection = document.createElement('section');
+  shadowSection.className = 'rw-shadow-assignment';
+  shadowSection.setAttribute('aria-label', 'Shadow assignment');
+  panel.appendChild(shadowSection);
+  const shadowRows = new Map();
+  let shadowPaintAt = -Infinity;
+  // Stable nodes preserve keyboard focus while evidence and eligibility refresh.
+  function paintShadowAssignments() {
+    const views = new Map();
+    for (const job of ctx.world.jobs || []) {
+      if (job.state !== 'accepted' || job.progress !== 1) continue;
+      const projection = ctx.stationDesk?.peekShadow?.(job);
+      if (projection?.deep && projection.deep.state !== 'legacy') views.set(job, projection);
+    }
+    for (const [job, row] of shadowRows) {
+      if (!views.has(job)) { row.el.remove(); shadowRows.delete(job); }
+    }
+    shadowSection.hidden = views.size === 0;
+    for (const [job, projection] of views) {
+      let row = shadowRows.get(job);
+      if (!row) {
+        const el = document.createElement('div');
+        const title = document.createElement('h3');
+        const terms = document.createElement('p');
+        const status = document.createElement('p');
+        const button = document.createElement('button');
+        button.type = 'button';
+        // Native buttons sit outside the SVG plot surface. The existing
+        // chartOpen input gate suppresses flight fire until activation.
+        button.addEventListener('keydown', guardShadowDossierSpace);
+        button.addEventListener('click', () => {
+          const choice = button.dataset.choice;
+          const result = ctx.stationDesk.chooseShadowDossier({ id: job.id, choice }, job);
+          row.notice = result.notice;
+          row.noticeUntil = ctx.elapsed + 5;
+          paintShadowAssignments();
+          if (result.ok && choice === 'begin') setOpen(false);
+        });
+        for (const child of [title, terms, status, button]) el.appendChild(child);
+        shadowSection.appendChild(el);
+        row = { el, title, terms, status, button, notice: '', noticeUntil: 0 };
+        shadowRows.set(job, row);
+      }
+      const deep = projection.deep;
+      row.title.textContent = `Shadow assignment — ${job.target} · ${job.id} · ${SYSTEMS[job.originSystem]?.station?.name || job.originSystem}`;
+      row.terms.textContent = deep.terms;
+      // The shared basic-ready instruction includes these exact terms. Keep
+      // its phase/consequence prefix without printing the agreement twice.
+      const instruction = projection.instruction.replace(deep.terms, '').trim();
+      if (ctx.elapsed >= row.noticeUntil) row.notice = '';
+      row.status.textContent = `${instruction} Dossier evidence: ${deep.observedSeconds.toFixed(1)}/${deep.requiredSeconds} s. ${row.notice}`;
+      const pursuing = deep.state === 'pursuing';
+      row.button.hidden = !pursuing && deep.state !== 'available';
+      row.button.dataset.choice = pursuing ? 'end' : 'begin';
+      row.button.disabled = !pursuing && !deep.canStart;
+      row.button.textContent = pursuing ? 'End dossier attempt; keep basic report' : `Attempt complete dossier — ${deep.payQuoted} UU total`;
+      row.button.setAttribute('aria-label', `${row.button.textContent} — ${job.target} · ${job.id}`);
+      if (!pursuing && !deep.canStart && deep.state === 'available') row.status.textContent += ` Start unavailable: ${deep.startBlockedReason}.`;
+    }
+  }
   panel.appendChild(destField);
   panel.appendChild(filterRow);
   panel.appendChild(itinerary);
@@ -946,6 +1007,7 @@ export function initGalaxyChart(ctx) {
 
   function setOpen(next) {
     if (next) {
+      for (const row of shadowRows.values()) row.notice = '';
       try {
         if (canOpenPlayCard(ctx, 'chart') === false) return;
       } catch { /* skip mutex */ }
@@ -961,6 +1023,8 @@ export function initGalaxyChart(ctx) {
       resetView();
       applyFilters();
       paintItinerary();
+      paintShadowAssignments();
+      shadowPaintAt = ctx.elapsed;
     } else {
       resetView();
       clearHover();
@@ -1424,6 +1488,10 @@ export function initGalaxyChart(ctx) {
       }
     }
     if (open) {
+      if (ctx.elapsed < shadowPaintAt || ctx.elapsed - shadowPaintAt >= .2) {
+        paintShadowAssignments();
+        shadowPaintAt = ctx.elapsed;
+      }
       const scale = ctx.settings.textScale;
       if (scale !== appliedScale) {
         appliedScale = scale;
@@ -1438,5 +1506,6 @@ export function initGalaxyChart(ctx) {
     }
   }
 
+  ctx.galaxyChart = { close: () => setOpen(false) };
   return { update };
 }

@@ -61,9 +61,15 @@ import {
 import { requestLaneClearance } from './npc.js';
 import { SUSPEND_AFTER_MS } from './controls.js';
 import { COURIER_SHADOW } from '../game/state.js';
+import { codeOf, shortLabel } from './bindings.js';
 import {
   certifyShadowSystem,
   freshShadowState,
+  sanitizeShadowState,
+  shadowEarnedPay,
+  closeShadowDossier,
+  shadowDossierTerms,
+  shadowDossierBlocked,
   isShadowJob,
   pointInCorridor,
   SHADOW_COPY,
@@ -3714,7 +3720,8 @@ function makeShadowJob(ctx, sysId) {
     progress: 0,
     state: 'offered',
     deadline: ctx.world.time + COURIER_SHADOW.deadlineSeconds,
-    shadow: freshShadowState(),
+    shadow: freshShadowState(clampJobPay(pay + Math.round(pay * COURIER_SHADOW.deepPremium)) > pay
+      ? clampJobPay(pay + Math.round(pay * COURIER_SHADOW.deepPremium)) : 0),
   };
 }
 
@@ -3773,6 +3780,8 @@ function shadowFrameInputs(ctx, job) {
     playerAlive: hull > 0,
     docked: ctx.flags.docked === true,
     berthHold: ctx.flags.berthHold === true,
+    paused: ctx.flags.paused === true,
+    jumping: ctx.gate?.jumping === true,
     sameSystem,
     courierAlive: !!rec && rec.state !== 'dead' && rec.state !== 'captured'
       && rec.state !== 'derelict' && rec.state !== 'inTransit',
@@ -3788,6 +3797,8 @@ function shadowFrameInputs(ctx, job) {
     destName: shadowSystemName(dest),
     employerStation: spyStationName(job.originSystem, 'the home dock'),
     payQuoted: job.payQuoted,
+    secondsLeft: job.deadline - ctx.world.time,
+    chartBinding: shadowChartBinding(ctx),
     liveId: null,
   };
   if (!sameSystem || !out.courierAlive || !shipObj || !Object.hasOwn(SYSTEMS, dest)) return out;
@@ -3809,6 +3820,11 @@ function shadowFrameInputs(ctx, job) {
   out.sightClear = shadowSightClear(pp.x, pp.y, pp.z, cp.x, cp.y, cp.z, shadowBodies(ctx));
   out.liveId = live.id ?? null;
   return out;
+}
+
+function shadowChartBinding(ctx) {
+  const code = codeOf(ctx, 'chart');
+  return typeof code === 'string' && code ? shortLabel(code) : 'M';
 }
 
 /**
@@ -3858,7 +3874,8 @@ function tickShadowFrame(ctx, dt) {
     // Present a latched warning — a new crossing, or one restored from a save
     // — on a real visible frame, and only then may grace resume.
     if (step > 0 && job.shadow.warned && !shadowPresented.has(job)) {
-      ctx.emit('commLine', { text: SHADOW_COPY.warning(input.courierName) });
+      ctx.emit('commLine', { text: input.acquired && job.shadow.deep?.state === 'pursuing'
+        ? SHADOW_COPY.deepWarning(input.courierName) : SHADOW_COPY.warning(input.courierName) });
       shadowPresented.add(job);
       requestAutosave(ctx);
     }
@@ -3871,6 +3888,11 @@ function tickShadowFrame(ctx, dt) {
       // One operation: the exact save invariant is progress 1 WITH 30 s.
       job.progress = 1;
       job.shadow.observedSeconds = COURIER_SHADOW.requiredSeconds;
+      ctx.emit('commLine', { text: out.instruction });
+      requestAutosave(ctx);
+      dirty = true;
+    }
+    if (out.deepCompleted || out.deepClosed) {
       ctx.emit('commLine', { text: out.instruction });
       requestAutosave(ctx);
       dirty = true;
@@ -3920,15 +3942,23 @@ function tickShadowJob(ctx, job) {
     }
     shadow.courierCreated = true; // same synchronous operation as the insert
     requestAutosave(ctx);
-  } else if (!acquired) {
+  } else if (shadowBankReady(ctx, dest)) {
     // Once created, a missing or ended bound record is target LOSS, never a
     // respawn. After the report is acquired, losing the courier cannot revoke it.
     const rec = findShadowCourier(ctx, job);
     const gone = !rec || rec.state === 'dead' || rec.state === 'captured'
       || rec.state === 'derelict' || rec.state === 'inTransit';
     if (gone) {
-      endShadowJob(ctx, job, SHADOW_COPY.lost + '.', true);
-      return { settled: false, dirty: true };
+      if (!acquired) {
+        endShadowJob(ctx, job, SHADOW_COPY.lost + '.', true);
+        return { settled: false, dirty: true };
+      }
+      if (['available', 'pursuing'].includes(shadow.deep?.state)) {
+        job.shadow = closeShadowDossier(shadow, 'target-lost');
+        ctx.emit('commLine', { text: 'Courier lost; dossier opportunity ended. Basic report still files before the deadline.' });
+        shadowProjection.delete(job.id);
+        requestAutosave(ctx);
+      }
     }
   }
   if (!acquired) return { settled: false, dirty: false };
@@ -3936,7 +3966,7 @@ function tickShadowJob(ctx, job) {
   // Terminal BEFORE the reward effects, so a repeated tick or a reload of the
   // resulting save cannot pay the same report twice.
   job.state = 'failed';
-  const pay = Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0;
+  const pay = shadowEarnedPay(job);
   noteJobOutcome(ctx, job, 'delivered', pay);
   if (pay > 0) ctx.world.credits += pay;
   const employer = SYSTEMS[origin].faction;
@@ -6535,10 +6565,16 @@ export function initStation(ctx) {
           render();
           return;
         }
+        const postedShadow = sanitizeShadowState(job.shadow, job);
+        if (!postedShadow) {
+          ui.notice = 'That posting has invalid dossier terms.';
+          render();
+          return;
+        }
         job.payQuoted = shadowPay;
         job.deadline = ctx.world.time + COURIER_SHADOW.deadlineSeconds;
         job.progress = 0;
-        job.shadow = freshShadowState();
+        job.shadow = sanitizeShadowState(postedShadow, { ...job, state: 'accepted' });
         // Create now when the destination bank already exists; otherwise the
         // false marker is permission for ONE attempt at that bank's first load.
         if (shadowBankReady(ctx, shadowDest)) {
@@ -6777,6 +6813,7 @@ export function initStation(ctx) {
     boardJobs(ctx, currentId).forEach((job, i) => {
       trackJob(job);
       const card = h('div', 'job-card', panel);
+      const dossier = isShadowJob(job) ? peekShadow(job) : null;
       let title = job.title;
       let detail = job.detail;
       if (job.kind === 'mining') {
@@ -6819,8 +6856,10 @@ export function initStation(ctx) {
         // accepted card adds the live shared instruction, never a second rule.
         title = job.title;
         detail = job.detail;
-        const proj = job.state === 'accepted' ? shadowProjection.get(job.id) : null;
-        if (proj && proj.instruction) detail = `${detail} ${proj.instruction}`;
+        if (job.state === 'accepted' && dossier?.instruction) {
+          const instruction = dossier.instruction.replace(dossier.deep?.terms || '', '').trim();
+          if (instruction) detail = `${detail} ${instruction}`;
+        }
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = jobSlotOf(job);
@@ -6925,11 +6964,12 @@ export function initStation(ctx) {
         const homeName = spyStationName(originId, 'the home dock');
         // The displayed offer quote IS the agreement; acceptance copies it.
         const est = job.state === 'accepted'
-          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : clampJobPay(job.reward))
+          ? shadowEarnedPay(job)
           : clampJobPay(job.reward);
         rewardLine = job.state === 'accepted'
           ? `File the shadow report at ${homeName} — pays ${est} UU`
           : `File the shadow report here — pays ${est} UU`;
+        if (dossier?.deep?.terms) rewardLine += '. ' + dossier.deep.terms;
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = jobSlotOf(job);
@@ -8299,6 +8339,7 @@ export function initStation(ctx) {
   // The posted offer is the agreement available to accept. Periodic redraws
   // retain it despite price drift; a deliberate board visit posts fresh quotes.
   function peekJobReward(job, refresh = false, rememberDrawn = refresh) {
+    if (isShadowJob(job)) return job.state === 'accepted' ? shadowEarnedPay(job) : clampJobPay(job.reward);
     if (!job || (job.kind !== 'haul' && job.kind !== 'trade')) return undefined;
     if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
     const shown = displayedHaulQuotes.get(job.id);
@@ -8383,9 +8424,24 @@ export function initStation(ctx) {
       maxRange: COURIER_SHADOW.maxRange,
       requiredSeconds: COURIER_SHADOW.requiredSeconds,
     };
+    const input = job.state === 'accepted' ? shadowFrameInputs(ctx, job) : {
+      accepted: false, payQuoted: job.reward, secondsLeft: job.deadline - ctx.world.time,
+      employerStation: spyStationName(job.originSystem, 'the employer dock'), chartBinding: shadowChartBinding(ctx),
+    };
+    const state = job.shadow;
+    const deep = state?.deep;
+    const blocked = shadowDossierBlocked(state, input);
+    out.deep = {
+      state: deep?.state || 'legacy', observedSeconds: deep?.observedSeconds || 0,
+      requiredSeconds: COURIER_SHADOW.deepSeconds, payQuoted: deep?.payQuoted || 0,
+      premium: deep?.payQuoted ? deep.payQuoted - input.payQuoted : 0,
+      canStart: blocked === '', startBlockedReason: blocked, closedReason: deep?.closedReason || '',
+      riskRange: COURIER_SHADOW.maxRange, terms: shadowDossierTerms(state, input),
+    };
     // An OFFER reports no live risk or progress before acceptance.
     if (job.state !== 'accepted') return out;
-    const proj = shadowProjection.get(job.id);
+    const proj = stepShadow(state, input, 0);
+    proj.currentTargetId = proj.detectable ? input.liveId : null;
     const shadow = job.shadow && typeof job.shadow === 'object' ? job.shadow : freshShadowState();
     out.phase = proj ? proj.phase : (job.progress >= 1 ? 'basic-ready' : 'seeking');
     out.observedSeconds = Number.isFinite(shadow.observedSeconds) ? shadow.observedSeconds : 0;
@@ -8430,8 +8486,7 @@ export function initStation(ctx) {
    * Ties keep the job's existing position in `ctx.world.jobs`.
    */
   const SHADOW_LOCAL_CONTACT = ['not-selected', 'out-of-range', 'occluded'];
-  function shadowExposureEstimate(suspicion, grace) {
-    const gain = COURIER_SHADOW.suspicionGain;
+  function shadowExposureEstimate(suspicion, grace, gain = COURIER_SHADOW.suspicionGain) {
     const toMax = gain > 0 ? Math.max(0, COURIER_SHADOW.suspicionMax - suspicion) / gain : Infinity;
     return Math.max(toMax, grace);
   }
@@ -8443,9 +8498,9 @@ export function initStation(ctx) {
     const grace = Number.isFinite(proj.graceRemaining) ? proj.graceRemaining : Infinity;
     const reason = proj.contactReason;
     const local = reason === 'observing' || SHADOW_LOCAL_CONTACT.includes(reason);
-    if (proj.phase === 'basic-ready') return { tier: 5, exposure: Infinity, grace: Infinity };
+    if (proj.phase === 'basic-ready' || proj.phase === 'deep-ready') return { tier: 5, exposure: Infinity, grace: Infinity };
     if (warned && proj.dangerous === true) {
-      return { tier: 0, exposure: shadowExposureEstimate(suspicion, grace), grace };
+      return { tier: 0, exposure: shadowExposureEstimate(suspicion, grace, proj.suspicionGain), grace };
     }
     if (warned && suspicion > 0 && local) return { tier: 1, exposure: Infinity, grace };
     if (reason === 'observing') return { tier: 2, exposure: Infinity, grace: Infinity };
@@ -8595,6 +8650,36 @@ export function initStation(ctx) {
     return { ok: true, notice };
   }
 
+  function chooseShadowDossier(args, expectedRow = null) {
+    const refuse = (token) => ({ ok: false, token, notice: `Dossier choice refused: ${token}.` });
+    if (!args || typeof args !== 'object' || Array.isArray(args)
+      || Object.keys(args).length !== 2 || !Object.hasOwn(args, 'id') || !Object.hasOwn(args, 'choice')
+      || typeof args.id !== 'string' || !args.id || !['begin', 'end'].includes(args.choice)) return refuse('invalid-args');
+    const job = ctx.world.jobs?.find((j) => j.id === args.id);
+    if (!isShadowJob(job) || job.state !== 'accepted' || (expectedRow && expectedRow !== job)) return refuse('not-accepted');
+    if (!sanitizeShadowState(job.shadow, job)) return refuse('invalid-contract');
+    const input = shadowFrameInputs(ctx, job);
+    if (input.expired) return refuse('expired');
+    if (input.paused || input.jumping || input.docked || input.berthHold || !input.playerAlive) return refuse('flight-unavailable');
+    if (args.choice === 'begin') {
+      const blocked = shadowDossierBlocked(job.shadow, input);
+      if (blocked) return refuse(blocked);
+      job.shadow = { ...job.shadow, deep: { ...job.shadow.deep, state: 'pursuing' } };
+      ctx.galaxyChart?.close();
+    } else {
+      if (job.shadow.deep?.state !== 'pursuing') return refuse('not-pursuing');
+      job.shadow = closeShadowDossier(job.shadow, 'withdrawn');
+    }
+    const projection = stepShadow(job.shadow, input, 0);
+    projection.currentTargetId = projection.detectable ? input.liveId : null;
+    shadowProjection.set(job.id, projection);
+    const notice = args.choice === 'begin' ? 'Complete dossier attempt started. Open beyond 400 or break sight to cool off.'
+      : `Dossier attempt ended; basic report still files for ${job.payQuoted} UU before the deadline.`;
+    ctx.emit('commLine', { text: notice });
+    requestAutosave(ctx);
+    return { ok: true, notice };
+  }
+
   function acceptJobDesk(jobOrHandle) {
     let job = jobOrHandle;
     if (typeof jobOrHandle === 'string') job = { id: jobOrHandle };
@@ -8629,6 +8714,7 @@ export function initStation(ctx) {
     selectService,
     acceptJob: acceptJobDesk,
     abandonJob: abandonJobDesk,
+    chooseShadowDossier,
     trade,
     repairAll,
     feed,

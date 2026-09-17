@@ -3,6 +3,12 @@ import { DEFAULT_BINDINGS } from '../systems/bindings.js';
 import { COMM_REPEAT_SECONDS } from '../game/state.js';
 
 /**
+ * Courier shadow contract: shadow.v2 adds bounded deep evidence/quoted terms.
+ * stationDesk.peekShadow(job) projects those terms without mutation;
+ * stationDesk.chooseShadowDossier({id, choice:'begin'|'end'}, expectedRow?)
+ * rechecks the exact live assignment for chart/API parity. Uses commLine only.
+ * galaxyChart.close() invokes the existing close path after dossier opt-in.
+ *
  * RIMWARD web — shared context, THE cross-system contract. v2.
  *
  * Every system receives this object. Systems are src/systems/*.js (presentation

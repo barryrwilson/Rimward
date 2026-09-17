@@ -41,6 +41,7 @@ export const COMMAND_NAMES = freeze([
   'openService',
   'acceptJob',
   'abandonJob',
+  'chooseShadowDossier',
   'trade',
   'repairAll',
   'feed',
@@ -776,7 +777,7 @@ export const ROLE_STATUS = freeze({
     'demand/surrender/salvage/conversation cards: observe speaker, kind and displayed terms; resolve by listed intent, optionally bound to conversationId. hail on a locked hull whose targets.current.hail.state is willing (resolveBand bargaining/capitulate, not yielded) inside range opens the surrender card with the player as causer (hailOpened terms:true); the claim lasts only while that card is open',
   ),
   missions: role(
-    ['openService', 'acceptJob', 'abandonJob'],
+    ['openService', 'acceptJob', 'abandonJob', 'chooseShadowDossier'],
     'board offers docked; abandon accepted mining/trade/hunt/passenger/explore/espionage/war at Jobs for -1 posting-faction standing; active jobs observed in flight; jobState ring terminals',
   ),
   explorer: role(
@@ -896,6 +897,7 @@ export const COMMAND_SPECS = freeze({
   openService: cmd({ id: 'dock service id' }, ['trader', 'missions', 'services', 'rescue']),
   acceptJob: cmd({ id: 'offered job id' }, ['missions']),
   abandonJob: cmd({ id: 'accepted ordinary job id; -1 posting-faction standing' }, ['missions']),
+  chooseShadowDossier: cmd({ id: 'exact accepted courier job id', choice: "'begin'|'end'; Galaxy Chart Shadow assignment equivalent; begin requires basic report and selected courier at 150–400 with clear sight; end keeps basic" }, ['missions']),
   trade: cmd(
     { commodity: 'commodity key', qty: 'integer 1..min(99, capacity)', side: "'buy'|'sell'" },
     ['trader'],

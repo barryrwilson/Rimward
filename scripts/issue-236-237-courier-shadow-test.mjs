@@ -575,12 +575,13 @@ ok('a terminal row projects ended with no instruction');
 // ===========================================================================
 
 const goodShadow = { v: 1, courierCreated: true, observedSeconds: 12.5, suspicion: 44, warned: true, warningSeconds: 3 };
-assert.deepEqual(sanitizeShadowState(goodShadow, { state: 'accepted', progress: 0 }), goodShadow);
+const legacy = (s) => ({ ...s, v: 2, deep: { state: 'legacy', observedSeconds: 0, payQuoted: 0, closedReason: '' } });
+assert.deepEqual(sanitizeShadowState(goodShadow, { state: 'accepted', progress: 0 }), legacy(goodShadow));
 assert.deepEqual(sanitizeShadowState(freshShadowState(), { state: 'offered', progress: 0 }), freshShadowState());
 // Warned true with suspicion zero is preserved exactly; grace is not replenished.
 assert.deepEqual(
   sanitizeShadowState({ v: 1, courierCreated: true, observedSeconds: 3, suspicion: 0, warned: true, warningSeconds: 6 }, { state: 'accepted', progress: 0 }),
-  { v: 1, courierCreated: true, observedSeconds: 3, suspicion: 0, warned: true, warningSeconds: 6 },
+  legacy({ v: 1, courierCreated: true, observedSeconds: 3, suspicion: 0, warned: true, warningSeconds: 6 }),
 );
 const rejectCases = [
   ['null', null, { state: 'accepted', progress: 0 }],
@@ -608,7 +609,7 @@ for (const [label, raw, job] of rejectCases) {
 }
 assert.deepEqual(
   sanitizeShadowState({ v: 1, courierCreated: true, observedSeconds: 30, suspicion: 0, warned: false, warningSeconds: 0 }, { state: 'accepted', progress: 1 }),
-  { v: 1, courierCreated: true, observedSeconds: 30, suspicion: 0, warned: false, warningSeconds: 0 },
+  legacy({ v: 1, courierCreated: true, observedSeconds: 30, suspicion: 0, warned: false, warningSeconds: 0 }),
 );
 ok('the save reader rejects every malformed subtype payload and repairs none');
 
@@ -684,7 +685,7 @@ assert.equal(offer.need, 1);
 assert.equal(offer.progress, 0);
 assert.equal(offer.recordId, shadowRecordId(offer.id));
 assert.equal(offer.destSystem, 'veridian');
-assert.deepEqual(offer.shadow, freshShadowState());
+assert.deepEqual(offer.shadow, freshShadowState(offer.shadow.deep.payQuoted));
 const introSlots = ctx.world.jobs
   .filter((j) => j.kind === 'espionage' && j.originSystem === 'freehold' && j.mission === undefined)
   .map((j) => j.slot).sort();
@@ -840,7 +841,7 @@ ok('ownership is derived from the live job and released exactly once');
   assert.equal(back.slot, 2);
   assert.equal(back.recordId, shadowRecordId(back.id));
   assert.equal(back.target, job.target);
-  assert.deepEqual(back.shadow, { v: 1, courierCreated: true, observedSeconds: 11, suspicion: 63, warned: true, warningSeconds: 5 });
+  assert.deepEqual(back.shadow, legacy({ v: 1, courierCreated: true, observedSeconds: 11, suspicion: 63, warned: true, warningSeconds: 5 }));
   assert.equal(ctx.world.recordBanks.veridian.filter((r) => r.id === back.recordId).length, 1, 'no duplicate hull');
   job = back;
 }
@@ -1028,7 +1029,7 @@ ok('only the posting employer settles, exactly once, and never again on reload')
   assert.notEqual(next.id, offer.id);
   assert.equal(next.recordId, shadowRecordId(next.id));
   assert.equal(next.state, 'offered');
-  assert.deepEqual(next.shadow, freshShadowState());
+  assert.deepEqual(next.shadow, freshShadowState(next.shadow.deep.payQuoted));
   offer = next;
 }
 ok('a terminal outcome reposts exactly one fresh offer at the next sync');

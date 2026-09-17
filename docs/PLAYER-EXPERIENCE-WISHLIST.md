@@ -73,6 +73,26 @@ blocked cases stay under investigation: no collision-avoidance or general
 blocked-reliability fix is claimed, and safety cancellation still relinquishes
 the helm. Final verification, merge and deployment remain separate. See [diagnosis and evidence limits](Issue234LightDocking.md).
 
+## Choosing whether to stay for a complete dossier — 2026-09-17
+
+Issue #238 implementation and acceptance are verified on the isolated candidate.
+After earning basic courier intelligence, the pilot can return for the quoted
+basic payment or deliberately choose one deeper attempt from the existing Galaxy
+Chart. The terms name the premium and extra observation before commitment.
+Lingering attracts readable mission-local suspicion; opening beyond 400 units
+or breaking sight provides an escape. Exposure loses the optional opportunity,
+not the banked basic report, while the original deadline still applies.
+
+Final runtime `7838c9e2` passes independent code/security review, build, unchanged
+boot, 9 dossier groups and 52 base courier groups. Natural deep play verified
+warning, withdrawal, in-progress reload, reacquisition and a complete dossier
+paying 630 UU once (350 → 980), unchanged after payment reload. Earlier basic
+and interrupted-deep filing paid their 420 UU once. Console/network and final
+deep cleanup were clean. The final native UI fixture also verifies held-key
+release, separate job choices, action refusals, remapped binding and single-copy
+Jobs terms. Ready for PR; issue closure belongs to merge. Tuning remains
+provisional and #234 stays separate. No merge/deployment is claimed. See
+[evidence and limits](Issue238ImplementationReview.md).
 ## Following a courier is its own kind of work — 2026-09-17
 
 Issues #236/#237 are implemented and independently verified on isolated runtime

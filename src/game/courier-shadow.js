@@ -560,13 +560,14 @@ function boundedNumber(value, lo, hi) {
  * `job` supplies `{ state, progress }`. Nothing here heals an out-of-range
  * value into a payable assignment.
  */
-export function sanitizeShadowState(raw, job) {
+function sanitizeShadowV1(raw, job) {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if (SHADOW_FIELDS.some((k) => !Object.hasOwn(raw, k))) return null;
   const keys = Object.keys(raw);
   for (let i = 0; i < keys.length; i++) {
     if (!SHADOW_FIELDS.includes(keys[i])) return null; // unknown nested field
   }
-  if (raw.v !== COURIER_SHADOW.version) return null;
+  if (raw.v !== 1) return null;
   if (typeof raw.courierCreated !== 'boolean') return null;
   if (typeof raw.warned !== 'boolean') return null;
   const observed = boundedNumber(raw.observedSeconds, 0, COURIER_SHADOW.requiredSeconds);
@@ -591,7 +592,7 @@ export function sanitizeShadowState(raw, job) {
     return null;
   }
   return {
-    v: COURIER_SHADOW.version,
+    v: 1,
     courierCreated: created,
     observedSeconds: observed,
     suspicion,
@@ -601,15 +602,117 @@ export function sanitizeShadowState(raw, job) {
 }
 
 /** The zero state an offered row carries. */
-export function freshShadowState() {
+export function freshShadowState(deepPay = 0) {
   return {
-    v: COURIER_SHADOW.version,
+    v: deepPay > 0 ? 2 : 1,
     courierCreated: false,
     observedSeconds: 0,
     suspicion: 0,
     warned: false,
     warningSeconds: 0,
+    ...(deepPay > 0 ? { deep: { state: 'available', observedSeconds: 0, payQuoted: deepPay, closedReason: '' } } : {}),
   };
+}
+
+const DEEP_FIELDS = ['state', 'observedSeconds', 'payQuoted', 'closedReason'];
+const DEEP_STATES = ['available', 'pursuing', 'ready', 'closed', 'legacy'];
+const legacyDeep = () => ({ state: 'legacy', observedSeconds: 0, payQuoted: 0, closedReason: '' });
+const validPay = (n) => Number.isInteger(n) && n > 0 && n <= 20000;
+
+/** Validate the original format first; never invent premium terms on migration. */
+export function sanitizeShadowState(raw, job) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if (raw.v === 1) {
+    const old = sanitizeShadowV1(raw, job);
+    if (!old) return null;
+    return job?.state === 'accepted' ? { ...old, v: 2, deep: legacyDeep() } : old;
+  }
+  if (raw.v !== 2 || Object.keys(raw).some((k) => !SHADOW_FIELDS.includes(k) && k !== 'deep')) return null;
+  const { deep, ...basic } = raw;
+  const base = sanitizeShadowV1({ ...basic, v: 1 }, job);
+  if (!base || !deep || typeof deep !== 'object' || Array.isArray(deep)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(deep))
+    || Object.keys(deep).length !== DEEP_FIELDS.length
+    || Object.keys(deep).some((k) => !DEEP_FIELDS.includes(k))
+    || !DEEP_STATES.includes(deep.state)) return null;
+  const seconds = boundedNumber(deep.observedSeconds, 0, COURIER_SHADOW.deepSeconds);
+  if (seconds === null) return null;
+  if (!['', 'exposed', 'withdrawn', 'target-lost'].includes(deep.closedReason)
+    || (deep.state === 'closed') !== (deep.closedReason !== '')) return null;
+  if (deep.state === 'ready' ? seconds !== COURIER_SHADOW.deepSeconds
+    : deep.state === 'pursuing' ? seconds >= COURIER_SHADOW.deepSeconds : seconds !== 0) return null;
+  if (deep.state === 'legacy') {
+    if (deep.payQuoted !== 0 || job?.state === 'offered') return null;
+  } else {
+    const basicPay = job?.state === 'offered' ? job.reward : job?.payQuoted;
+    if (!validPay(basicPay) || !validPay(deep.payQuoted) || deep.payQuoted <= basicPay) return null;
+    if (job?.state === 'offered' && deep.state !== 'available') return null;
+  }
+  if (['pursuing', 'ready', 'closed'].includes(deep.state)
+    && (job?.progress !== 1 || !base.courierCreated || base.observedSeconds !== COURIER_SHADOW.requiredSeconds)) return null;
+  return { ...base, v: 2, deep: { ...deep } };
+}
+
+export function shadowEarnedPay(job) {
+  const clean = sanitizeShadowState(job?.shadow, job);
+  if (!clean) return 0;
+  return clean?.deep?.state === 'ready' ? clean.deep.payQuoted : (validPay(job?.payQuoted) ? job.payQuoted : 0);
+}
+
+export function closeShadowDossier(shadow, reason) {
+  return { ...shadow, deep: { ...shadow.deep, state: 'closed', observedSeconds: 0, closedReason: reason } };
+}
+
+/** One text contract for the chart, Jobs, HUD and API. No world writes. */
+export function shadowDossierTerms(shadow, inp) {
+  const deep = shadow?.deep;
+  if (!deep || deep.state === 'legacy') return 'Basic-only contract; no optional dossier was offered.';
+  const b = inp.payQuoted, d = deep.payQuoted;
+  const grace = Math.max(0, COURIER_SHADOW.graceSeconds - shadow.warningSeconds);
+  const home = inp.employerStation || 'the employer dock';
+  const deadline = `before the deadline (${Math.max(0, Math.ceil(inp.secondsLeft || 0))} s left)`;
+  const forfeit = 'The original deadline still applies; whole-job abandonment forfeits all payment.';
+  if (deep.state === 'ready') return `Complete dossier banked. File at ${home} for ${d} UU total (+${d - b}) ${deadline}. No further observation or risk is required. ${forfeit}`;
+  if (deep.state === 'closed') {
+    const reason = deep.closedReason === 'exposed' ? 'Tail identified; dossier opportunity lost.'
+      : deep.closedReason === 'withdrawn' ? 'Dossier attempt ended by choice.' : 'Courier lost; dossier opportunity ended.';
+    return `${reason} Basic report still files for ${b} UU ${deadline} at ${home}. This attempt cannot be retried. ${forfeit}`;
+  }
+  const choice = deep.state === 'pursuing'
+    ? `Complete dossier attempt in progress: ${deep.observedSeconds.toFixed(1)}/${COURIER_SHADOW.deepSeconds} s gathered. Complete dossier: ${d} UU total (+${d - b}). `
+      + `Open Galaxy Chart (${inp.chartBinding || 'M'}) → Shadow assignment to end the attempt and keep basic. `
+    : `Optional: open Galaxy Chart (${inp.chartBinding || 'M'}) → Shadow assignment. Complete dossier: ${d} UU total (+${d - b}). `;
+  return `Basic report files at ${home} for ${b} UU ${deadline}. ` + choice
+    + 'Basic records identity and the observed local route; the dossier corroborates that courier’s route and traffic pattern. '
+    + `${COURIER_SHADOW.deepSeconds} additional selected seconds at 150–400 units with clear sight are required. `
+    + 'While pursuing, staying within 400 units attracts attention even without selection. Open beyond 400 or break sight to cool off; evidence is retained. '
+    + (inp.accepted ? `Warning history: ${shadow.warned ? 'already warned' : 'not warned'}; ${grace.toFixed(1)} s of warned danger grace remain. Starting never resets risk or grace. ` : '')
+    + 'Exposure or ending the attempt permanently loses incomplete dossier evidence; the basic report survives. '
+    + forfeit;
+}
+
+/** Preserve native Space activation without the window flight-key handler
+ * cancelling its default. Escape, Enter and the chart binding still bubble. */
+export function guardShadowDossierSpace(e) {
+  if (e?.code === 'Space') e.stopPropagation();
+}
+
+export function shadowDossierBlocked(shadow, inp) {
+  if (!shadow?.deep || shadow.deep.state === 'legacy') return 'basic-only-contract';
+  if (shadow.deep.state !== 'available') return 'attempt-unavailable';
+  if (!inp.accepted || inp.expired) return 'expired-or-inactive';
+  if (!inp.acquired) return 'basic-report-required';
+  if (inp.playerAlive === false) return 'dead';
+  if (inp.paused) return 'paused';
+  if (inp.jumping) return 'jumping';
+  if (inp.docked || inp.berthHold) return 'docked-or-held';
+  if (!inp.sameSystem) return 'wrong-system';
+  if (!inp.courierAlive || !inp.courierPresent || !shadowDetectable(true, inp.distance)) return 'contact-unavailable';
+  if (!inp.certified || !inp.inCorridor) return 'outside-certified-area';
+  if (!inp.selected) return 'select-courier';
+  if (inp.distance < COURIER_SHADOW.minRange || inp.distance > COURIER_SHADOW.maxRange) return 'hold-150-400-units';
+  if (!inp.sightClear) return 'sight-blocked';
+  return '';
 }
 
 /** Is this job the exact approved subtype? Never inferred from display text. */
@@ -658,6 +761,7 @@ function graceClause(graceRemaining) {
 }
 
 export const SHADOW_COPY = Object.freeze({
+  deepWarning: (name) => `${name}: Tail attracting attention. Open beyond 400 or break sight.`,
   warning: (name) => `${name}: ${WARNING_SENTENCE}`,
   /**
    * The persistent status line. It carries the same approved sentence plus the
@@ -722,18 +826,20 @@ function riskWord(suspicion, warned, grace) {
 export function stepShadow(shadow, input, dt) {
   const base = shadow && typeof shadow === 'object' ? shadow : freshShadowState();
   const next = {
-    v: COURIER_SHADOW.version,
+    v: base.v === 2 ? 2 : 1,
     courierCreated: base.courierCreated === true,
     observedSeconds: fin(base.observedSeconds) ? base.observedSeconds : 0,
     suspicion: fin(base.suspicion) ? base.suspicion : 0,
     warned: base.warned === true,
     warningSeconds: fin(base.warningSeconds) ? base.warningSeconds : 0,
+    ...(base.deep ? { deep: { ...base.deep } } : {}),
   };
   const inp = input && typeof input === 'object' ? input : {};
   const name = typeof inp.courierName === 'string' && inp.courierName ? inp.courierName : 'the courier';
   const step = fin(dt) && dt > 0 ? dt : 0;
 
   const acquired = inp.acquired === true;
+  const pursuing = acquired && next.deep?.state === 'pursuing';
   const ended = inp.accepted !== true || inp.expired === true;
   // The ONE detection rule the public id, the card and the HUD all share.
   const detectable = shadowDetectable(inp.courierPresent === true, inp.distance);
@@ -757,6 +863,7 @@ export function stepShadow(shadow, input, dt) {
 
   // The mission may integrate at all only while the whole certificate holds.
   const active = !ended
+    && inp.paused !== true && inp.jumping !== true
     && inp.playerAlive !== false
     && inp.docked !== true
     && inp.berthHold !== true
@@ -768,19 +875,21 @@ export function stepShadow(shadow, input, dt) {
 
   const dangerous = active
     && fin(inp.distance)
-    && inp.distance < COURIER_SHADOW.minRange
+    && (pursuing ? inp.distance <= COURIER_SHADOW.maxRange : inp.distance < COURIER_SHADOW.minRange)
     && inp.sightClear === true;
-  const observing = reason === 'observing' && !acquired;
+  const observing = reason === 'observing' && (!acquired || pursuing);
 
   let warnEmitted = false;
   let exposed = false;
   let completed = false;
+  let deepCompleted = false;
+  let deepClosed = false;
 
-  if (active && !acquired && step > 0) {
+  if (active && (!acquired || pursuing) && step > 0) {
     // 1. Suspicion first: it owns the warning crossing.
     const before = next.suspicion;
     const delta = dangerous
-      ? COURIER_SHADOW.suspicionGain * step
+      ? (pursuing && inp.distance >= COURIER_SHADOW.minRange ? COURIER_SHADOW.deepSuspicionGain : COURIER_SHADOW.suspicionGain) * step
       : -COURIER_SHADOW.suspicionDecay * step;
     let s = before + delta;
     if (s < 0) s = 0;
@@ -806,7 +915,18 @@ export function stepShadow(shadow, input, dt) {
       // 4. Exposure is evaluated BEFORE completion in the same interval.
       exposed = next.suspicion >= COURIER_SHADOW.suspicionMax
         && next.warningSeconds >= COURIER_SHADOW.graceSeconds;
-      if (!exposed && observing) {
+      if (exposed && pursuing) {
+        next.deep = closeShadowDossier(next, 'exposed').deep;
+        deepClosed = true;
+        exposed = false;
+      }
+      if (!exposed && !deepClosed && observing && pursuing) {
+        next.deep.observedSeconds = Math.min(COURIER_SHADOW.deepSeconds, next.deep.observedSeconds + step);
+        if (next.deep.observedSeconds >= COURIER_SHADOW.deepSeconds) {
+          next.deep.state = 'ready';
+          deepCompleted = true;
+        }
+      } else if (!exposed && observing && !pursuing) {
         let o = next.observedSeconds + step;
         if (o >= COURIER_SHADOW.requiredSeconds) {
           o = COURIER_SHADOW.requiredSeconds;
@@ -824,7 +944,7 @@ export function stepShadow(shadow, input, dt) {
 
   let phase;
   if (ended) phase = 'ended';
-  else if (done) phase = 'basic-ready';
+  else if (done) phase = next.deep?.state === 'ready' ? 'deep-ready' : next.deep?.state === 'pursuing' ? 'pursuing-deep' : 'basic-ready';
   else if (observing) phase = 'observing';
   else if (next.observedSeconds > 0) phase = 'paused';
   else phase = 'seeking';
@@ -832,16 +952,21 @@ export function stepShadow(shadow, input, dt) {
   let instruction;
   if (ended) {
     instruction = '';
-  } else if (done) {
+  } else if (done && next.deep?.state !== 'pursuing') {
     const station = typeof inp.employerStation === 'string' && inp.employerStation
       ? inp.employerStation : 'the employer dock';
     const pay = fin(inp.payQuoted) ? Math.round(inp.payQuoted) : 0;
-    instruction = SHADOW_COPY.acquired(station, pay);
+    instruction = next.deep?.state === 'ready'
+      ? `Complete dossier ready. Return to ${station} for ${next.deep.payQuoted} UU total before the deadline.`
+      : next.deep && next.deep.state !== 'legacy'
+        ? `Basic report ready. ${shadowDossierTerms(next, inp)}`
+        : SHADOW_COPY.acquired(station, pay);
   } else if (next.warned && dangerous) {
     // Finding 4: the human line must carry the same two facts the API does —
     // whether this is the final warning, and the warned danger time actually
     // left. Repeated and restored close approaches render it again from state.
-    instruction = SHADOW_COPY.warningStatus(name, graceLeft, risk === 'final-warning');
+    instruction = pursuing ? SHADOW_COPY.deepWarning(name) + graceClause(graceLeft)
+      : SHADOW_COPY.warningStatus(name, graceLeft, risk === 'final-warning');
   } else if (next.warned && active && next.suspicion > 0) {
     instruction = SHADOW_COPY.withdrawingStatus(graceLeft);
   } else if (reason === 'target-unavailable') {
@@ -860,8 +985,8 @@ export function stepShadow(shadow, input, dt) {
   } else if (reason === 'occluded') {
     instruction = `Line of sight to ${name} is blocked.`;
   } else {
-    const left = Math.max(0, COURIER_SHADOW.requiredSeconds - next.observedSeconds);
-    instruction = `Observing ${name} — ${Math.ceil(left)} s to go.`;
+    const left = pursuing ? COURIER_SHADOW.deepSeconds - next.deep.observedSeconds : COURIER_SHADOW.requiredSeconds - next.observedSeconds;
+    instruction = `Observing ${name}${pursuing ? ' for complete dossier' : ''} — ${Math.ceil(Math.max(0, left))} s to go.`;
   }
 
   return {
@@ -873,6 +998,9 @@ export function stepShadow(shadow, input, dt) {
     warnEmitted,
     exposed,
     completed,
+    deepCompleted,
+    deepClosed,
+    suspicionGain: pursuing && inp.distance >= COURIER_SHADOW.minRange ? COURIER_SHADOW.deepSuspicionGain : COURIER_SHADOW.suspicionGain,
     dangerous,
     detectable,
     graceRemaining: graceLeft,

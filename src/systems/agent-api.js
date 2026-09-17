@@ -246,7 +246,7 @@ function deskNoticeToken(notice) {
 }
 
 function afterDesk(ctx, name, result) {
-  if (result && result.ok === true) return ok(ctx, name, (name === 'acceptJob' || name === 'abandonJob') ? result.notice : '');
+  if (result && result.ok === true) return ok(ctx, name, (name === 'acceptJob' || name === 'abandonJob' || name === 'chooseShadowDossier') ? result.notice : '');
   const notice = result && typeof result.notice === 'string' ? result.notice : '';
   const token = str(result && result.token) || (notice ? deskNoticeToken(notice) : 'no-service');
   return fail(ctx, name, token, notice || 'The desk could not complete that request.');
@@ -545,6 +545,11 @@ function dispatchLive(ctx, name, args) {
     const id = Object.hasOwn(args, 'id') ? args.id : '';
     if (typeof id !== 'string' || !id) return fail(ctx, name, 'no-service');
     return afterDesk(ctx, name, desk.acceptJob({ id }));
+  }
+  if (name === 'chooseShadowDossier') {
+    const desk = deskOf(ctx);
+    if (typeof desk?.chooseShadowDossier !== 'function') return fail(ctx, name, 'no-service');
+    return afterDesk(ctx, name, desk.chooseShadowDossier(args));
   }
   if (name === 'abandonJob') {
     const blocked = refuseDesk(ctx, name, DESK_NEED.abandonJob);
