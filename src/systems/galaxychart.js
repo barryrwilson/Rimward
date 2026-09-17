@@ -629,7 +629,10 @@ export function initGalaxyChart(ctx) {
       const deep = projection.deep;
       row.title.textContent = `Shadow assignment — ${job.target} · ${job.id} · ${SYSTEMS[job.originSystem]?.station?.name || job.originSystem}`;
       row.terms.textContent = deep.terms;
-      row.status.textContent = `${projection.instruction} Dossier evidence: ${deep.observedSeconds.toFixed(1)}/${deep.requiredSeconds} s. ${shadowNotice}`;
+      // The shared basic-ready instruction includes these exact terms. Keep
+      // its phase/consequence prefix without printing the agreement twice.
+      const instruction = projection.instruction.replace(deep.terms, '').trim();
+      row.status.textContent = `${instruction} Dossier evidence: ${deep.observedSeconds.toFixed(1)}/${deep.requiredSeconds} s. ${shadowNotice}`;
       const pursuing = deep.state === 'pursuing';
       row.button.hidden = !pursuing && deep.state !== 'available';
       row.button.dataset.choice = pursuing ? 'end' : 'begin';

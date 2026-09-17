@@ -2210,6 +2210,40 @@ body.rw-reduced-motion #hud[data-family='bio'] .rw-reticle::after {
 .rw-shadow-assignment button:disabled { opacity: .65; cursor: default; }
 .rw-shadow-assignment button:focus-visible { outline: 2px solid var(--rw-accent); outline-offset: 3px; }
 
+/* Dossier terms and Agent play controls must remain independently reachable.
+   Reserve a bottom band only while the dossier chart is visible; the original
+   badge position and chart layout return as soon as that surface closes. */
+body:has(.rw-galaxy-chart:not(.is-hidden) .rw-shadow-assignment:not([hidden])) .rw-agent-badge {
+  top: auto;
+  bottom: 8px;
+  left: 4vw;
+  right: 4vw;
+  max-width: none;
+  max-height: 132px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 6px 12px;
+  overflow-y: auto;
+  background: #09101e;
+}
+body:has(.rw-galaxy-chart:not(.is-hidden) .rw-shadow-assignment:not([hidden])) .rw-agent-badge-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
+body:has(.rw-galaxy-chart:not(.is-hidden) .rw-shadow-assignment:not([hidden])) .rw-agent-badge-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+body:has(.rw-agent-badge) .rw-galaxy-chart:has(.rw-shadow-assignment:not([hidden])) {
+  box-sizing: border-box;
+  padding-bottom: 148px;
+}
+body:has(.rw-agent-badge) .rw-galaxy-chart:has(.rw-shadow-assignment:not([hidden])) .rw-galaxy-chart-panel {
+  height: min(760px, calc(100vh - 184px));
+}
+
 .rw-galaxy-dest-field {
   display: flex;
   align-items: center;
