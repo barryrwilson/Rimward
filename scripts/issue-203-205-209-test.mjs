@@ -15,13 +15,16 @@ ctx.agent.optIn = true;
 initAgentApi(ctx);
 const api = window.rimward;
 const act = (name, args = {}) => api.act({ v: 2, name, args });
-const p = SYSTEMS.freehold.station.position;
-ctx.ship.object.position.set(p[0] + 36, p[1], p[2]);
-ctx.ship.velocity.set(0, 0, 0);
-ctx.ship.speed = 0;
-ctx.input.dockPressed = true;
-station.update(1 / 60);
-assert.equal(ctx.flags.docked, true);
+const dockHere = () => {
+  const p = SYSTEMS[ctx.world.currentSystem].station.position;
+  ctx.ship.object.position.set(p[0] + 36, p[1], p[2]);
+  ctx.ship.velocity.set(0, 0, 0);
+  ctx.ship.speed = 0;
+  ctx.input.dockPressed = true;
+  station.update(1 / 60);
+  assert.equal(ctx.flags.docked, true);
+};
+dockHere();
 ctx.world.credits = 100000;
 ctx.cargoCapacity = 1000;
 ctx.cargo.length = 0;
@@ -80,35 +83,105 @@ for (const side of ['buy', 'sell']) {
 assert.equal(act('trade', { commodity: 'provisions', qty: 0, side: 'buy' }).token, 'bad-qty');
 console.log('PASS restricted buy/sell retain prose, agree with market, and mutate no resources');
 ctx.stationDesk.selectService('jobs');
-const spy = api.observe().jobs.offers.find(j => j.kind === 'espionage');
-assert.ok(spy);
-assert.equal(act('acceptJob', { id: spy.id }).ok, true);
+const homeName = SYSTEMS.freehold.station.name;
+const filing = `Intel acquired—return to ${homeName} to file.`;
+const briefing = `Report at ${homeName} for payment after completing the objective.`;
+const takeSpy = () => {
+  ctx.stationDesk.selectService('jobs');
+  const offer = api.observe().jobs.offers.find(j => j.kind === 'espionage');
+  assert.ok(offer);
+  assert.equal(act('acceptJob', { id: offer.id }).ok, true);
+  return ctx.world.jobs.find(j => j.id === offer.id);
+};
+const spy = takeSpy();
 for (const progress of [0, 1]) {
-  ctx.world.jobs.find(j => j.id === spy.id).progress = progress;
+  spy.progress = progress;
   ctx.stationDesk.selectService('jobs');
   const row = api.observe().jobs.active.find(j => j.id === spy.id);
   assert.equal(row.payAt, 'freehold');
-  assert.match(row.status, new RegExp(SYSTEMS.freehold.station.name));
+  assert.match(row.status, new RegExp(homeName));
+  // Issue 235: the collected objective states the filing run outright; the
+  // uncollected contract keeps the #205 briefing and its destination fields.
+  assert.equal(row.status, progress >= 1 ? filing : briefing);
+  assert.equal(row.progress, progress);
+  assert.equal(row.need, 1);
+  assert.equal(row.destSystem, spy.destSystem);
+  assert.equal(row.originSystem, 'freehold');
+  assert.ok(row.reward > 0);
   const deskLines = [...dom.walkDom(document.body)].map(n => n.textContent || '');
-  assert.ok(deskLines.some(t => t.includes(`file at ${SYSTEMS.freehold.station.name}`)));
+  assert.ok(deskLines.some(t => t.includes(`file at ${homeName}`)));
+  // The API line and the rendered card agree about the same collection state.
+  assert.ok(deskLines.some(t => t.includes(progress >= 1 ? 'intel aboard' : 'gather at')));
 }
 ctx.stationDesk.undock();
-assert.equal(api.observe().jobs.active.find(j => j.id === spy.id).payAt, 'freehold');
+const inFlight = api.observe().jobs.active.find(j => j.id === spy.id);
+assert.equal(inFlight.payAt, 'freehold');
+assert.equal(inFlight.status, filing);
+console.log('PASS spy status flips to the filing instruction on collection and agrees with the desk card');
+// Abandoned: the collected row leaves active immediately and pays nothing.
+spy.progress = 0;
+dockHere();
+ctx.stationDesk.selectService('jobs');
+spy.progress = 1;
+const beforeAbandon = ctx.world.credits;
+assert.equal(act('abandonJob', { id: spy.id }).ok, true);
+assert.equal(ctx.world.credits, beforeAbandon);
+assert.equal(api.observe().jobs.active.some(j => j.id === spy.id), false);
+assert.equal(ctx.stationDesk.peekJobReturn(spy), null);
+assert.equal(ctx.agent.jobNoted[spy.id], 'abandoned');
+// Delivered: settlement at the origin pays exactly once and clears the row.
+const filed = takeSpy();
+filed.progress = 1;
+const reward = api.observe().jobs.active.find(j => j.id === filed.id).payQuoted;
+assert.ok(Number.isFinite(reward) && reward > 0);
+const beforeFiling = ctx.world.credits;
+// The delivery sweep runs on its own half-second cadence, not every frame.
+const tickJobs = () => station.update(0.5);
+tickJobs();
+assert.equal(ctx.world.credits - beforeFiling, reward);
+assert.equal(ctx.agent.jobNoted[filed.id], 'delivered');
+for (let i = 0; i < 5; i++) tickJobs();
+assert.equal(ctx.world.credits - beforeFiling, reward);
+assert.equal(api.observe().jobs.active.some(j => j.id === filed.id), false);
+assert.equal(ctx.stationDesk.peekJobReturn(filed), null);
+// Lapsed: an expired collected contract closes without payment.
+const lapsed = takeSpy();
+lapsed.progress = 1;
+lapsed.deadline = ctx.world.time - 1;
+const beforeLapse = ctx.world.credits;
+tickJobs();
+assert.equal(ctx.world.credits, beforeLapse);
+assert.equal(ctx.agent.jobNoted[lapsed.id], 'lapsed');
+assert.equal(api.observe().jobs.active.some(j => j.id === lapsed.id), false);
+assert.equal(ctx.stationDesk.peekJobReturn(lapsed), null);
+console.log('PASS delivered, lapsed and abandoned spy records leave active jobs with no duplicate payment');
+ctx.stationDesk.undock();
 const fixtureRows = [];
 for (const kind of ['mining', 'explore', 'espionage', 'recovery', 'trade', 'passenger', 'ferry', 'hunt', 'war']) {
   fixtureRows.push({ id: `fixture-${kind}`, kind, state: 'accepted', originSystem: 'veridian', destSystem: 'freehold', need: 1, progress: 0 });
 }
+// Collected rows for a second employer and for the other return-for-payment
+// families: only espionage changes wording, and always to its own station.
+for (const kind of ['mining', 'explore', 'espionage', 'recovery']) {
+  fixtureRows.push({ id: `fixture-collected-${kind}`, kind, state: 'accepted', originSystem: 'veridian', destSystem: 'freehold', need: 1, progress: 1 });
+}
 fixtureRows.push({ id: 'fixture-invalid', kind: 'espionage', state: 'accepted', originSystem: '__proto__' });
 ctx.world.jobs.push(...fixtureRows);
 const active = api.observe().jobs.active;
+const rivalName = SYSTEMS.veridian.station.name;
 for (const j of fixtureRows) {
   const row = active.find(r => r.id === j.id);
   if (['mining', 'explore', 'espionage', 'recovery'].includes(j.kind) && j.originSystem === 'veridian') {
     assert.equal(row.payAt, 'veridian');
-    assert.ok(row.status.includes(SYSTEMS.veridian.station.name));
+    assert.ok(row.status.includes(rivalName));
+    assert.equal(row.status, j.kind === 'espionage' && j.progress >= 1
+      ? `Intel acquired—return to ${rivalName} to file.`
+      : `Report at ${rivalName} for payment after completing the objective.`);
+    assert.equal(row.status.includes(homeName), false);
   } else assert.equal(Object.hasOwn(row, 'payAt'), false);
 }
-console.log('PASS return-origin instructions persist in flight and omit destination/kill/invalid cases');
+assert.notEqual(rivalName, homeName);
+console.log('PASS return-origin instructions persist in flight, name each employer, and omit destination/kill/invalid cases');
 for (const employer of chainEmployerKeys()) {
   for (const step of [1, 2, 3]) {
     const job = makeChainJob(employer, step);

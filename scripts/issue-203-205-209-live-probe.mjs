@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-process.env.ISSUE74_OUT = resolve('out/issues-203-205-209/live');
+process.env.ISSUE74_OUT ||= resolve('out/issues-203-205-209/live');
 delete process.env.ISSUE74_RESUME_PROFILE;
 const { runLive, sleep } = await import('./issue-74-live-harness.mjs');
 
@@ -118,8 +118,13 @@ await runLive('desk-clarity', async ({ c, result, act, observe, wait, checkpoint
   const names = await c.eval(`({home:window.__ctx.systems[${JSON.stringify(offered.originSystem)}].station.name,dest:window.__ctx.systems[${JSON.stringify(offered.destSystem)}].station.name})`);
   await showSpy();
   const accepted = await checkpoint('spy-accepted');
+  const briefing = `Report at ${names.home} for payment after completing the objective.`;
+  const filing = `Intel acquired—return to ${names.home} to file.`;
   assert.equal(active(accepted).payAt,offered.originSystem);
   assert.ok(active(accepted).status.includes(names.home));
+  // Issue 235: before collection the briefing and destination survive untouched.
+  assert.equal(active(accepted).status,briefing);
+  assert.equal(active(accepted).destSystem,offered.destSystem);
   const beforeCards = await cards();
   const beforeCard = beforeCards.find(j => j.title?.endsWith('. '+offered.title));
   assert.ok(beforeCard?.state.includes('gather at '+names.dest));
@@ -140,10 +145,15 @@ await runLive('desk-clarity', async ({ c, result, act, observe, wait, checkpoint
   assert.equal(active(gathered).state,'accepted');
   assert.equal(active(gathered).payAt,offered.originSystem);
   assert.ok(active(gathered).status.includes(names.home));
+  // Issue 235: the collected contract names the filing run in the API status,
+  // agreeing with the card, progress and payAt on the same observation.
+  assert.equal(active(gathered).status,filing);
+  assert.equal(active(gathered).progress,1);
+  assert.equal(active(gathered).destSystem,offered.destSystem);
   const afterCards = await cards();
   const afterCard = afterCards.find(j => j.title?.endsWith('. '+offered.title));
   assert.ok(afterCard?.state.includes('intel aboard — file at '+names.home));
-  result.spy = { offered, names, before:active(accepted), beforeCard, after:active(gathered), afterCard };
+  result.spy = { offered, names, wording:{ briefing, filing }, before:active(accepted), beforeCard, after:active(gathered), afterCard };
   const reward = active(gathered).payQuoted;
   assert.ok(Number.isFinite(reward) && reward > 0);
   await berth(offered.originSystem); await act('openService', {id:'jobs'});

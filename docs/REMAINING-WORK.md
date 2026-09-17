@@ -1,5 +1,18 @@
 # RIMWARD remaining work
 
+## Collected spy intel status — #235
+
+Implemented on `codex/issue-235-spy-status`, pending independent QA: an accepted
+espionage row whose objective is collected reports `Intel acquired—return to
+<station> to file.` in `observe().jobs.active[]`, naming its own `payAt` and
+agreeing with the Jobs desk card. The pre-collection briefing, destination
+fields, other job families, rewards, deadlines and settlement are unchanged, and
+nothing new is saved. Focused #203/#205/#209 coverage was extended with
+before/after collection, two employers, and delivered/lapsed/abandoned records
+with no duplicate payment; the live Chromium probe passes. Follow-up to closed
+#205, under tracking issue #233. Merge and deployment remain separate; see
+[scope and evidence](Issue235SpyStatus.md).
+
 ## Predictable freighter docking — #221
 
 Implemented on `codex/issue-221-freighter-docking`, pending independent QA.
