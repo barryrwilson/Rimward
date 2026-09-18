@@ -60,7 +60,7 @@ import {
 } from '../game/launch-clearance.js';
 import { requestLaneClearance } from './npc.js';
 import { SUSPEND_AFTER_MS } from './controls.js';
-import { COURIER_SHADOW } from '../game/state.js';
+import { COURIER_SHADOW, DOSSIER_CONFLICT } from '../game/state.js';
 import { codeOf, shortLabel } from './bindings.js';
 import {
   certifyShadowSystem,
@@ -87,6 +87,23 @@ import {
   shadowRoute,
   shadowSightClear,
   stepShadow,
+  // Issue #240: the one dossier-conflict scenario.
+  conflictNames,
+  dossierReference,
+  evidenceRef,
+  freshConflictState,
+  isConflictPairing,
+  newEvidenceId,
+  setShadowConflict,
+  shadowBetrayalReceipt,
+  shadowConflictJobValid,
+  conflictBuyerPay,
+  shadowConflictTerms,
+  shadowConflictTermLines,
+  shadowTermLines,
+  shadowDeclineReceipt,
+  shadowHonourReceipt,
+  voidShadowConflict,
 } from '../game/courier-shadow.js';
 import {
   createShadowCourier,
@@ -3757,6 +3774,16 @@ function makeShadowJob(ctx, sysId) {
   if (!name) return null;
   const pay = clampJobPay(jobPayFor(ctx, sysId, explorePayBase()));
   if (!Number.isFinite(pay) || pay <= 0) return null;
+  const premium = clampJobPay(pay + Math.round(pay * COURIER_SHADOW.deepPremium));
+  const deepPay = premium > pay ? premium : 0;
+  const shadow = freshShadowState(deepPay);
+  // Issue #240: exactly one authored pairing acquires the exclusive conflict,
+  // and only on a FRESH offer with a real optional dossier. Every way this can
+  // fall short — the wrong pairing, no dossier premium, no headroom under the
+  // existing pay bound, or no cryptographic UUID source in this context —
+  // simply posts the ordinary v2 job below, with no conflict, no exclusivity
+  // copy, no partial v3 row and no exception.
+  const conflict = makeShadowConflict(sysId, dest, deepPay);
   return {
     id,
     kind: 'espionage',
@@ -3766,16 +3793,47 @@ function makeShadowJob(ctx, sysId) {
     destSystem: dest,
     target: name,
     recordId,
-    title: 'Shadow courier',
+    // The exclusivity is named in the TITLE and stated in full in the derived
+    // term lines beside the reward. It is deliberately NOT appended to
+    // `detail`: the existing briefing already runs close to the persisted
+    // detail bound, and an appended paragraph would be silently truncated on
+    // the first save round-trip. The derived terms cannot truncate.
+    title: conflict ? 'Shadow courier — exclusive Ledger dossier' : 'Shadow courier',
     detail: shadowBriefing(ctx, sysId, dest, name, pay),
     reward: pay,
     need: 1,
     progress: 0,
     state: 'offered',
     deadline: ctx.world.time + COURIER_SHADOW.deadlineSeconds,
-    shadow: freshShadowState(clampJobPay(pay + Math.round(pay * COURIER_SHADOW.deepPremium)) > pay
-      ? clampJobPay(pay + Math.round(pay * COURIER_SHADOW.deepPremium)) : 0),
+    shadow: conflict ? { ...shadow, v: 3, conflict } : shadow,
   };
+}
+
+/**
+ * The fresh conflict for one candidate posting, or null for an ordinary v2.
+ *
+ * C = D + round(D x 0.50), clamped to the existing job-pay bound, and C must
+ * be strictly greater than D — at D = the bound there is no higher valid
+ * amount, so the scenario declines rather than quoting a premium it cannot
+ * pay. The token is generated ONCE here, from the platform's cryptographic
+ * UUID source; it is never derived from a job or record id, never regenerated
+ * on load, and a repost gets a new one.
+ */
+function makeShadowConflict(origin, dest, deepPay) {
+  if (origin !== DOSSIER_CONFLICT.originSystem || dest !== DOSSIER_CONFLICT.destSystem) return null;
+  if (!Object.hasOwn(FACTIONS, DOSSIER_CONFLICT.employerFaction)) return null;
+  if (!Object.hasOwn(FACTIONS, DOSSIER_CONFLICT.buyerFaction)) return null;
+  if (SYSTEMS[origin]?.faction !== DOSSIER_CONFLICT.employerFaction) return null;
+  if (SYSTEMS[dest]?.faction !== DOSSIER_CONFLICT.buyerFaction) return null;
+  // ONE bounded arithmetic, shared with the strict validator: C = D + 50%,
+  // clamped to the persisted pay bound and strictly greater than D. At the
+  // bound there is no higher valid amount, so this returns null and the
+  // caller posts an ordinary v2 job.
+  const buyerPay = conflictBuyerPay(deepPay);
+  if (buyerPay === null || buyerPay !== clampJobPay(buyerPay)) return null;
+  const evidenceId = newEvidenceId();
+  if (!evidenceId) return null; // no secure UUID source: post an ordinary v2
+  return freshConflictState(evidenceId, buyerPay);
 }
 
 /**
@@ -3917,6 +3975,12 @@ function tickShadowFrame(ctx, dt) {
   for (let i = jobs.length - 1; i >= 0; i--) {
     const job = jobs[i];
     if (!isShadowJob(job) || job.state !== 'accepted') continue;
+    // Issue #240: a row CLAIMING v3 must satisfy the complete contract before
+    // this frame reconstructs anything from it. The pure integrator cannot
+    // refuse, so refusing here is what keeps a malformed conflict from being
+    // rebuilt frame after frame and eventually settled. The slow tick below
+    // ends the assignment; nothing is integrated or written in the meantime.
+    if (job.shadow?.v === 3 && !shadowConflictJobValid(job)) continue;
     const input = shadowFrameInputs(ctx, job);
     const out = stepShadow(job.shadow, input, step);
     job.shadow = out.shadow;
@@ -3986,6 +4050,14 @@ function tickShadowJob(ctx, job) {
     endShadowJob(ctx, job, SHADOW_COPY.lost + '.', true);
     return { settled: false, dirty: true };
   }
+  // Issue #240: a malformed v3 fails closed BEFORE any original payout, not
+  // just before a buyer payout. It ends as an ordinary lost assignment — it is
+  // never downgraded into a payable v2/basic row, and the employer never pays
+  // on evidence the game cannot validate.
+  if (shadow.v === 3 && !shadowConflictJobValid(job)) {
+    endShadowJob(ctx, job, SHADOW_COPY.lost + '.', true);
+    return { settled: false, dirty: true };
+  }
   const acquired = Number.isFinite(job.progress) && job.progress >= 1;
   if (shadow.courierCreated !== true) {
     // ONE attempt, and only once the destination bank exists. A false marker
@@ -4022,6 +4094,12 @@ function tickShadowJob(ctx, job) {
   // Terminal BEFORE the reward effects, so a repeated tick or a reload of the
   // resulting save cannot pay the same report twice.
   job.state = 'failed';
+  // Issue #240: honouring is decided by the physical dock. Close the conflict
+  // as `honored` in the SAME synchronous step, before any credit, standing,
+  // contact or comm effect, so a re-entrant tick sees a terminal row and the
+  // rival can never be paid afterwards. Ordinary settlement is never suspended
+  // waiting for an extra dialogue.
+  job.shadow = setShadowConflict(job.shadow, 'honored');
   const pay = shadowEarnedPay(job);
   noteJobOutcome(ctx, job, 'delivered', pay);
   if (pay > 0) ctx.world.credits += pay;
@@ -4033,8 +4111,12 @@ function tickShadowJob(ctx, job) {
   const employerName = factionDisplayName(employer);
   const repLine = employerName ? ' ' + employerName + ' standing +' + MINING_REP + '.' : '';
   const homeName = spyStationName(origin, 'the home dock');
+  // Issue #240: an exclusive assignment names the tier, the employer, the real
+  // total and the ordinary reward it just earned, and says the rival closed.
+  const honourLine = job.shadow?.conflict?.state === 'honored'
+    ? ' ' + shadowHonourReceipt(job, pay, MINING_REP) : '';
   ctx.emit('commLine', {
-    text: 'Shadow report on ' + job.target + ' filed at ' + homeName + ' — ' + pay + ' UU posted.' + repLine,
+    text: 'Shadow report on ' + job.target + ' filed at ' + homeName + ' — ' + pay + ' UU posted.' + repLine + honourLine,
   });
   shadowProjection.delete(job.id);
   replaceShadowJob(ctx, job);
@@ -4042,6 +4124,12 @@ function tickShadowJob(ctx, job) {
 }
 
 function replaceShadowJob(ctx, job) {
+  // Issue #240: this is the single terminal funnel — settlement, expiry,
+  // contact loss, exposure, posting withdrawal and Jobs-desk abandonment all
+  // arrive here. A still-live conflict closes as `void` so no stale buyer row
+  // survives the replacement. An already `honored` or `betrayed` conflict is
+  // left exactly as its own branch wrote it.
+  if (job && job.shadow) job.shadow = voidShadowConflict(job.shadow);
   const jobs = ctx.world.jobs;
   if (!Array.isArray(jobs)) return;
   const idx = jobs.indexOf(job);
@@ -6622,15 +6710,36 @@ export function initStation(ctx) {
           return;
         }
         const postedShadow = sanitizeShadowState(job.shadow, job);
-        if (!postedShadow) {
+        // Issue #240: a posted conflict must satisfy the COMPLETE contract —
+        // the exact scenario pairing, identity and bounds — before it can be
+        // accepted. A malformed one refuses rather than binding the pilot to
+        // exclusivity terms the game cannot honour.
+        if (!postedShadow || !shadowConflictJobValid(job)) {
           ui.notice = 'That posting has invalid dossier terms.';
           render();
           return;
         }
-        job.payQuoted = shadowPay;
-        job.deadline = ctx.world.time + COURIER_SHADOW.deadlineSeconds;
+        // The same offered conflict token and amount carry across acceptance:
+        // nothing is regenerated, requoted or retrofitted onto an older row.
+        // Build and validate the accepted shape BEFORE writing any of it, so a
+        // refusal cannot leave a half-accepted posting on the board.
+        const accepting = {
+          ...job,
+          state: 'accepted',
+          payQuoted: shadowPay,
+          deadline: ctx.world.time + COURIER_SHADOW.deadlineSeconds,
+          progress: 0,
+        };
+        const acceptedShadow = sanitizeShadowState(postedShadow, accepting);
+        if (!acceptedShadow || !shadowConflictJobValid({ ...accepting, shadow: acceptedShadow })) {
+          ui.notice = 'That posting has invalid dossier terms.';
+          render();
+          return;
+        }
+        job.payQuoted = accepting.payQuoted;
+        job.deadline = accepting.deadline;
         job.progress = 0;
-        job.shadow = sanitizeShadowState(postedShadow, { ...job, state: 'accepted' });
+        job.shadow = acceptedShadow;
         // Create now when the destination bank already exists; otherwise the
         // false marker is permission for ONE attempt at that bank's first load.
         if (shadowBankReady(ctx, shadowDest)) {
@@ -6866,6 +6975,11 @@ export function initStation(ctx) {
     const aceHomeId = aceHomeSystem(ctx);
     const liveFerry = (ctx.world.jobs ?? []).find((j) => j && j.id === 'ferry-consignment');
     if (liveFerry && liveFerry.state === 'offered') reofferFerryHandles(liveFerry);
+    // Issue #240: the competing buyer is drawn FIRST. It is the one
+    // consequential, irreversible choice on this board, and the station view
+    // caps its published rows — a section appended after every ordinary card
+    // could fall outside that cap and stop being observable at all.
+    renderDossierBuyer(panel);
     boardJobs(ctx, currentId).forEach((job, i) => {
       trackJob(job);
       const card = h('div', 'job-card', panel);
@@ -7025,7 +7139,14 @@ export function initStation(ctx) {
         rewardLine = job.state === 'accepted'
           ? `File the shadow report at ${homeName} — pays ${est} UU`
           : `File the shadow report here — pays ${est} UU`;
-        if (dossier?.deep?.terms) rewardLine += '. ' + dossier.deep.terms;
+        // Issue #240: the conflict tail is rendered as its own bounded rows
+        // below, so the reward line keeps the ordinary dossier agreement and
+        // the exclusive terms are not printed twice or clipped by the cap.
+        if (dossier?.deep?.terms) {
+          rewardLine += '. ' + (dossier.conflict?.terms
+            ? dossier.deep.terms.replace(dossier.conflict.terms, '').trim()
+            : dossier.deep.terms);
+        }
       } else if (job.kind === 'espionage') {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const slot = jobSlotOf(job);
@@ -7073,6 +7194,12 @@ export function initStation(ctx) {
         rewardLine = `Reward: ${jobPay(ctx, job.reward)} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
       h('div', 'job-reward', card, rewardLine);
+      // Issue #240: the whole exclusive agreement, one bounded row per line,
+      // on the OFFER as well as the accepted card — so every consequence is
+      // readable before acceptance and through the station view's text cap.
+      if (dossier?.conflict) {
+        for (const line of shadowTermLines(dossier.conflict.terms)) h('div', 'job-reward', card, line);
+      }
       if (haulBuyInLine) h('div', 'job-reward job-buy-in', card, haulBuyInLine);
       if (chainSkuHint) h('div', 'job-reward', card, chainSkuHint);
       if (job.id === 'bounty-ace' && job.state !== 'done' && currentId !== aceHomeId) {
@@ -7197,6 +7324,60 @@ export function initStation(ctx) {
         h('div', 'job-state job-done', card, job.kind === 'recovery' && job.state === 'failed' ? RECOVERY_COLD : 'DONE');
       }
     });
+  }
+
+  /**
+   * Issue #240: the competing dossier buyer, at the DESTINATION Jobs desk.
+   *
+   * Its own section, because these originals were posted elsewhere and are not
+   * this board's postings — `boardJobs` is untouched. Every string is written
+   * through the shared text-safe `h`/`btn` builders, so the same nodes the
+   * player clicks are the ones `stationAction` dispatches: one closure, one
+   * label, one receipt. The buttons capture the live row object and the full
+   * internal token, which the shared mutation re-checks.
+   */
+  function renderDossierBuyer(panel) {
+    const rows = dossierBuyerJobs();
+    if (rows.length === 0) return;
+    const n = conflictNames();
+    h('div', 'screen-sub', panel, `COMPETING DOSSIER BUYER — ${n.buyer} at ${n.buyerStation}`);
+    h('div', 'screen-note', panel,
+      `These contracts were posted at ${n.employerStation}. ${n.buyer} buys only a COMPLETE dossier, `
+      + 'never a basic or partial report, and only before the original deadline. Ignoring this section, '
+      + 'closing the panel or docking here sells nothing.');
+    for (const job of rows) {
+      const conflict = job.shadow.conflict;
+      const card = h('div', 'job-card', panel);
+      h('div', 'job-title', card, dossierReference(job));
+      for (const line of shadowConflictTermLines(job.shadow, shadowFrameInputs(ctx, job))) {
+        h('div', 'job-detail', card, line);
+      }
+      h('div', 'job-reward', card,
+        `${n.buyer} pays ${conflict.buyerPayQuoted} UU total here for the completed dossier and its `
+        + `exclusive ownership; ${n.employer} would pay ${job.shadow.deep.payQuoted} UU total at `
+        + `${n.employerStation}.`);
+      const blocked = dossierBuyerBlocked(job);
+      if (blocked) {
+        h('div', 'job-state', card, `Buyer choice unavailable: ${blocked}.`);
+        continue;
+      }
+      const sell = `Sell dossier to ${n.buyer} — ${conflict.buyerPayQuoted} UU total; betray ${n.employer} `
+        + `(${DOSSIER_CONFLICT.betrayEmployerStanding}) — ${job.target} · ${job.id} · ${evidenceRef(conflict.evidenceId)}`;
+      const keep = `Decline ${n.buyer}; keep the ${n.employer} contract — ${job.target} · ${job.id} · `
+        + `${evidenceRef(conflict.evidenceId)}`;
+      btn(card, sell, () => chooseDossierBuyer(
+        { id: job.id, evidenceId: conflict.evidenceId, choice: 'betray' }, job));
+      h('div', 'screen-note', card,
+        `One click is the decision. ${n.buyer} ${DOSSIER_CONFLICT.betrayBuyerStanding >= 0 ? '+' : ''}`
+        + `${DOSSIER_CONFLICT.betrayBuyerStanding} standing; you lose the ${n.employer} `
+        + `${job.shadow.deep.payQuoted} UU, its +${DOSSIER_CONFLICT.honorEmployerStanding} standing and the `
+        + 'local dockmaster reward. No other contract changes.');
+      btn(card, keep, () => chooseDossierBuyer(
+        { id: job.id, evidenceId: conflict.evidenceId, choice: 'decline' }, job));
+      h('div', 'screen-note', card,
+        `Declining closes this buyer permanently for this assignment: 0 UU, no standing or contact change, `
+        + 'all evidence, the original payment and the original deadline retained.');
+    }
   }
 
   // ---- bar (rumors: real incidents only — Witness Rule §8.7) ----
@@ -8631,6 +8812,35 @@ export function initStation(ctx) {
       suspicionGain: deepSuspicionGainFor(input.scannerTier),
       suspicionNote: deepSuspicionExplanation(input.scannerTier),
     };
+    // Issue #240: the derived conflict observation. `evidenceRef` is exactly
+    // the first 8 characters of the internal token, matching the human dossier
+    // reference; the full UUID and `recordId` are never published. Offered rows
+    // publish every proposed term with canChoose false, and accepted rows stay
+    // readable in flight even though the choice itself needs the buyer's Jobs
+    // desk. UI and API read THIS, never a second rule set.
+    if (state?.conflict) {
+      const c = state.conflict;
+      const blockedReason = dossierBuyerBlocked(job);
+      out.conflict = {
+        scenario: c.scenario,
+        evidenceRef: evidenceRef(c.evidenceId),
+        state: c.state,
+        employerFaction: DOSSIER_CONFLICT.employerFaction,
+        buyerFaction: DOSSIER_CONFLICT.buyerFaction,
+        buyerSystem: DOSSIER_CONFLICT.destSystem,
+        buyerStation: spyStationName(DOSSIER_CONFLICT.destSystem, 'the rival dock'),
+        buyerPayQuoted: c.buyerPayQuoted,
+        originalPay: job.state === 'accepted' ? shadowEarnedPay(job) : clampJobPay(job.reward),
+        canChoose: blockedReason === '',
+        blockedReason,
+        terms: shadowConflictTerms(state, input),
+      };
+      // The observation field list is exactly the approved one. The view's own
+      // line splitting is a RENDERING concern: the docked panel and
+      // stationView build their rows from `terms` through the shared splitter,
+      // so the whole agreement survives the per-row text cap without adding a
+      // published field.
+    }
     // An OFFER reports no live risk or progress before acceptance.
     if (job.state !== 'accepted') return out;
     const proj = stepShadow(state, input, 0);
@@ -8873,6 +9083,141 @@ export function initStation(ctx) {
     return { ok: true, notice };
   }
 
+  /**
+   * Issue #240: may the competing buyer be answered for THIS row right now?
+   *
+   * ONE read-only evaluator. The projection publishes it as
+   * `canChoose`/`blockedReason`, the Jobs buttons enable from it, and the
+   * mutation below re-runs it — so a human button, `stationAction` and the
+   * read-only API can never disagree about availability. Order is the order
+   * the player can act on: contract validity, then dossier progress, then the
+   * deadline, then life and flight state, then the physical dock and service.
+   */
+  function dossierBuyerBlocked(job) {
+    if (!isShadowJob(job) || job.state !== 'accepted') return 'not-accepted';
+    if (!isConflictPairing(job)) return 'no-conflict';
+    const shadow = job.shadow;
+    if (!shadow || typeof shadow !== 'object' || shadow.v !== 3 || !shadow.conflict) return 'no-conflict';
+    if (!shadowConflictJobValid(job)) return 'invalid-contract';
+    if (shadow.conflict.state !== 'open') return 'offer-closed';
+    if (job.progress !== 1 || shadow.deep?.state !== 'ready') return 'dossier-incomplete';
+    if (!Number.isFinite(job.deadline) || ctx.world.time >= job.deadline) return 'expired';
+    const hull = ctx.player && Number.isFinite(ctx.player.hull) ? ctx.player.hull : 1;
+    if (!(hull > 0)) return 'dead';
+    if (ctx.flags.paused === true) return 'paused';
+    if (ctx.gate?.jumping === true) return 'jumping';
+    if (ctx.flags.berthHold === true) return 'berth-hold';
+    if (ctx.flags.docked !== true) return 'not-docked';
+    if (ctx.world.currentSystem !== DOSSIER_CONFLICT.destSystem
+      || currentId !== DOSSIER_CONFLICT.destSystem) return 'wrong-dock';
+    if (peekService() !== 'jobs') return 'no-jobs-service';
+    return '';
+  }
+
+  /** Every accepted conflict original this dock can show, in job-list order. */
+  function dossierBuyerJobs() {
+    const jobs = ctx.world.jobs;
+    if (!Array.isArray(jobs)) return [];
+    if (ctx.world.currentSystem !== DOSSIER_CONFLICT.destSystem
+      || currentId !== DOSSIER_CONFLICT.destSystem) return [];
+    return jobs.filter((job) => (
+      isShadowJob(job) && job.state === 'accepted' && isConflictPairing(job)
+      && job.shadow?.v === 3 && job.shadow.conflict && shadowConflictJobValid(job)
+    ));
+  }
+
+  /**
+   * The ONE shared mutation behind both buyer buttons and `stationAction`.
+   *
+   * Exact own primitive args `{ id, evidenceId, choice }` — no prototype, no
+   * extra or missing key. `expectedRow` is the UI's extra internal guard: the
+   * captured job OBJECT must still be the live row, so a stale card whose id
+   * was reissued after a replacement or a restore refuses. The full token is an
+   * internal stale-identity guard carried by the closure; no API client needs
+   * it, and only its first 8 characters are ever published.
+   *
+   * Every refusal leaves credits, standing, jobs, evidence, quotes, the target
+   * and the deadline exactly as they were, and never touches another contract.
+   */
+  function chooseDossierBuyer(args, expectedRow = null) {
+    const refuse = (token) => {
+      const notice = `Cannot complete that dossier choice now: ${token}.`;
+      ui.notice = notice;
+      return { ok: false, token, notice };
+    };
+    if (!args || typeof args !== 'object' || Array.isArray(args)) return refuse('invalid-args');
+    if (![Object.prototype, null].includes(Object.getPrototypeOf(args))) return refuse('invalid-args');
+    // Shape FIRST, values second. `Object.keys` alone hides symbol keys,
+    // non-enumerable keys and accessors; a getter would run during validation
+    // and could return a different value each read. Reflect.ownKeys plus a data
+    // descriptor check closes all three BEFORE any value is read.
+    const fields = ['id', 'evidenceId', 'choice'];
+    const own = Reflect.ownKeys(args);
+    if (own.length !== fields.length) return refuse('invalid-args');
+    const taken = { __proto__: null };
+    for (const k of own) {
+      if (typeof k !== 'string' || !fields.includes(k)) return refuse('invalid-args');
+      const d = Object.getOwnPropertyDescriptor(args, k);
+      if (!d || !Object.hasOwn(d, 'value')) return refuse('invalid-args'); // an accessor is not data
+      taken[k] = d.value; // captured ONCE, from the descriptor
+    }
+    for (const k of fields) {
+      if (typeof taken[k] !== 'string' || !taken[k]) return refuse('invalid-args');
+    }
+    // Nothing below reads `args` again: a mutable or exotic bag cannot change
+    // under the checks that already passed.
+    const { id, evidenceId, choice } = taken;
+    if (choice !== 'decline' && choice !== 'betray') return refuse('invalid-args');
+    const jobs = ctx.world.jobs;
+    const job = Array.isArray(jobs) ? jobs.find((row) => row && row.id === id) : null;
+    if (!job || (expectedRow && expectedRow !== job)) return refuse('not-accepted');
+    const blocked = dossierBuyerBlocked(job);
+    if (blocked) return refuse(blocked);
+    const conflict = job.shadow.conflict;
+    if (conflict.evidenceId !== evidenceId) return refuse('wrong-evidence');
+    const buyerPay = conflict.buyerPayQuoted;
+    if (!Number.isInteger(buyerPay) || buyerPay <= 0 || buyerPay > PAY_QUOTED_MAX) return refuse('invalid-contract');
+    if (buyerPay <= job.shadow.deep.payQuoted) return refuse('invalid-contract');
+
+    if (choice === 'decline') {
+      // The buyer closes permanently. No payment, standing, contact, evidence,
+      // quote, target or deadline effect — the original contract is untouched.
+      job.shadow = setShadowConflict(job.shadow, 'declined');
+      const notice = shadowDeclineReceipt(job);
+      ui.notice = notice;
+      ctx.emit('commLine', { text: notice });
+      requestAutosave(ctx);
+      render();
+      return { ok: true, notice };
+    }
+
+    const employer = DOSSIER_CONFLICT.employerFaction;
+    const buyer = DOSSIER_CONFLICT.buyerFaction;
+    if (!Object.hasOwn(FACTIONS, employer) || !Object.hasOwn(FACTIONS, buyer)) return refuse('invalid-contract');
+    // Every effect is validated above. Now terminalize SYNCHRONOUSLY, before
+    // any credit, standing, note or comm effect, so a re-entrant tick, a
+    // repeated click or a reload of the resulting save sees a closed row.
+    const receipt = shadowBetrayalReceipt(job, buyerPay);
+    job.shadow = setShadowConflict(job.shadow, 'betrayed');
+    job.state = 'failed'; // the existing internal terminal convention
+    // Exactly ONE terminal receipt. The agent watcher skips ids already noted,
+    // so no generic failed/closed duplicate follows this row.
+    noteJobOutcome(ctx, job, 'betrayed', buyerPay);
+    ctx.world.credits += buyerPay;
+    writeFactionStanding(ctx, employer, DOSSIER_CONFLICT.betrayEmployerStanding);
+    writeFactionStanding(ctx, buyer, DOSSIER_CONFLICT.betrayBuyerStanding);
+    // Deliberately NOT called here: completeJob, abandonJobDesk, applySpyExpose,
+    // rewardJobContacts or the ordinary employer settlement. No dockmaster
+    // favor or trust is earned at either dock for this outcome.
+    ui.notice = receipt;
+    ctx.emit('commLine', { text: receipt });
+    shadowProjection.delete(job.id);
+    replaceShadowJob(ctx, job);
+    requestAutosave(ctx);
+    render();
+    return { ok: true, notice: receipt };
+  }
+
   function acceptJobDesk(jobOrHandle) {
     let job = jobOrHandle;
     if (typeof jobOrHandle === 'string') job = { id: jobOrHandle };
@@ -8908,6 +9253,7 @@ export function initStation(ctx) {
     acceptJob: acceptJobDesk,
     abandonJob: abandonJobDesk,
     chooseShadowDossier,
+    chooseDossierBuyer,
     trade,
     repairAll,
     feed,

@@ -1,4 +1,17 @@
 # RIMWARD remaining work
+## Explicit double-agent dossier choice — #240
+
+Implemented and acceptance verified at runtime `c0a20d329f2ac759b1d6bb775d5b49f00fb8741a`.
+One fresh Red Ledger dossier names a Veridian competing buyer, higher total and
+-5/+2 standing consequences before acceptance. Honor, free decline and explicit
+betrayal share strict evidence identity and one terminal settlement; unrelated
+jobs and legacy contracts retain their terms. Independent code/security review,
+24 focused groups, build, unchanged boot, natural earned sale/reload/original
+return and controlled lifecycle/UI cases pass. PR #247 is the delivery artifact;
+merge/deployment remain separate. Broader conflicts and #234 stay outside scope.
+See [verification and limits](Issue240ImplementationReview.md) and
+[approved design](Issue240DossierConflict.md).
+
 
 ## Contact briefings and scanner spy benefits — #239
 

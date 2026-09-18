@@ -19,7 +19,7 @@
  *    warning grace, clamped to the persisted bounds before it returns.
  */
 
-import { COURIER_SHADOW, JUMP, SYSTEMS, U } from './state.js';
+import { COURIER_SHADOW, DOSSIER_CONFLICT, FACTIONS, JUMP, SYSTEMS, U } from './state.js';
 import { PHY } from './physics.js';
 import { scaleFor } from './ship-scale.js';
 import { sphereChordHit } from './ap-path.js';
@@ -617,7 +617,136 @@ export function freshShadowState(deepPay = 0) {
 const DEEP_FIELDS = ['state', 'observedSeconds', 'payQuoted', 'closedReason'];
 const DEEP_STATES = ['available', 'pursuing', 'ready', 'closed', 'legacy'];
 const legacyDeep = () => ({ state: 'legacy', observedSeconds: 0, payQuoted: 0, closedReason: '' });
-const validPay = (n) => Number.isInteger(n) && n > 0 && n <= 20000;
+/** The existing persisted job-pay bound. Must match save/station clamping. */
+export const PAY_BOUND = 20000;
+const validPay = (n) => Number.isInteger(n) && n > 0 && n <= PAY_BOUND;
+
+// ---------------------------------------------------------------------------
+// Issue #240: the isolated v3 conflict variant. A v3 row is a v2 row plus ONE
+// plain `conflict` object with exactly four own keys. v1 and v2 keep their
+// existing meaning byte for byte: a `conflict` stuffed into either of them
+// fails their existing unknown-key rules, and nothing here ever upgrades an
+// older row into a v3 one.
+// ---------------------------------------------------------------------------
+
+const CONFLICT_FIELDS = ['scenario', 'evidenceId', 'state', 'buyerPayQuoted'];
+
+/** Lowercase canonical UUID v4, version and variant nibbles included. */
+export const EVIDENCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/**
+ * One evidence token from the platform's cryptographic UUID source, or null.
+ *
+ * Null is an ordinary, supported answer: the caller then posts an ordinary v2
+ * job with no conflict and no exclusivity copy. There is deliberately NO
+ * insecure fallback — `randomUUID` needs a secure context, so plain-HTTP LAN
+ * hosting simply does not see this scenario. `source` is injectable so a test
+ * can pin a deterministic token instead of reading a random one.
+ */
+export function newEvidenceId(source = globalThis.crypto) {
+  try {
+    if (!source || typeof source.randomUUID !== 'function') return null;
+    const id = source.randomUUID();
+    return typeof id === 'string' && EVIDENCE_ID.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The zero conflict an offered v3 row carries. */
+export function freshConflictState(evidenceId, buyerPayQuoted) {
+  return { scenario: DOSSIER_CONFLICT.scenario, evidenceId, state: 'open', buyerPayQuoted };
+}
+
+/**
+ * The rival's quote for a dossier worth `deepPay`, or null when this posting
+ * cannot carry a conflict at all.
+ *
+ * C = D + round(D x 0.50), clamped to the existing persisted pay bound, and C
+ * must be STRICTLY greater than D. At the bound — or anywhere the clamp leaves
+ * no headroom — there is no higher valid amount to offer, so the scenario
+ * declines rather than quoting a premium it could not pay. The factory then
+ * posts an ordinary v2 job with no conflict and no exclusivity copy.
+ *
+ * Pure and bound-exact, so the offer, the strict validator and the tests all
+ * agree on the one arithmetic that decides whether this scenario exists.
+ */
+export function conflictBuyerPay(deepPay) {
+  if (!validPay(deepPay)) return null;
+  const quoted = deepPay + Math.round(deepPay * DOSSIER_CONFLICT.buyerPremium);
+  const bounded = quoted > PAY_BOUND ? PAY_BOUND : quoted;
+  return validPay(bounded) && bounded > deepPay ? bounded : null;
+}
+
+/**
+ * A plain object carrying EXACTLY these own data keys.
+ *
+ * `Object.keys` alone is not enough for a runtime row: it hides symbol keys,
+ * non-enumerable keys and accessors, any of which could smuggle behaviour into
+ * a value this module is about to copy and trust. Reflect.ownKeys plus a data
+ * descriptor check closes all three, and the prototype is checked FIRST so a
+ * hostile prototype can never reach a spread.
+ *
+ * Applied to the v3 additions only. v1 and v2 keep their existing checks
+ * byte-for-byte, so no older save changes meaning.
+ */
+function exactOwnKeys(raw, fields) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (![Object.prototype, null].includes(Object.getPrototypeOf(raw))) return false;
+  const own = Reflect.ownKeys(raw);
+  if (own.length !== fields.length) return false;
+  for (let i = 0; i < own.length; i++) {
+    const k = own[i];
+    if (typeof k !== 'string' || !fields.includes(k)) return false;
+    const d = Object.getOwnPropertyDescriptor(raw, k);
+    if (!d || !Object.hasOwn(d, 'value')) return false; // an accessor is not data
+  }
+  for (let i = 0; i < fields.length; i++) {
+    if (!Object.hasOwn(raw, fields[i])) return false;
+  }
+  return true;
+}
+
+/**
+ * Validate one persisted `conflict` against the approved table and the deep
+ * stage it belongs to. `job` supplies `{ state, progress }`. Returns a fresh
+ * plain object, or null to reject the WHOLE job — never a repaired one.
+ */
+function sanitizeShadowConflict(raw, job, deep) {
+  if (!exactOwnKeys(raw, CONFLICT_FIELDS)) return null;
+  if (raw.scenario !== DOSSIER_CONFLICT.scenario) return null;
+  if (typeof raw.evidenceId !== 'string' || !EVIDENCE_ID.test(raw.evidenceId)) return null;
+  if (!DOSSIER_CONFLICT.states.includes(raw.state)) return null;
+  if (!validPay(raw.buyerPayQuoted)) return null;
+  // v3 needs real dossier support: a legacy (basic-only) deep can never carry
+  // an exclusive complete dossier, so there is nothing for a buyer to want.
+  if (!deep || deep.state === 'legacy') return null;
+  if (!validPay(deep.payQuoted) || raw.buyerPayQuoted <= deep.payQuoted) return null;
+  const state = job?.state;
+  const progress = job?.progress;
+  const live = state === 'offered' || state === 'accepted';
+  const terminal = state === 'failed' || state === 'done';
+  const ready = deep.state === 'ready' && progress === 1;
+  if (raw.state === 'open') {
+    // The pre-dossier stage is included; derived eligibility owns availability,
+    // so no extra "offered" boolean is persisted.
+    if (!live) return null;
+  } else if (raw.state === 'declined') {
+    if (state !== 'accepted' || !ready) return null;
+  } else if (raw.state === 'honored') {
+    if (!terminal || progress !== 1) return null;
+  } else if (raw.state === 'betrayed') {
+    if (!terminal || !ready) return null;
+  } else { // void: expiry, loss or abandonment at any otherwise valid stage
+    if (!terminal) return null;
+  }
+  return {
+    scenario: raw.scenario,
+    evidenceId: raw.evidenceId,
+    state: raw.state,
+    buyerPayQuoted: raw.buyerPayQuoted,
+  };
+}
 
 /** Validate the original format first; never invent premium terms on migration. */
 export function sanitizeShadowState(raw, job) {
@@ -627,14 +756,27 @@ export function sanitizeShadowState(raw, job) {
     if (!old) return null;
     return job?.state === 'accepted' ? { ...old, v: 2, deep: legacyDeep() } : old;
   }
-  if (raw.v !== 2 || Object.keys(raw).some((k) => !SHADOW_FIELDS.includes(k) && k !== 'deep')) return null;
-  const { deep, ...basic } = raw;
+  if (raw.v !== 2 && raw.v !== 3) return null;
+  const v3 = raw.v === 3;
+  // A v3 ROOT is checked strictly, and BEFORE anything is spread out of it:
+  // plain prototype, exactly the v2 fields plus `deep` and `conflict`, no
+  // symbol, non-enumerable or accessor key. A v2 root keeps its existing
+  // unknown-key rule exactly as it was.
+  if (v3 && !exactOwnKeys(raw, [...SHADOW_FIELDS, 'deep', 'conflict'])) return null;
+  if (!v3 && Object.keys(raw).some((k) => !SHADOW_FIELDS.includes(k) && k !== 'deep')) return null;
+  const { deep, conflict, ...basic } = raw;
   const base = sanitizeShadowV1({ ...basic, v: 1 }, job);
-  if (!base || !deep || typeof deep !== 'object' || Array.isArray(deep)
+  if (!base) return null;
+  // A v3 DEEP gets the same strict own-data check as the v3 root, and BEFORE a
+  // single deep property is read, so no symbol key, hidden key or getter is
+  // ever consulted. v2 keeps its existing enumerable-key rule byte-for-byte.
+  if (v3) {
+    if (!exactOwnKeys(deep, DEEP_FIELDS)) return null;
+  } else if (!deep || typeof deep !== 'object' || Array.isArray(deep)
     || ![Object.prototype, null].includes(Object.getPrototypeOf(deep))
     || Object.keys(deep).length !== DEEP_FIELDS.length
-    || Object.keys(deep).some((k) => !DEEP_FIELDS.includes(k))
-    || !DEEP_STATES.includes(deep.state)) return null;
+    || Object.keys(deep).some((k) => !DEEP_FIELDS.includes(k))) return null;
+  if (!DEEP_STATES.includes(deep.state)) return null;
   const seconds = boundedNumber(deep.observedSeconds, 0, COURIER_SHADOW.deepSeconds);
   if (seconds === null) return null;
   if (!['', 'exposed', 'withdrawn', 'target-lost'].includes(deep.closedReason)
@@ -650,7 +792,194 @@ export function sanitizeShadowState(raw, job) {
   }
   if (['pursuing', 'ready', 'closed'].includes(deep.state)
     && (job?.progress !== 1 || !base.courierCreated || base.observedSeconds !== COURIER_SHADOW.requiredSeconds)) return null;
-  return { ...base, v: 2, deep: { ...deep } };
+  if (!v3) return { ...base, v: 2, deep: { ...deep } };
+  const clean = sanitizeShadowConflict(conflict, job, deep);
+  if (!clean) return null;
+  return { ...base, v: 3, deep: { ...deep }, conflict: clean };
+}
+
+/**
+ * The COMPLETE v3 contract, checked against a fully reconstructed job.
+ *
+ * `sanitizeShadowState` above validates the nested shape without claiming the
+ * job's quote or deadline are available yet. This is the late second pass: it
+ * receives a job whose id, recordId, origin, destination, state, progress,
+ * reward, payQuoted and deadline have all already been validated, and it
+ * re-runs the nested contract against those checked values plus the exact
+ * scenario pairing. A row that fails either pass is rejected whole; nothing is
+ * ever downgraded to a payable v2 or basic row.
+ *
+ * A non-v3 job passes iff it carries no conflict at all.
+ */
+export function shadowConflictJobValid(job) {
+  const shadow = job?.shadow;
+  const hasConflict = !!shadow && typeof shadow === 'object' && shadow.conflict !== undefined;
+  if (!shadow || typeof shadow !== 'object' || shadow.v !== 3) return !hasConflict;
+  if (!hasConflict) return false;
+  if (!isShadowJob(job)) return false;
+  if (job.originSystem !== DOSSIER_CONFLICT.originSystem) return false;
+  if (job.destSystem !== DOSSIER_CONFLICT.destSystem) return false;
+  if (typeof job.id !== 'string' || !isShadowRecordIdFor(job.recordId, job.id)) return false;
+  if (typeof job.target !== 'string' || !job.target) return false;
+  if (!Number.isFinite(job.deadline) || job.deadline < 0) return false;
+  if (job.state !== 'offered' && !validPay(job.payQuoted)) return false;
+  return sanitizeShadowState(shadow, job) !== null;
+}
+
+/** Is this job the exact approved conflict pairing? Never inferred from text. */
+export function isConflictPairing(job) {
+  return isShadowJob(job)
+    && job.originSystem === DOSSIER_CONFLICT.originSystem
+    && job.destSystem === DOSSIER_CONFLICT.destSystem;
+}
+
+/** The authored names this scenario speaks. Read from the world, never copied. */
+export function conflictNames() {
+  return {
+    employer: FACTIONS[DOSSIER_CONFLICT.employerFaction]?.name || DOSSIER_CONFLICT.employerFaction,
+    buyer: FACTIONS[DOSSIER_CONFLICT.buyerFaction]?.name || DOSSIER_CONFLICT.buyerFaction,
+    employerStation: SYSTEMS[DOSSIER_CONFLICT.originSystem]?.station?.name || 'the employer dock',
+    buyerStation: SYSTEMS[DOSSIER_CONFLICT.destSystem]?.station?.name || 'the rival dock',
+  };
+}
+
+/** The PUBLIC evidence reference: the first 8 token characters, never more. */
+export function evidenceRef(evidenceId) {
+  return typeof evidenceId === 'string' && EVIDENCE_ID.test(evidenceId)
+    ? evidenceId.slice(0, DOSSIER_CONFLICT.refLength)
+    : '';
+}
+
+/**
+ * The one human dossier reference: the courier's existing unique name, the
+ * original job id and the short evidence reference. This names the player's
+ * corroborated observations — not cargo, a commodity or an NPC record for
+ * sale — and it never publishes the full token or the bound `recordId`.
+ */
+export function dossierReference(job) {
+  const name = typeof job?.target === 'string' && job.target ? job.target : 'the courier';
+  const id = typeof job?.id === 'string' ? job.id : '';
+  return `Complete route dossier: ${name} · ${id} · ${evidenceRef(job?.shadow?.conflict?.evidenceId)}`;
+}
+
+/** Signed standing, as the player reads it: `-5`, `+2`. */
+function signed(n) {
+  return `${n >= 0 ? '+' : ''}${n}`;
+}
+
+/**
+ * The complete competing-buyer agreement, shared by the Jobs card, the Chart,
+ * the HUD and the API. Everything the design requires to be disclosed before
+ * acceptance is here, so an offer, a pursuit and the buyer choice all read the
+ * SAME sentences. '' when this row carries no conflict.
+ */
+export function shadowConflictTerms(shadow, inp) {
+  const c = shadow?.conflict;
+  if (!c || !shadow?.deep) return '';
+  const n = conflictNames();
+  const b = Math.round(inp?.payQuoted ?? 0);
+  const d = shadow.deep.payQuoted;
+  const buy = c.buyerPayQuoted;
+  const head = `Exclusive commission: ${n.employer} buys the complete corroborated route dossier and its `
+    + `exclusive ownership; no one else may hold it. Basic report ${b} UU, or complete dossier ${d} UU total, `
+    + `filed at ${n.employerStation} for ${n.employer} — docking there files automatically and commits that outcome. `
+    + `${n.buyer} at ${n.buyerStation} in ${SYSTEMS[DOSSIER_CONFLICT.destSystem]?.name || DOSSIER_CONFLICT.destSystem} `
+    + `will instead pay ${buy} UU total for the SAME completed dossier, and only once it is complete. `
+    + `Selling there forfeits all ${n.employer} payment, the ${signed(DOSSIER_CONFLICT.honorEmployerStanding)} ${n.employer} completion standing and the `
+    + `local dockmaster reward, and settles ${n.employer} ${signed(DOSSIER_CONFLICT.betrayEmployerStanding)}, `
+    + `${n.buyer} ${signed(DOSSIER_CONFLICT.betrayBuyerStanding)}. Only one buyer is ever paid, and only once. `
+    + `Declining the ${n.buyer} offer costs 0 UU and changes no standing or contacts. `
+    + `Abandoning the whole contract at a Jobs desk keeps its existing ${n.employer} -1 standing and pays 0 UU. `
+    + `The ${COURIER_SHADOW.deadlineSeconds}-second acceptance deadline is unchanged. `
+    + 'Ordinary faction reactions to the resulting standing still apply.';
+  if (c.state === 'open') return head;
+  const closed = c.state === 'declined'
+    ? `${n.buyer} was declined; that offer is permanently closed for this assignment and the ${n.employer} contract stands.`
+    : c.state === 'honored' ? `Filed to ${n.employer}; the ${n.buyer} offer is closed.`
+      : c.state === 'betrayed' ? `Sold exclusively to ${n.buyer} at ${n.buyerStation}; the ${n.employer} contract is closed without payment.`
+        : `This assignment ended; the ${n.buyer} offer is closed.`;
+  return `${closed} ${head}`;
+}
+
+/**
+ * The same agreement, split into sentence-aligned lines short enough to
+ * survive the station view's existing 240-character per-row text cap.
+ *
+ * The docked panel and `stationView` publish one ROW per line, so an agent
+ * observation and a human reading the panel both get the WHOLE agreement
+ * instead of a truncated first paragraph. Same sentences, same order, same
+ * source string — never a second, shorter summary.
+ */
+export function shadowConflictTermLines(shadow, inp, cap = 200) {
+  return shadowTermLines(shadowConflictTerms(shadow, inp), cap);
+}
+
+/** Split one agreement string into sentence-aligned, view-cap-safe lines. */
+export function shadowTermLines(terms, cap = 200) {
+  if (typeof terms !== 'string' || !terms) return [];
+  const lines = [];
+  let line = '';
+  for (const piece of terms.split(/(?<=\.) /)) {
+    if (!piece) continue;
+    if (line && (line.length + 1 + piece.length) > cap) {
+      lines.push(line);
+      line = piece;
+    } else {
+      line = line ? `${line} ${piece}` : piece;
+    }
+    // A single sentence longer than the cap is still split, so no line can
+    // ever be silently clipped by the view.
+    while (line.length > cap) {
+      lines.push(line.slice(0, cap));
+      line = line.slice(cap);
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/**
+ * The single advertisement sentence, emitted ONCE on the deep-ready transition
+ * and retained in the shared mission instruction thereafter. No live courier
+ * position, handle or hidden telemetry: this is an advertised buyer with a
+ * known delivery dock, not an omniscient transmission.
+ */
+export function shadowConflictAdvert(shadow) {
+  const c = shadow?.conflict;
+  if (!c || c.state !== 'open' || shadow?.deep?.state !== 'ready') return '';
+  const n = conflictNames();
+  return `Complete dossier banked. ${n.buyerStation} offers ${c.buyerPayQuoted} total instead of `
+    + `${n.employer}'s ${shadow.deep.payQuoted}. Selling there ends this assignment: `
+    + `${n.employer} ${signed(DOSSIER_CONFLICT.betrayEmployerStanding)}, ${n.buyer} `
+    + `${signed(DOSSIER_CONFLICT.betrayBuyerStanding)}. Return to ${n.employerStation} to honor; `
+    + 'docking there files automatically.';
+}
+
+/** The exact betrayal receipt, shared by the button notice and the comm line. */
+export function shadowBetrayalReceipt(job, buyerPay) {
+  const n = conflictNames();
+  return `Sold ${dossierReference(job)} exclusively to ${n.buyer} at ${n.buyerStation}: ${buyerPay} UU total. `
+    + `${n.employer} ${signed(DOSSIER_CONFLICT.betrayEmployerStanding)}; ${n.buyer} `
+    + `${signed(DOSSIER_CONFLICT.betrayBuyerStanding)}. Original contract closed without payment; `
+    + 'no original completion/contact reward. No other contracts changed.';
+}
+
+/** The exact decline receipt: nothing moves, and the buyer never reopens. */
+export function shadowDeclineReceipt(job) {
+  const n = conflictNames();
+  const d = job?.shadow?.deep?.payQuoted ?? 0;
+  return `Declined ${n.buyer} for ${dossierReference(job)}: that offer is permanently closed for this assignment. `
+    + `0 UU; no standing or contact change. The ${n.employer} contract still pays ${d} UU total at `
+    + `${n.employerStation}, and the original deadline is unchanged.`;
+}
+
+/** The honour receipt tail: the actual tier, employer, total and ordinary reward. */
+export function shadowHonourReceipt(job, pay, repDelta) {
+  const n = conflictNames();
+  const tier = job?.shadow?.deep?.state === 'ready' ? 'complete route dossier' : 'basic report';
+  return `Filed the ${tier} exclusively to ${n.employer} at ${n.employerStation} under the exclusive agreement: `
+    + `${pay} UU total, ${n.employer} ${signed(repDelta)} and the ordinary local dockmaster reward. `
+    + `The ${n.buyer} offer at ${n.buyerStation} is closed.`;
 }
 
 export function shadowEarnedPay(job) {
@@ -661,6 +990,27 @@ export function shadowEarnedPay(job) {
 
 export function closeShadowDossier(shadow, reason) {
   return { ...shadow, deep: { ...shadow.deep, state: 'closed', observedSeconds: 0, closedReason: reason } };
+}
+
+/**
+ * Issue #240: move a v3 conflict to an explicit state. Pure — the caller owns
+ * the write. A row without a conflict is returned untouched, so every shared
+ * terminal path can call this unconditionally.
+ */
+export function setShadowConflict(shadow, state) {
+  if (!shadow?.conflict || !DOSSIER_CONFLICT.states.includes(state)) return shadow;
+  return { ...shadow, conflict: { ...shadow.conflict, state } };
+}
+
+/**
+ * Close a still-live conflict as `void` — expiry, courier loss, exposure,
+ * abandonment and posting withdrawal all arrive here. A conflict that already
+ * reached `honored` or `betrayed` is NEVER overwritten, so the single terminal
+ * outcome each assignment records cannot be rewritten by a later sweep.
+ */
+export function voidShadowConflict(shadow) {
+  const state = shadow?.conflict?.state;
+  return state === 'open' || state === 'declined' ? setShadowConflict(shadow, 'void') : shadow;
 }
 
 /** A tuned rate as the player reads it: `4`, `3.5`, `10`. */
@@ -722,16 +1072,21 @@ export function deepSuspicionExplanation(scannerTier) {
 export function shadowDossierTerms(shadow, inp) {
   const deep = shadow?.deep;
   if (!deep || deep.state === 'legacy') return 'Basic-only contract; no optional dossier was offered.';
+  // Issue #240: the competing-buyer agreement rides on the SAME terms string
+  // every surface already reads, so the offer, the pursuit, the Chart, the
+  // HUD, the API and the buyer choice cannot quote different deals.
+  const rival = shadowConflictTerms(shadow, inp);
+  const tail = rival ? ' ' + rival : '';
   const b = inp.payQuoted, d = deep.payQuoted;
   const grace = Math.max(0, COURIER_SHADOW.graceSeconds - shadow.warningSeconds);
   const home = inp.employerStation || 'the employer dock';
   const deadline = `before the deadline (${Math.max(0, Math.ceil(inp.secondsLeft || 0))} s left)`;
   const forfeit = 'The original deadline still applies; whole-job abandonment forfeits all payment.';
-  if (deep.state === 'ready') return `Complete dossier banked. File at ${home} for ${d} UU total (+${d - b}) ${deadline}. No further observation or risk is required. ${forfeit}`;
+  if (deep.state === 'ready') return `Complete dossier banked. File at ${home} for ${d} UU total (+${d - b}) ${deadline}. No further observation or risk is required. ${forfeit}${tail}`;
   if (deep.state === 'closed') {
     const reason = deep.closedReason === 'exposed' ? 'Tail identified; dossier opportunity lost.'
       : deep.closedReason === 'withdrawn' ? 'Dossier attempt ended by choice.' : 'Courier lost; dossier opportunity ended.';
-    return `${reason} Basic report still files for ${b} UU ${deadline} at ${home}. This attempt cannot be retried. ${forfeit}`;
+    return `${reason} Basic report still files for ${b} UU ${deadline} at ${home}. This attempt cannot be retried. ${forfeit}${tail}`;
   }
   const choice = deep.state === 'pursuing'
     ? `Complete dossier attempt in progress: ${deep.observedSeconds.toFixed(1)}/${COURIER_SHADOW.deepSeconds} s gathered. Complete dossier: ${d} UU total (+${d - b}). `
@@ -747,7 +1102,7 @@ export function shadowDossierTerms(shadow, inp) {
     + 'While pursuing, staying within 400 units attracts attention even without selection. Open beyond 400 or break sight to cool off; evidence is retained. '
     + (inp.accepted ? `Warning history: ${shadow.warned ? 'already warned' : 'not warned'}; ${grace.toFixed(1)} s of warned danger grace remain. Starting never resets risk or grace. ` : '')
     + 'Exposure or ending the attempt permanently loses incomplete dossier evidence; the basic report survives. '
-    + forfeit;
+    + forfeit + tail;
 }
 
 /** Preserve native Space activation without the window flight-key handler
@@ -884,14 +1239,27 @@ function riskWord(suspicion, warned, grace) {
  */
 export function stepShadow(shadow, input, dt) {
   const base = shadow && typeof shadow === 'object' ? shadow : freshShadowState();
+  // Issue #240: EXPLICIT version preservation. The old `base.v === 2 ? 2 : 1`
+  // ternary silently demoted a v3 row to v2 on every single flight frame,
+  // which `tickShadowFrame` then assigns straight back onto the job.
+  //
+  // The v3 MARKER is preserved unconditionally — including when the conflict
+  // object is missing or malformed. This integrator is pure and cannot refuse,
+  // so demoting a broken v3 to v2 here would quietly mint a payable
+  // basic/dossier row out of an invalid one. Keeping the marker leaves it
+  // failing closed at the strict validator, which is where refusal belongs.
+  // A conflict object is carried only when it really is a plain object.
+  const carried = base.v === 3 && base.conflict && typeof base.conflict === 'object'
+    && !Array.isArray(base.conflict) ? { ...base.conflict } : null;
   const next = {
-    v: base.v === 2 ? 2 : 1,
+    v: base.v === 3 ? 3 : base.v === 2 ? 2 : 1,
     courierCreated: base.courierCreated === true,
     observedSeconds: fin(base.observedSeconds) ? base.observedSeconds : 0,
     suspicion: fin(base.suspicion) ? base.suspicion : 0,
     warned: base.warned === true,
     warningSeconds: fin(base.warningSeconds) ? base.warningSeconds : 0,
     ...(base.deep ? { deep: { ...base.deep } } : {}),
+    ...(carried ? { conflict: carried } : {}),
   };
   const inp = input && typeof input === 'object' ? input : {};
   const name = typeof inp.courierName === 'string' && inp.courierName ? inp.courierName : 'the courier';
@@ -1019,8 +1387,10 @@ export function stepShadow(shadow, input, dt) {
     const station = typeof inp.employerStation === 'string' && inp.employerStation
       ? inp.employerStation : 'the employer dock';
     const pay = fin(inp.payQuoted) ? Math.round(inp.payQuoted) : 0;
+    const advert = shadowConflictAdvert(next);
     instruction = next.deep?.state === 'ready'
       ? `Complete dossier ready. Return to ${station} for ${next.deep.payQuoted} UU total before the deadline.`
+        + (advert ? ' ' + advert : '')
       : next.deep && next.deep.state !== 'legacy'
         ? `Basic report ready. ${shadowDossierTerms(next, inp)}`
         : SHADOW_COPY.acquired(station, pay);
