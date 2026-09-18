@@ -1,5 +1,42 @@
 # RIMWARD remaining work
 
+## Contact briefings and scanner spy benefits — #239
+
+Implementation candidate on `codex/issue-239-spy-benefits`, runtime pinned at
+`c510a7e03e79b862c070c8d61889c895aab8b0e8`; final evidence review pending. The owner selected
+the recommended contact-plus-scanner slice from the approved design. A local
+face at the employer or destination dock reads a free flight-plan briefing for
+an accepted shadow assignment — static turnaround distance, the out-and-back
+shuttle, the endpoint pivot and the match-straight / ease-turn tactic — with no
+live telemetry and no cost. Mounted Wolfeye tiers lower the dossier-pursuit
+suspicion rate to 4 / 3.5 / 3 inside the 150–400 unit band; crowding, basic
+observation, prices and existing scanner capabilities are unchanged, and the
+benefit is stated before purchase on every tier's row.
+
+New `test:spy-benefits` (16 groups / 32 checks) plus 52 courier, 9 dossier,
+agent-desk and refusal-token suites all exit 0 after the final scoped fix
+(`out/issue-239/focused-*.log`). Those tests are synthetic: real pure
+integrator and real booted desk, not natural flight. `npm run build` PASS in
+10.26 s, full unchanged boot and independent Codex code/security review PASS
+on the pinned runtime. Interim docs and controlled browser fixtures also PASS;
+receipts are linked in the contract below. Natural stock payout of 840 UU once
+plus reload and actual Mk I and Mk II purchases passed in one earned career.
+Mk I reached partial dossier progress with reload preservation, then exposure
+retained the basic payout; no natural Mk I dossier completion is claimed.
+Mk II completed 30/30 using cooling bursts, paid 630 UU once, and retained
+1360 UU across reload with no active job. An earlier unavailable courier and
+failed wrapper remain recorded separately from the same-profile recovery.
+Final evidence review remains root-owned. Draft PR #246 contains pushed
+`b207bbe0`, with all CI checks green there.
+A banked-favor write on the stale-briefing
+refusal path was found and fixed narrowly, without changing global contact
+semantics. No save, version, event, API schema or SKU changed; rollback is a
+plain commit revert with no save migration. Concealed mounts and the #240
+employer conflict stay parked. Merge is owner-authorized once the remaining
+gates pass and is executed by root and Owen; none has occurred. See
+[the implemented contract and limits](Issue239SpyBenefits.md) and the
+[implementation mission](missions/issue-239.md).
+
 ## Optional complete dossier — #238
 
 Implemented on `codex/issue-238-deep-dossier`, runtime

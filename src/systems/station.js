@@ -70,6 +70,10 @@ import {
   closeShadowDossier,
   shadowDossierTerms,
   shadowDossierBlocked,
+  deepSuspicionGainFor,
+  deepSuspicionRateLine,
+  deepSuspicionCaveat,
+  deepSuspicionExplanation,
   isShadowJob,
   pointInCorridor,
   SHADOW_COPY,
@@ -3678,6 +3682,55 @@ function pushIntroEspionageJob(jobs, job) {
   jobs.push(job);
 }
 
+/**
+ * Issue #239: may THIS dock brief THIS assignment right now? Read-only.
+ *
+ * The employer dock can brief before the pilot ever flies; the destination
+ * dock helps reacquisition. Everything else must hold: a valid accepted
+ * contract with a live future deadline, real origin/destination systems, a
+ * named target and record, a contract that still passes the existing strict
+ * state/quote validation, and a destination whose static route resolves. The
+ * brief speaks real route geometry, so a contract it cannot verify refuses.
+ */
+function shadowBriefable(ctx, job, sysId) {
+  if (!isShadowJob(job) || job.state !== 'accepted') return false;
+  if (typeof sysId !== 'string' || !sysId) return false;
+  if (job.originSystem !== sysId && job.destSystem !== sysId) return false;
+  if (!Number.isFinite(job.deadline) || ctx.world.time >= job.deadline) return false;
+  const { originSystem: origin, destSystem: dest } = job;
+  if (typeof origin !== 'string' || !Object.hasOwn(SYSTEMS, origin)) return false;
+  if (typeof dest !== 'string' || !Object.hasOwn(SYSTEMS, dest)) return false;
+  if (typeof job.target !== 'string' || !job.target) return false;
+  if (typeof job.recordId !== 'string' || !job.recordId) return false;
+  if (!sanitizeShadowState(job.shadow, job)) return false;
+  return shadowRoute(SYSTEMS[dest]).ok === true;
+}
+
+/** Every assignment this dock can brief, in the job list's own order. */
+function shadowBriefableJobs(ctx, sysId) {
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return [];
+  return jobs.filter((job) => shadowBriefable(ctx, job, sysId));
+}
+
+/**
+ * The flight plan a local face can read off an assignment sheet: the three
+ * route facts the posted briefing lacks — far turnaround distance, the
+ * out-and-back shuttle, the endpoint pivot — plus the tactic they imply.
+ *
+ * All STATIC route geometry, never a sighting. No current position, live
+ * handle, arrival estimate, occluder, NPC intent or record id, so
+ * `peekShadow`'s non-disclosure contract is untouched.
+ */
+function shadowFlightPlanBrief(job) {
+  const dock = spyStationName(job.destSystem, 'the far dock');
+  const name = typeof job.target === 'string' && job.target ? job.target : 'the courier';
+  return `Flight-plan brief for ${name} (${job.id}) at ${dock}: the courier shuttles out and back between `
+    + `the rendezvous and a turnaround ${COURIER_SHADOW.farRange} units from that dock along the same line. `
+    + 'It stops to pivot at either end. Match its speed on the straight; ease off when it turns so you do '
+    + 'not crowd it.';
+}
+
 /** Live shadow rows for one employer (offered or accepted). */
 function shadowRowsFor(jobs, sysId) {
   let n = 0;
@@ -3799,6 +3852,9 @@ function shadowFrameInputs(ctx, job) {
     payQuoted: job.payQuoted,
     secondsLeft: job.deadline - ctx.world.time,
     chartBinding: shadowChartBinding(ctx),
+    // Issue #239: the CURRENTLY mounted eye, read raw every frame. The pure
+    // evaluator owns strictness, so a corrupt value reads as stock there.
+    scannerTier: ctx.world.scanner,
     liveId: null,
   };
   if (!sameSystem || !out.courierAlive || !shipObj || !Object.hasOwn(SYSTEMS, dest)) return out;
@@ -7261,6 +7317,30 @@ export function initStation(ctx) {
     btn(panel, `1 — Repair all (${cost} UU)`, act.repairAll);
   }
 
+  /**
+   * Issue #239: what a Wolfeye tier is worth to courier-dossier work, stated
+   * BEFORE the purchase — on the Mk I offer row, the Mk II offer row, and the
+   * Mk II prerequisite row a scanner-0 pilot sees instead.
+   *
+   * Prices and rates come from the same constants and shared copy helpers the
+   * evaluator integrates and the mission terms quote, so they cannot drift.
+   * Each line stays inside the station view's text cap, so the docked panel
+   * and `observe().station.view` read identically. The closing sentence scopes
+   * the NEW benefit to dossier exposure; it does not deny the eye's own
+   * established resolve, contact-duration or lock-closure capabilities.
+   */
+  function scannerDossierPitch(tier) {
+    const cost = tier === 2 ? SCANNER2_COST : SCANNER_COST;
+    const name = tier === 2 ? 'Wolfeye Mk II' : 'Wolfeye Mk I';
+    const prereq = tier === 2 ? ', and it needs the Mk I eye in the socket first' : '';
+    return [
+      `${name} — ${cost} UU${prereq}. ${deepSuspicionRateLine(tier)}`,
+      deepSuspicionCaveat(tier),
+      'This mission benefit is lower dossier exposure only; it grants no extra '
+        + "detection entitlement beyond the eye's own established capabilities.",
+    ].filter((line) => line !== '');
+  }
+
   // ---- outfitting ----
   function renderOutfitting(panel) {
     h('div', 'screen-sub', panel, 'OUTFITTING — hull work & instruments');
@@ -7288,6 +7368,7 @@ export function initStation(ctx) {
       h('div', 'screen-note', row2, 'Wolfeye Mk I installed — target resolve reads numerically; nearby ships sit on a bottom arc.');
     } else {
       btn(row2, `2 — Wolfeye Mk I scanner (${SCANNER_COST} UU)`, act.buyScanner);
+      for (const line of scannerDossierPitch(1)) h('div', 'screen-note', panel, line);
     }
     // Wave 30: concealed mounts (§29) — the Q-ship bluff enabler, bought once.
     const row3 = h('div', 'screen-btnrow', panel);
@@ -7302,8 +7383,10 @@ export function initStation(ctx) {
       h('div', 'screen-note', row4, 'Wolfeye Mk II installed — hidden gunports read on the bracket. Longer contacts; lock shows closure.');
     } else if (ctx.world.scanner === 1) {
       btn(row4, `4 — Wolfeye Mk II scanner (${SCANNER2_COST} UU)`, act.buyScanner2);
+      for (const line of scannerDossierPitch(2)) h('div', 'screen-note', panel, line);
     } else {
       h('div', 'screen-note', row4, 'Wolfeye Mk II needs the Mk I eye in the socket first.');
+      for (const line of scannerDossierPitch(2)) h('div', 'screen-note', panel, line);
     }
     // Wave 51: mining-head ladder (§51) — one row per purchasable head
     // (indices 1..3 of MINING_LASERS; 0 is the stock head). Bought in order:
@@ -7463,6 +7546,38 @@ export function initStation(ctx) {
     return true;
   }
 
+  /**
+   * Issue #239: resolve a captured briefing choice against LIVE state, or
+   * refuse.
+   *
+   * The closure captures the face, the assignment and their identity at paint
+   * time; none of it is trusted when it fires. A stale card, a face who has
+   * left the roster, an ended/expired/filed/foreign or corrupt assignment, or
+   * a panel that is no longer this dock's People desk all return null.
+   *
+   * The roster is read RAW from `ctx.world.contacts` rather than through
+   * `contactsForSystem`, which restores banked favors onto replacement rows —
+   * a refusal path must not write anything on its way to saying no. Reading
+   * is all this does on either path, so refusing and repeating are free.
+   */
+  function resolveShadowBriefing(captured) {
+    const hull = ctx.player && Number.isFinite(ctx.player.hull) ? ctx.player.hull : 1;
+    if (hull <= 0) return null;
+    if (ctx.flags.docked !== true || ui.service !== 'people') return null;
+    if (ctx.world.currentSystem !== captured.system || currentId !== captured.system) return null;
+    const roster = Array.isArray(ctx.world.contacts) ? ctx.world.contacts : [];
+    const contact = roster.find((c) => c && c.id === captured.contactId
+      && c.system === captured.system) || null;
+    if (!contact || contact !== captured.contact) return null;
+    const jobs = Array.isArray(ctx.world.jobs) ? ctx.world.jobs : [];
+    const job = jobs.find((j) => j && j.id === captured.jobId) || null;
+    if (!job || job !== captured.job) return null;
+    if (job.target !== captured.target || job.recordId !== captured.recordId) return null;
+    if (job.originSystem !== captured.origin || job.destSystem !== captured.dest) return null;
+    if (!shadowBriefable(ctx, job, captured.system)) return null;
+    return shadowFlightPlanBrief(job);
+  }
+
   function renderPeople(panel) {
     h('div', 'screen-sub', panel, 'PEOPLE — who runs this dock');
     renderRescue(panel);
@@ -7476,6 +7591,9 @@ export function initStation(ctx) {
     // Wave 16: the pilot's own recorded chart marks (wave 14), surfaced
     // once per dock on keeper cards only — computed once for the loop.
     const chartNotes = chartedMarkNotes(ctx);
+    // Issue #239: the assignments any face at this dock can read a flight plan
+    // off, resolved once for the roster loop.
+    const briefable = shadowBriefableJobs(ctx, currentId);
     // Wave 41: two studies per faction, up to three contacts per dock — a
     // roster must never show one face twice. The first claim on a variant
     // keeps it; a collider takes the free study. Roster order is stable
@@ -7518,6 +7636,12 @@ export function initStation(ctx) {
         for (const note of chartNotes) {
           h('div', 'people-chart-line', chart, `◇ ${note.lmName} — ${note.systemName}`);
         }
+      }
+      // Issue #239: say the price before the button that charges it — there
+      // is none. This never replaces Ask around or any favor service.
+      if (briefable.length > 0) {
+        h('div', 'people-note', card,
+          "Read this assignment's shuttle route and turnaround advice. 0 UU; no favor spent.");
       }
       const row = h('div', 'screen-btnrow people-actions', card);
       btn(row, 'Ask around', () => {
@@ -7570,6 +7694,29 @@ export function initStation(ctx) {
             ui.notice = `${contact.name} waves the yard off. “${ui.compNote}”`;
           }
           render();
+        });
+      }
+      // Issue #239: one free route briefing per accepted assignment this dock
+      // can speak for. The job id rides the label so two same-name postings
+      // stay distinguishable and the established stationAction `expect` guard
+      // fails closed on a changed or reordered row.
+      for (const job of briefable) {
+        const captured = {
+          contact, job, contactId: contact.id, jobId: job.id, system: currentId,
+          target: job.target, recordId: job.recordId,
+          origin: job.originSystem, dest: job.destSystem,
+        };
+        btn(row, `Ask about ${job.target} (${job.id}) — free route briefing`, () => {
+          // Resolve FIRST. A live card repaints normally; a stale one is inert
+          // except for its notice, so it never re-enters the People builder.
+          const brief = resolveShadowBriefing(captured);
+          if (brief) {
+            ui.notice = brief;
+            render();
+            return;
+          }
+          ui.notice = 'Cannot read that flight plan now.';
+          showNoticeInPlace(ui.notice);
         });
       }
       renderFixerLaunder(h, btn, card, ctx, ui, currentId, contact, render);
@@ -7781,6 +7928,43 @@ export function initStation(ctx) {
       const note = h('div', 'station-notice', panel, ui.notice);
       if (typeof note.setAttribute === 'function' && ui.notice !== ui.bulk?.receipt) note.setAttribute('aria-live', 'polite');
     }
+  }
+
+  /**
+   * Issue #239: show a refusal on the panel already on screen, WITHOUT a
+   * rebuild.
+   *
+   * A stale briefing card must be inert except for its notice. The ordinary
+   * path for that is `render()`, but a People rebuild re-resolves the roster
+   * through `contactsForSystem`, which repairs a replacement row's banked
+   * favors — an economy write on a path whose whole contract is that it
+   * writes nothing. So the refusal updates only the footer notice node of the
+   * panel this desk already owns, in place.
+   *
+   * Native DOM on purpose: the node belongs to the live rendered panel, not
+   * to the `h`/`btn` capture harness. It therefore refuses to touch anything
+   * while a capture is running, while undocked, while the overlay is closed,
+   * or with no panel of its own — the API receipt still carries `ui.notice`
+   * from `perform()` in every one of those cases. Global `contactsForSystem`
+   * and ordinary `render()` semantics are untouched.
+   */
+  function showNoticeInPlace(text) {
+    if (h !== hDom || btn !== btnDom) return; // a capture pass owns the builders
+    if (!ctx.flags.docked || !ui.open) return;
+    const panel = renderedPanel;
+    if (!panel || typeof panel.appendChild !== 'function') return;
+    const kids = panel.children;
+    let note = null;
+    for (let i = (kids?.length ?? 0) - 1; i >= 0; i--) {
+      if (kids[i]?.className === 'station-notice') { note = kids[i]; break; }
+    }
+    if (!note) {
+      note = document.createElement('div');
+      note.className = 'station-notice';
+      panel.appendChild(note); // the same footer position buildPanel uses
+    }
+    note.textContent = text;
+    if (typeof note.setAttribute === 'function') note.setAttribute('aria-live', 'polite');
   }
 
   function render() {
@@ -8427,6 +8611,9 @@ export function initStation(ctx) {
     const input = job.state === 'accepted' ? shadowFrameInputs(ctx, job) : {
       accepted: false, payQuoted: job.reward, secondsLeft: job.deadline - ctx.world.time,
       employerStation: spyStationName(job.originSystem, 'the employer dock'), chartBinding: shadowChartBinding(ctx),
+      // Issue #239: an OFFER quotes the same mounted-eye rate an accepted row
+      // would charge, so the terms the player reads before accepting match.
+      scannerTier: ctx.world.scanner,
     };
     const state = job.shadow;
     const deep = state?.deep;
@@ -8437,6 +8624,12 @@ export function initStation(ctx) {
       premium: deep?.payQuoted ? deep.payQuoted - input.payQuoted : 0,
       canStart: blocked === '', startBlockedReason: blocked, closedReason: deep?.closedReason || '',
       riskRange: COURIER_SHADOW.maxRange, terms: shadowDossierTerms(state, input),
+      // Issue #239: the mounted eye's EFFECT, published for offers and
+      // accepted rows from the same input the terms were built from. The tier
+      // itself stays out — `ctx.world.scanner` is already observable, and only
+      // the rate actually being charged belongs on a mission projection.
+      suspicionGain: deepSuspicionGainFor(input.scannerTier),
+      suspicionNote: deepSuspicionExplanation(input.scannerTier),
     };
     // An OFFER reports no live risk or progress before acceptance.
     if (job.state !== 'accepted') return out;

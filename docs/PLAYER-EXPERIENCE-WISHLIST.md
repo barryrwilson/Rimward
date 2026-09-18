@@ -1,5 +1,49 @@
 # RIMWARD Player-Experience Wishlist
 
+## Asking the right face, and buying a quieter eye — #239
+
+Implementation candidate, final evidence review pending. The playtest complaint was that
+contacts only ever offered unrelated flavor and that bought scanners had no
+mission-specific use. Both now pay off, optionally.
+
+With a shadow assignment accepted, any face at the employer dock — before the
+pilot has flown anywhere — or at the destination dock will read the assignment
+flight plan for free: the courier shuttles out and back between the rendezvous
+and a turnaround 1500 units from the destination dock along the same rendezvous
+line, and it stops to pivot at each end, so match its speed on the straight and
+ease off as it turns rather than crowding it. The card says plainly that it costs 0 UU and no favor. It is
+route geometry off a sheet, not a sighting — no live position, no target
+handle, no arrival time. Ask around and every favor service are untouched.
+
+A Wolfeye eye now corroborates with less revealing work: dossier pursuit inside
+the 150–400 unit band draws 3.5/s with the Mk I and 3/s with the Mk II instead
+of the stock 4/s. Crowding inside 150 units still costs 10/s at every tier, and
+a stock starter finishes and is paid the basic report exactly as before — no
+purchase gate appears anywhere. Both tiers explain the benefit, the real price
+and the prerequisite before you spend, and the Mk II states its own honest
+limit: from clean risk it can just finish one uninterrupted attempt, but
+suspicion you already carry, or one close approach, can still require a cooling
+break. That is the interesting purchase — it buys one clean run, not immunity.
+
+New focused coverage (16 groups / 32 checks) and the 52 courier, 9 dossier,
+agent-desk and refusal-token suites all pass. Those are synthetic checks
+against the real integrator and the real booted desk, not natural play. Build
+and full unchanged boot, independent code/security review, interim docs review
+and controlled browser fixtures pass on the pinned runtime. Natural play paid
+stock basic plus introductory reports' 840 UU once, verified reload, and bought Mk I for 400 UU
+(1190 → 790). Continuing that earned career after an unavailable courier,
+Mk I demonstrated partial dossier progress and reload preservation, then
+retained the basic payout after exposure. It did not complete a natural dossier.
+The pilot earned and spent the additional 900 UU for Mk II, used the contact's
+route facts and cooling bursts, and completed 30/30 for a single 630 UU payout;
+1360 UU remained stable across reload with no active job. The clean
+uninterrupted Mk II claim is deterministic-only. Final evidence review remains
+pending. Draft PR #246 contains pushed `b207bbe0`, with all CI checks green there.
+Tuning stays provisional. Concealed mounts found no supporting
+inspection path and are explicitly parked, as is the #240 employer conflict.
+Merge is owner-authorized once the remaining gates pass; none has occurred. See
+[the implemented contract and limits](Issue239SpyBenefits.md).
+
 ## Predictable freighter docking — #221
 
 Implemented on `codex/issue-221-freighter-docking`, pending independent QA.
