@@ -2,7 +2,7 @@
 
 ## Asking the right face, and buying a quieter eye — #239
 
-Implementation candidate, gates pending. The playtest complaint was that
+Implementation candidate, final evidence review pending. The playtest complaint was that
 contacts only ever offered unrelated flavor and that bought scanners had no
 mission-specific use. Both now pay off, optionally.
 
@@ -28,9 +28,18 @@ break. That is the interesting purchase — it buys one clean run, not immunity.
 New focused coverage (16 groups / 32 checks) and the 52 courier, 9 dossier,
 agent-desk and refusal-token suites all pass. Those are synthetic checks
 against the real integrator and the real booted desk, not natural play. Build
-and independent code/security review pass on the pinned runtime; unchanged boot
-and live browser verification are still pending, so acceptance is not yet
-claimed. Tuning stays provisional. Concealed mounts found no supporting
+and full unchanged boot, independent code/security review, interim docs review
+and controlled browser fixtures pass on the pinned runtime. Natural play paid
+stock basic plus introductory reports' 840 UU once, verified reload, and bought Mk I for 400 UU
+(1190 → 790). Continuing that earned career after an unavailable courier,
+Mk I demonstrated partial dossier progress and reload preservation, then
+retained the basic payout after exposure. It did not complete a natural dossier.
+The pilot earned and spent the additional 900 UU for Mk II, used the contact's
+route facts and cooling bursts, and completed 30/30 for a single 630 UU payout;
+1360 UU remained stable across reload with no active job. The clean
+uninterrupted Mk II claim is deterministic-only. Final evidence review remains
+pending. Draft PR #246 contains pushed `b207bbe0`, with all CI checks green there.
+Tuning stays provisional. Concealed mounts found no supporting
 inspection path and are explicitly parked, as is the #240 employer conflict.
 Merge is owner-authorized once the remaining gates pass; none has occurred. See
 [the implemented contract and limits](Issue239SpyBenefits.md).

@@ -170,10 +170,33 @@ bank. Reverting the refusal branch to `render()` still reproduces the original
   browser play.
 - Root-owned gates: `npm run build` **PASS** in 10.26 s against `c510a7e0`
   (`out/issue-239/build-c510a7e.log`) and independent Codex code/security review
-  **PASS** on the pinned runtime (report path forthcoming). Unchanged
-  `npm run test:boot` and live browser verification remain **pending**; their
-  receipts are not in hand and are not claimed. `test:boot` itself is
-  unchanged.
+  **PASS** on the pinned runtime (`out/issue-239/review/CODEX-VERDICT.md`). The
+  full unchanged `npm run test:boot` passed (`out/issue-239/boot-c510a7e.log`).
+  Interim documentation review passed at `b207bbe0`
+  (`out/issue-239/review/CODEX-DOCS-VERDICT.md`).
+- Controlled browser fixtures **PASS**, including native/UI/API copy and
+  refusal checks, with no console errors (`out/issue-239/ui-fixture/REPORT.md`).
+  These seeded fixtures do not establish natural upgrade progression.
+- The same natural earned career filed stock basic plus introductory reports for 840 UU
+  (350 → 1190), retained the result across reload, and bought Mk I for 400 UU
+  (1190 → 790). After a courier became unavailable through ordinary traffic
+  damage, abandoning that job and filing the independent introduction paid 420 UU
+  (790 → 1210). A fresh Mk I assignment reached 14.129 dossier progress at
+  3.5 suspicion/s and preserved progress/grace across reload; later exposure
+  during slow tracking retained the basic 420 UU payout (1210 → 1630).
+  This is not a natural Mk I dossier completion.
+- The same career then bought Mk II for 900 UU (1630 → 730), completed a
+  natural 30/30 dossier and received 630 UU once (730 → 1360) at simulation
+  time 1206.64. Repeated ticks and reload preserved 1360 UU with no active job.
+  The pilot used a midpoint tactic informed by the contact's static route
+  facts and cooled in bursts; clean uninterrupted Mk II completion is proved
+  only by deterministic tests. The original campaign wrapper's unavailable
+  target failure remains evidence; recovery continued the same profile.
+  Recovery 4 reached ready state but timed out withdrawing; recovery 5 settled
+  that same state. Consolidated receipts and limits:
+  `out/issue-239/live/REPORT.md`, `SUMMARY.json` and `CLEANUP.json` in that folder.
+  Browser console/errors and network failures were empty; runtime/source hash
+  stayed unchanged. Final evidence review remains root-owned before merge.
 - The station view caps every notice at 240 characters. The full briefing is
   returned by the `stationAction` receipt and rendered on the native notice
   node; no claim is made that the truncated `observe().station.view.notice`
@@ -186,7 +209,8 @@ bank. Reverting the refusal branch to `render()` still reproduces the original
 - #240 employer/competitor evidence conflict stays parked and separate.
 - Tuning remains provisional playtest balance, not a measured conclusion.
 - Merge is authorized by the owner once the required gates pass, and root and
-  Owen execute it. No merge, push or deployment has been performed here.
+  Owen execute it. Draft PR #246 contains pushed commit `b207bbe0`; no merge
+  or deployment has occurred.
 
 ## Security self-review
 

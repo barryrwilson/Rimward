@@ -1,8 +1,10 @@
 # Issue #239 — contacts and equipment earn optional spy roles
 
-**Current stage: implementation complete on a pinned runtime; build and
-independent code/security review PASS; boot and live verification pending.**
-No merge or push has occurred yet.
+**Current stage: pinned runtime passes build, unchanged boot, independent
+code/security review and controlled browser fixtures; natural earned-career
+verification is complete, pending final evidence review.** Draft PR #246
+contains pushed commit `b207bbe0`, with all CI checks green at that commit.
+No merge has occurred.
 
 - Outcome: contacts and existing equipment change the pilot's information or
   exposure tradeoffs, while a starter-equipment spy mission stays viable.
@@ -71,12 +73,33 @@ also passed; the only runtime change after those runs was that notice fix.
 
 Verified and root-owned: `npm run build` PASS in 10.26 s against `c510a7e0`
 (`out/issue-239/build-c510a7e.log`), and independent Codex code/security review
-PASS on the pinned runtime (report path forthcoming).
+PASS on the pinned runtime (`out/issue-239/review/CODEX-VERDICT.md`). The full
+unchanged `npm run test:boot` passed (`out/issue-239/boot-c510a7e.log`). Interim
+docs at `b207bbe0` passed review (`out/issue-239/review/CODEX-DOCS-VERDICT.md`).
+Controlled browser fixtures passed, including native/UI/API copy and refusal
+checks, with no console errors (`out/issue-239/ui-fixture/REPORT.md`). These
+seeded checks are separate from natural progression.
 
-Still pending: unchanged `npm run test:boot` (session 95359 still running) and
-the natural live stock browser campaign, which is ongoing. Neither receipt is
-in hand, so neither is claimed. The new tests are synthetic — real pure
-integrator and real booted desk, not natural flight.
+One natural earned career paid stock basic plus introductory reports' 840 UU once (350 → 1190),
+verified reload, then bought Mk I for 400 UU (1190 → 790). Ordinary traffic
+damage made the next courier unavailable; abandoning that job and delivering
+the independent introduction paid 420 UU (790 → 1210). A fresh Mk I assignment reached
+14.129 dossier progress at 3.5 suspicion/s with reload preserving progress and
+grace. Later exposure during slow tracking retained the basic payout of 420 UU
+(1210 → 1630); no natural Mk I dossier completion is claimed.
+
+The same profile bought Mk II for 900 UU (1630 → 730), completed a natural
+30/30 dossier and received 630 UU once (730 → 1360) at simulation time 1206.64.
+Repeated ticks and reload retained 1360 UU and no active job. The pilot used
+the contact's static route facts to choose a midpoint tactic and cooled in
+bursts; the exact clean uninterrupted completion claim is deterministic-only.
+The original unavailable-target campaign wrapper failure is retained alongside
+the successful same-profile recovery, not relabeled as a passing attempt.
+Recovery 4 reached deep-ready but timed out withdrawing; recovery 5 settled
+that same state. The consolidated `out/issue-239/live/REPORT.md`, `SUMMARY.json`
+and `CLEANUP.json` record the unchanged source hash, empty browser error/network
+logs, final ledger and closed owned processes/profile. These outcomes support
+the bounded acceptance contract; independent final evidence review is pending.
 
 ## Implementation history worth keeping
 
@@ -106,7 +129,5 @@ and not waived here.
 
 ## Next gate
 
-Unchanged boot and the natural browser campaign against the pinned runtime.
-Once those receipts land alongside the existing build and independent
-code/security PASS, root and Owen execute the authorized merge; issue closure
-follows it. No merge has occurred.
+Review the final evidence update. Root and Owen then execute the authorized
+merge; issue closure follows it. No merge has occurred.
