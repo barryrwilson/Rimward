@@ -1,4 +1,17 @@
 # RIMWARD Player-Experience Wishlist
+## A deliberate double-agent choice — #240
+
+Implemented and verified on candidate `c0a20d32`: a new exclusive Red Ledger
+courier dossier has one named Veridian buyer. The pilot sees both payouts,
+forfeiture and standing effects before accepting, then can honor, decline free,
+or knowingly sell the completed dossier. Merely working for multiple factions
+is not punished. One evidence identity prevents double payment while unrelated
+contracts remain whole. Natural play earned the dossier, sold it for 945 UU
+once, reloaded and returned to the original employer without another payout;
+controlled tests cover the other choices and lifecycle boundaries. See
+[verification and limits](Issue240ImplementationReview.md). PR #247 is ready
+for the normal delivery gate; no merge/deployment is claimed here.
+
 
 ## Asking the right face, and buying a quieter eye — #239
 
