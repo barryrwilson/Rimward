@@ -792,6 +792,14 @@ export const COURIER_SHADOW = Object.freeze({
   deepSeconds: 30,
   deepPremium: 0.50,
   deepSuspicionGain: 4,
+  // Issue #239: the effective dossier-pursuit rate by MOUNTED scanner tier,
+  // indexed 0/1/2 (stock / Wolfeye Mk I / Wolfeye Mk II). Index 0 repeats
+  // deepSuspicionGain above, which stays the compatibility default every
+  // missing, malformed or out-of-range tier falls back to. Better instruments
+  // corroborate with less revealing work; they never widen detection, change
+  // the 150–400 band, the 10/s close rate, timing, grace or selection. No
+  // version bump: this is tuning only and nothing new is persisted.
+  deepSuspicionByScanner: Object.freeze([4, 3.5, 3]),
   slot: 2, // reserved for this subtype only; introductory spy keeps 0/1
   slotsPerSystem: 1,
   mission: 'courier-shadow',

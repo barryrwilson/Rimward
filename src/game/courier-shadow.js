@@ -663,6 +663,61 @@ export function closeShadowDossier(shadow, reason) {
   return { ...shadow, deep: { ...shadow.deep, state: 'closed', observedSeconds: 0, closedReason: reason } };
 }
 
+/** A tuned rate as the player reads it: `4`, `3.5`, `10`. */
+function rateText(n) {
+  return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)));
+}
+
+/**
+ * Issue #239: the effective dossier-pursuit suspicion rate for ONE mounted
+ * scanner tier — the single rate the integrator, the projection and all copy
+ * share. It changes nothing else: not the band, the 10/s close rate, timing,
+ * grace, selection, basic observation or detection eligibility.
+ *
+ * Only an in-range INTEGER tier selects a tuned rate, so a corrupt save or an
+ * unknown future tier reads as stock rather than minting a cheaper pursuit.
+ * Pure: the tier arrives on the frame input; this never reads a live mount.
+ */
+export function deepSuspicionGainFor(scannerTier) {
+  const stock = COURIER_SHADOW.deepSuspicionGain;
+  const table = COURIER_SHADOW.deepSuspicionByScanner;
+  if (!Array.isArray(table) || table.length === 0) return stock;
+  if (typeof scannerTier !== 'number' || !Number.isInteger(scannerTier)) return stock;
+  if (scannerTier < 0 || scannerTier >= table.length) return stock;
+  const gain = table[scannerTier];
+  return Number.isFinite(gain) && gain > 0 ? gain : stock;
+}
+
+/** The rate sentence every tier shares, derived from the frozen tuning. */
+export function deepSuspicionRateLine(scannerTier) {
+  const gain = deepSuspicionGainFor(scannerTier);
+  const stock = COURIER_SHADOW.deepSuspicionGain;
+  const versus = gain === stock ? '' : ` instead of the stock ${rateText(stock)}/s`;
+  return `Dossier pursuit at ${COURIER_SHADOW.minRange}–${COURIER_SHADOW.maxRange} units draws `
+    + `${rateText(gain)}/s of courier attention${versus}. `
+    + `Crowding inside ${COURIER_SHADOW.minRange} units still draws ${rateText(COURIER_SHADOW.suspicionGain)}/s.`;
+}
+
+/**
+ * The honest limit of a reduced rate, or '' when there is none to state.
+ * Derived, never asserted: a tier earns this only when its own rate cannot
+ * reach the exposure cap across a whole attempt. The margin is small even
+ * then, so it refuses to promise completion.
+ */
+export function deepSuspicionCaveat(scannerTier) {
+  const gain = deepSuspicionGainFor(scannerTier);
+  if (gain >= COURIER_SHADOW.deepSuspicionGain) return '';
+  if (gain * COURIER_SHADOW.deepSeconds >= COURIER_SHADOW.suspicionMax) return '';
+  return `From clean risk it can just finish one uninterrupted ${COURIER_SHADOW.deepSeconds}-second attempt; `
+    + 'carried suspicion or any crowding can still force a cooling break.';
+}
+
+/** Rate plus caveat — the shared explanation Jobs, Chart, HUD and API read. */
+export function deepSuspicionExplanation(scannerTier) {
+  const caveat = deepSuspicionCaveat(scannerTier);
+  return caveat ? `${deepSuspicionRateLine(scannerTier)} ${caveat}` : deepSuspicionRateLine(scannerTier);
+}
+
 /** One text contract for the chart, Jobs, HUD and API. No world writes. */
 export function shadowDossierTerms(shadow, inp) {
   const deep = shadow?.deep;
@@ -685,6 +740,10 @@ export function shadowDossierTerms(shadow, inp) {
   return `Basic report files at ${home} for ${b} UU ${deadline}. ` + choice
     + 'Basic records identity and the observed local route; the dossier corroborates that courier’s route and traffic pattern. '
     + `${COURIER_SHADOW.deepSeconds} additional selected seconds at 150–400 units with clear sight are required. `
+    // Issue #239: the mounted eye's own rate, read from the SAME frame input
+    // the integrator uses, so the agreement can never quote a rate the mission
+    // is not actually charging.
+    + `${deepSuspicionExplanation(inp.scannerTier)} `
     + 'While pursuing, staying within 400 units attracts attention even without selection. Open beyond 400 or break sight to cool off; evidence is retained. '
     + (inp.accepted ? `Warning history: ${shadow.warned ? 'already warned' : 'not warned'}; ${grace.toFixed(1)} s of warned danger grace remain. Starting never resets risk or grace. ` : '')
     + 'Exposure or ending the attempt permanently loses incomplete dossier evidence; the basic report survives. '
@@ -840,6 +899,10 @@ export function stepShadow(shadow, input, dt) {
 
   const acquired = inp.acquired === true;
   const pursuing = acquired && next.deep?.state === 'pursuing';
+  // Issue #239: read the mounted eye ONCE per frame from this input. Changing
+  // gear, hull or reloading only moves the next frame's rate — it never
+  // touches accumulated evidence, suspicion, the latched warning or grace.
+  const deepGain = deepSuspicionGainFor(inp.scannerTier);
   const ended = inp.accepted !== true || inp.expired === true;
   // The ONE detection rule the public id, the card and the HUD all share.
   const detectable = shadowDetectable(inp.courierPresent === true, inp.distance);
@@ -889,7 +952,7 @@ export function stepShadow(shadow, input, dt) {
     // 1. Suspicion first: it owns the warning crossing.
     const before = next.suspicion;
     const delta = dangerous
-      ? (pursuing && inp.distance >= COURIER_SHADOW.minRange ? COURIER_SHADOW.deepSuspicionGain : COURIER_SHADOW.suspicionGain) * step
+      ? (pursuing && inp.distance >= COURIER_SHADOW.minRange ? deepGain : COURIER_SHADOW.suspicionGain) * step
       : -COURIER_SHADOW.suspicionDecay * step;
     let s = before + delta;
     if (s < 0) s = 0;
@@ -1000,7 +1063,11 @@ export function stepShadow(shadow, input, dt) {
     completed,
     deepCompleted,
     deepClosed,
-    suspicionGain: pursuing && inp.distance >= COURIER_SHADOW.minRange ? COURIER_SHADOW.deepSuspicionGain : COURIER_SHADOW.suspicionGain,
+    suspicionGain: pursuing && inp.distance >= COURIER_SHADOW.minRange ? deepGain : COURIER_SHADOW.suspicionGain,
+    // Issue #239: what the mounted eye is worth, published for Jobs, the
+    // Chart, the HUD queue and the API rather than recomputed by each.
+    deepSuspicionGain: deepGain,
+    deepSuspicionNote: deepSuspicionExplanation(inp.scannerTier),
     dangerous,
     detectable,
     graceRemaining: graceLeft,
