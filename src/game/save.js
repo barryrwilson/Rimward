@@ -1,7 +1,7 @@
 import '../ui/screens.css';
 import { createShipState, SHIP_CLASSES, SYSTEMS, FACTIONS, U, JUMP, COMMODITIES, ORE_TYPES } from './state.js';
 import { COURIER_SHADOW } from './state.js';
-import { sanitizeShadowState, isShadowRecordId, shadowRecordId } from './courier-shadow.js';
+import { sanitizeShadowState, isShadowRecordId, shadowRecordId, shadowConflictJobValid } from './courier-shadow.js';
 import {
   sanitizeHangar,
   parkMounted,
@@ -675,7 +675,46 @@ function sanitizeOneJob(raw) {
   if (kind === 'explore' && job.deadline === undefined) return null;
   if (kind === 'espionage' && job.deadline === undefined) return null;
   if (kind === 'war' && job.deadline === undefined) return null;
+  // Issue #240: the LATE second pass. The shadow call above validated the v3
+  // base/deep structure and the conflict shape without being able to claim the
+  // accepted quote or the deadline were available. Now they are — and they are
+  // the CHECKED values on `job`, never the unchecked raw row — so the complete
+  // v3 contract (exact scenario pairing, job/record identity, finite accepted
+  // quote and deadline, nested state coherence) is re-checked here. Either
+  // pass failing rejects the whole row; nothing downgrades to a payable v2.
+  if (!shadowConflictJobValid(job)) return null;
   return job;
+}
+
+/**
+ * Issue #240: duplicate v3 evidence tokens inside ONE loaded save.
+ *
+ * The same completed dossier can never be owned twice, so a collision is not a
+ * contest to be won — EVERY colliding row is rejected, whatever its state.
+ * This is deliberately NOT the hunt/war cap-reduction pattern: that pattern
+ * protects `accepted` rows and only runs above the save cap, which would let a
+ * malformed fixture keep a payable duplicate entitlement below the cap. Here
+ * an accepted collision is dropped exactly like an offered or terminal one,
+ * unconditionally and independent of `dropJobsUntilCap`. Unrelated rows,
+ * credits and standing are untouched.
+ */
+function dropDuplicateEvidence(rows) {
+  const counts = new Map();
+  for (let i = 0; i < rows.length; i++) {
+    const token = rows[i]?.shadow?.conflict?.evidenceId;
+    if (typeof token !== 'string' || !token) continue;
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+  }
+  let collided = false;
+  counts.forEach((n) => { if (n > 1) collided = true; });
+  if (!collided) return rows;
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const token = rows[i]?.shadow?.conflict?.evidenceId;
+    if (typeof token === 'string' && token && counts.get(token) > 1) continue;
+    out.push(rows[i]);
+  }
+  return out;
 }
 
 function huntOriginBank(ctx, origin) {
@@ -952,13 +991,22 @@ function sanitizeJobs(ctx) {
     ctx.world.jobs = [];
     return;
   }
-  const out = [];
-  const seen = new Set();
+  const valid = [];
   for (let i = 0; i < raw.length; i++) {
     const job = sanitizeOneJob(raw[i]);
     if (!job) continue;
     if (!huntSanitizeKeepsRecord(ctx, job)) continue;
     if (!warSanitizeKeepsRecord(ctx, job)) continue;
+    valid.push(job);
+  }
+  // Issue #240: single-job evidence ownership, over the structurally valid
+  // rows and BEFORE duplicate job-id elimination — two rows sharing a token
+  // are both dropped even when they also share an id.
+  const out = [];
+  const seen = new Set();
+  const unique = dropDuplicateEvidence(valid);
+  for (let i = 0; i < unique.length; i++) {
+    const job = unique[i];
     if (seen.has(job.id)) continue;
     seen.add(job.id);
     out.push(job);

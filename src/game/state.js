@@ -830,6 +830,48 @@ export const COURIER_SHADOW = Object.freeze({
 });
 
 /**
+ * Issue #240: the ONE authored dossier-conflict scenario. Fixed scenario
+ * tuning only — the mechanism lives in game/courier-shadow.js (validation and
+ * copy) and systems/station.js (offer, choice, settlement).
+ *
+ * Exactly one employer/buyer pairing acquires conflict behaviour: a Red Ledger
+ * shadow assignment posted at Ledger Anchorage (The Redmarch) whose courier
+ * runs out of Veridian Spire (Veridian Reach). The Veridian Combine buys the
+ * COMPLETED dossier exclusively, and only at that destination dock. No other
+ * station, faction pairing, job family or mission is touched, and no new
+ * currency, event, key, gauge or equipment SKU is introduced.
+ *
+ * The premium and the standing deltas below are provisional first-playtest
+ * terms recorded in docs/missions/issue-240.md, not established economy
+ * balance. Display names are NOT duplicated here: they are read from FACTIONS
+ * and SYSTEMS so the copy can never drift from the authored world.
+ */
+export const DOSSIER_CONFLICT = Object.freeze({
+  version: 1,
+  /** The exact persisted literal. A row carrying anything else is rejected. */
+  scenario: 'ledger-veridian-dossier-v1',
+  originSystem: 'redmarch',
+  destSystem: 'veridian',
+  employerFaction: 'redledger',
+  buyerFaction: 'veridian',
+  /** C = D + round(D * buyerPremium), clamped to the existing pay bound. */
+  buyerPremium: 0.50,
+  /** Betrayal only. Honour, decline, abandonment and expiry are unchanged. */
+  betrayEmployerStanding: -5,
+  betrayBuyerStanding: 2,
+  /**
+   * The ordinary completion standing this scenario's copy QUOTES. It is not a
+   * second writer: settlement still goes through the existing job path. It
+   * must equal station.js MINING_REP, and a focused test pins the honoured
+   * payout's real delta against this value so the disclosure cannot drift.
+   */
+  honorEmployerStanding: 2,
+  /** Public evidence reference length; the full token stays internal. */
+  refLength: 8,
+  states: Object.freeze(['open', 'declined', 'honored', 'betrayed', 'void']),
+});
+
+/**
  * NPC escape (issue #68): a fleeing hull runs for a real physical gate or the
  * station holding lane instead of open space. Tuning only — the contract,
  * scoring and phase machine live in game/npc-escape.js. No damage, repair or

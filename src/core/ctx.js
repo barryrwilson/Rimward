@@ -9,6 +9,18 @@ import { COMM_REPEAT_SECONDS } from '../game/state.js';
  * rechecks the exact live assignment for chart/API parity. Uses commLine only.
  * galaxyChart.close() invokes the existing close path after dossier opt-in.
  *
+ * Issue #240 dossier conflict: shadow.v3 is that same row plus ONE plain
+ * `shadow.conflict` {scenario, evidenceId, state, buyerPayQuoted}, on exactly
+ * one authored employer/buyer pairing (game/state.js DOSSIER_CONFLICT). No
+ * global save-version change, no new job family or slot, no new top-level
+ * world field and NO new ctx event: the choice reuses commLine plus the
+ * existing bounded jobState outcome row. stationDesk.peekShadow(job).conflict
+ * publishes the derived observation (evidenceRef is the first 8 token
+ * characters only; the full UUID and recordId stay internal), and
+ * stationDesk.chooseDossierBuyer({id, evidenceId, choice:'decline'|'betray'},
+ * expectedRow?) is the one shared mutation behind the destination Jobs
+ * buttons and stationAction alike. Older builds cannot read a v3 row.
+ *
  * RIMWARD web — shared context, THE cross-system contract. v2.
  *
  * Every system receives this object. Systems are src/systems/*.js (presentation

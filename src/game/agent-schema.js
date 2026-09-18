@@ -777,8 +777,12 @@ export const ROLE_STATUS = freeze({
     'demand/surrender/salvage/conversation cards: observe speaker, kind and displayed terms; resolve by listed intent, optionally bound to conversationId. hail on a locked hull whose targets.current.hail.state is willing (resolveBand bargaining/capitulate, not yielded) inside range opens the surrender card with the player as causer (hailOpened terms:true); the claim lasts only while that card is open',
   ),
   missions: role(
-    ['openService', 'acceptJob', 'abandonJob', 'chooseShadowDossier'],
-    'board offers docked; abandon accepted mining/trade/hunt/passenger/explore/espionage/war at Jobs for -1 posting-faction standing; active jobs observed in flight; jobState ring terminals',
+    ['openService', 'acceptJob', 'abandonJob', 'chooseShadowDossier', 'stationAction'],
+    'board offers docked; abandon accepted mining/trade/hunt/passenger/explore/espionage/war at Jobs for -1 posting-faction standing; active jobs observed in flight; jobState ring terminals. '
+    + 'Issue #240: a courier-shadow row may carry shadow.conflict (scenario, evidenceRef, state, buyerFaction/buyerStation, buyerPayQuoted, originalPay, canChoose, blockedReason, terms, termLines) — '
+    + 'a rival buyer for the COMPLETED dossier at the destination dock. Returning to the employer dock still files automatically and pays the earned tier; there is no new command for the rival. '
+    + 'Selling or declining uses the ordinary stationAction buttons in the destination Jobs service ("Sell dossier to ... / Decline ..."), which carry the dossier reference in their label; '
+    + 'read canChoose/blockedReason first, pass expect with the exact label, and expect one terminal jobState row (outcome betrayed with pay C, or delivered with the honoured total).',
   ),
   explorer: role(
     ['plotRoute', 'engageAutopilot', 'setControl', 'clearControl', 'pulse'],
