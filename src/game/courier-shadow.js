@@ -766,11 +766,17 @@ export function sanitizeShadowState(raw, job) {
   if (!v3 && Object.keys(raw).some((k) => !SHADOW_FIELDS.includes(k) && k !== 'deep')) return null;
   const { deep, conflict, ...basic } = raw;
   const base = sanitizeShadowV1({ ...basic, v: 1 }, job);
-  if (!base || !deep || typeof deep !== 'object' || Array.isArray(deep)
+  if (!base) return null;
+  // A v3 DEEP gets the same strict own-data check as the v3 root, and BEFORE a
+  // single deep property is read, so no symbol key, hidden key or getter is
+  // ever consulted. v2 keeps its existing enumerable-key rule byte-for-byte.
+  if (v3) {
+    if (!exactOwnKeys(deep, DEEP_FIELDS)) return null;
+  } else if (!deep || typeof deep !== 'object' || Array.isArray(deep)
     || ![Object.prototype, null].includes(Object.getPrototypeOf(deep))
     || Object.keys(deep).length !== DEEP_FIELDS.length
-    || Object.keys(deep).some((k) => !DEEP_FIELDS.includes(k))
-    || !DEEP_STATES.includes(deep.state)) return null;
+    || Object.keys(deep).some((k) => !DEEP_FIELDS.includes(k))) return null;
+  if (!DEEP_STATES.includes(deep.state)) return null;
   const seconds = boundedNumber(deep.observedSeconds, 0, COURIER_SHADOW.deepSeconds);
   if (seconds === null) return null;
   if (!['', 'exposed', 'withdrawn', 'target-lost'].includes(deep.closedReason)

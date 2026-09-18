@@ -673,6 +673,85 @@ assert.equal(viewLabels().some((l) => l.startsWith('Sell dossier')), false, 'and
 pass('stale, malformed, wrong-token, wrong-dock, wrong-service, expired and dead inputs all fail closed');
 
 // ---------------------------------------------------------------------------
+// 7a. Argument bags are exact OWN DATA: no symbol, hidden or accessor key
+// ---------------------------------------------------------------------------
+resetToReady();
+{
+  // `Object.keys` cannot see any of these three, and reading a getter would
+  // both run foreign code and let the value change between reads.
+  const base = () => ({ id: live.id, evidenceId: liveToken, choice: 'decline' });
+  for (const [why, make] of [
+    ['a symbol extra key', () => { const a = base(); a[Symbol('extra')] = 1; return a; }],
+    ['a non-enumerable extra key', () => {
+      const a = base(); Object.defineProperty(a, 'extra', { value: 1 }); return a;
+    }],
+    ['a missing key beside a symbol key', () => {
+      const a = base(); delete a.choice; a[Symbol('choice')] = 'decline'; return a;
+    }],
+  ]) {
+    const res = unchanged(() => desk.chooseDossierBuyer(make(), live), why);
+    assert.equal(res.token, 'invalid-args', `${why}: refused as invalid-args`);
+    assert.equal(live.shadow.conflict.state, 'open', `${why}: the conflict is untouched`);
+  }
+  // An accessor field is refused WITHOUT the getter ever running.
+  for (const field of ['id', 'evidenceId', 'choice']) {
+    let hits = 0;
+    const value = field === 'choice' ? 'decline' : field === 'id' ? live.id : liveToken;
+    const args = base();
+    delete args[field];
+    Object.defineProperty(args, field, { enumerable: true, configurable: true, get: () => { hits++; return value; } });
+    const res = unchanged(() => desk.chooseDossierBuyer(args, live), `an accessor ${field}`);
+    assert.equal(res.token, 'invalid-args', `an accessor ${field}: refused as invalid-args`);
+    assert.equal(hits, 0, `an accessor ${field}: its getter never ran`);
+    assert.equal(live.shadow.conflict.state, 'open', `an accessor ${field}: the conflict is untouched`);
+  }
+  // The ordinary bag still works, on the very same row.
+  const good = desk.chooseDossierBuyer(base(), live);
+  assert.equal(good.ok, true, 'a plain own-data bag is still accepted');
+  assert.equal(live.shadow.conflict.state, 'declined');
+}
+pass('buyer arguments are exact own primitives: symbol, hidden and accessor keys refuse before any read');
+
+// ---------------------------------------------------------------------------
+// 7c. The v3 DEEP stage gets the same strict own-data check
+// ---------------------------------------------------------------------------
+{
+  const deepRow = (mutate) => {
+    const row = job();
+    mutate(row.shadow.deep);
+    return row;
+  };
+  assert.equal(shadowConflictJobValid(job()), true, 'the plain v3 fixture is valid');
+  const hidden = deepRow((d) => { Object.defineProperty(d, 'extra', { value: 1 }); });
+  const symbolled = deepRow((d) => { d[Symbol('extra')] = 1; });
+  for (const [why, row] of [
+    ['a symbol extra deep key', symbolled],
+    ['a non-enumerable extra deep key', hidden],
+  ]) {
+    assert.equal(sanitizeShadowState(row.shadow, row), null, `${why} rejects the whole v3 row`);
+    assert.equal(shadowConflictJobValid(row), false, `${why} fails the late pass too`);
+  }
+  for (const field of ['state', 'observedSeconds', 'payQuoted', 'closedReason']) {
+    let hits = 0;
+    const row = job();
+    const value = row.shadow.deep[field];
+    delete row.shadow.deep[field];
+    Object.defineProperty(row.shadow.deep, field, {
+      enumerable: true, configurable: true, get: () => { hits++; return value; },
+    });
+    assert.equal(sanitizeShadowState(row.shadow, row), null, `an accessor deep ${field} rejects the row`);
+    assert.equal(shadowConflictJobValid(row), false, `an accessor deep ${field} fails the late pass`);
+    assert.equal(hits, 0, `an accessor deep ${field}: its getter never ran`);
+  }
+  // v1 and v2 keep their existing meaning byte-for-byte.
+  assert.deepEqual(sanitizeShadowState(clone(v2ready), job({ shadow: undefined })), v2ready,
+    'an ordinary v2 row is still accepted exactly as before');
+  assert.equal(sanitizeShadowState({ ...clone(v2ready), extra: 1 }, job({ shadow: undefined })), null,
+    'the v2 unknown-key rule is unchanged');
+}
+pass('a v3 deep with a symbol, hidden or accessor field is rejected before any property is read');
+
+// ---------------------------------------------------------------------------
 // 7b. Human / API parity: one closure, one label, one receipt
 // ---------------------------------------------------------------------------
 resetToReady();

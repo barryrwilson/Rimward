@@ -9147,24 +9147,39 @@ export function initStation(ctx) {
     };
     if (!args || typeof args !== 'object' || Array.isArray(args)) return refuse('invalid-args');
     if (![Object.prototype, null].includes(Object.getPrototypeOf(args))) return refuse('invalid-args');
-    const keys = Object.keys(args);
-    if (keys.length !== 3) return refuse('invalid-args');
-    for (const k of ['id', 'evidenceId', 'choice']) {
-      if (!Object.hasOwn(args, k) || typeof args[k] !== 'string' || !args[k]) return refuse('invalid-args');
+    // Shape FIRST, values second. `Object.keys` alone hides symbol keys,
+    // non-enumerable keys and accessors; a getter would run during validation
+    // and could return a different value each read. Reflect.ownKeys plus a data
+    // descriptor check closes all three BEFORE any value is read.
+    const fields = ['id', 'evidenceId', 'choice'];
+    const own = Reflect.ownKeys(args);
+    if (own.length !== fields.length) return refuse('invalid-args');
+    const taken = { __proto__: null };
+    for (const k of own) {
+      if (typeof k !== 'string' || !fields.includes(k)) return refuse('invalid-args');
+      const d = Object.getOwnPropertyDescriptor(args, k);
+      if (!d || !Object.hasOwn(d, 'value')) return refuse('invalid-args'); // an accessor is not data
+      taken[k] = d.value; // captured ONCE, from the descriptor
     }
-    if (args.choice !== 'decline' && args.choice !== 'betray') return refuse('invalid-args');
+    for (const k of fields) {
+      if (typeof taken[k] !== 'string' || !taken[k]) return refuse('invalid-args');
+    }
+    // Nothing below reads `args` again: a mutable or exotic bag cannot change
+    // under the checks that already passed.
+    const { id, evidenceId, choice } = taken;
+    if (choice !== 'decline' && choice !== 'betray') return refuse('invalid-args');
     const jobs = ctx.world.jobs;
-    const job = Array.isArray(jobs) ? jobs.find((row) => row && row.id === args.id) : null;
+    const job = Array.isArray(jobs) ? jobs.find((row) => row && row.id === id) : null;
     if (!job || (expectedRow && expectedRow !== job)) return refuse('not-accepted');
     const blocked = dossierBuyerBlocked(job);
     if (blocked) return refuse(blocked);
     const conflict = job.shadow.conflict;
-    if (conflict.evidenceId !== args.evidenceId) return refuse('wrong-evidence');
+    if (conflict.evidenceId !== evidenceId) return refuse('wrong-evidence');
     const buyerPay = conflict.buyerPayQuoted;
     if (!Number.isInteger(buyerPay) || buyerPay <= 0 || buyerPay > PAY_QUOTED_MAX) return refuse('invalid-contract');
     if (buyerPay <= job.shadow.deep.payQuoted) return refuse('invalid-contract');
 
-    if (args.choice === 'decline') {
+    if (choice === 'decline') {
       // The buyer closes permanently. No payment, standing, contact, evidence,
       // quote, target or deadline effect — the original contract is untouched.
       job.shadow = setShadowConflict(job.shadow, 'declined');
