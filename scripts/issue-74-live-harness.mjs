@@ -8,6 +8,9 @@ import {fileURLToPath} from 'node:url';
 export const repo=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 export const out=resolve(process.env.ISSUE74_OUT||join(repo,'out','issue-74-live'));
 export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+/** Origins this runner may select. Ids are src/game/state.js ORIGINS keys:
+ *  'greenhand' = Freehold Greenhand (default), 'drifter' = Rim Drifter. */
+export const LIVE_ORIGINS=['greenhand','drifter'];
 async function sourceHash(){const files=spawnSync('git',['ls-files','--cached','--others','--exclude-standard','src'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim().split(/\r?\n/).filter(Boolean).sort();const hash=createHash('sha256');for(const f of [...new Set(files)]){hash.update(f);hash.update(await readFile(join(repo,f)));}return hash.digest('hex');}
 async function port(){const s=createServer();await new Promise((r,j)=>{s.once('error',j);s.listen(0,'127.0.0.1',r);});const p=s.address().port;await new Promise(r=>s.close(r));return p;}
 async function stop(p){if(!p?.pid)return {started:false};if(p.exitCode!==null)return {pid:p.pid,exitCode:p.exitCode,exited:true};let error=null;try{p.kill('SIGTERM');}catch(e){error=String(e);}for(let i=0;i<50&&p.exitCode===null&&p.signalCode===null;i++)await sleep(100);return {pid:p.pid,exitCode:p.exitCode,signal:p.signalCode,exited:p.exitCode!==null||p.signalCode!==null,error};}
@@ -17,8 +20,12 @@ class CDP{
   send(method,params={}){const id=++this.id;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP timeout '+method));},Number(process.env.ISSUE74_CDP_TIMEOUT||120000));this.pending.set(id,{resolve,reject,timer});this.ws.send(JSON.stringify({id,method,params}));});}
   async eval(expression){const r=await this.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result?.value;}
 }
-export async function runLive(name,fn,{seed}={}){
+export async function runLive(name,fn,{seed,origin}={}){
   if(seed!==undefined&&(!Number.isInteger(seed)||seed<0||seed>0xffffffff))throw Error('Live seed must be an unsigned 32-bit integer');
+  // Rejected before any port, profile, Vite or Chrome exists: an unusable run
+  // must never reach a browser launch.
+  if(origin!==undefined&&(typeof origin!=='string'||!LIVE_ORIGINS.includes(origin)))throw Error('Live origin must be one of '+LIVE_ORIGINS.join(', '));
+  const originId=origin===undefined?'greenhand':origin;
   await mkdir(out,{recursive:true});const folder=join(out,name);await mkdir(folder,{recursive:true});
   const resumed=process.env.ISSUE74_RESUME_PROFILE?resolve(process.env.ISSUE74_RESUME_PROFILE):null;
   if(resumed&&!resumed.toLowerCase().startsWith((out+sep).toLowerCase()))throw Error('Resume profile must be inside the named issue evidence output');
@@ -50,7 +57,25 @@ export async function runLive(name,fn,{seed}={}){
     // rendering. Neither bound becomes an active-search-time measurement.
     const wait=async(pred,seconds,label,sample)=>{const began=Date.now(),end=began+Math.max(60000,seconds*4000);let s,startT;while(Date.now()<end){s=await observe();startT??=s.t;if(sample)await sample(s);if(pred(s))return s;if(s.t-startT>=seconds)break;await sleep(300);}throw Error('timeout '+label+' '+JSON.stringify({t:s?.t,worldElapsed:s?.t-startT,wallElapsed:(Date.now()-began)/1000,flags:s?.flags,ap:s?.autopilot}));};
     for(let i=0;i<160;i++){if(await c.eval('!!window.rimward'))break;await sleep(300);}
-    let s=await observe();if(s.session.phase==='title')await act('startGame');s=await observe();if(s.session.phase==='origin')await act('chooseOrigin',{id:'greenhand'});await wait(s=>s.session.phase==='playing',25,'playing');
+    let s=await observe();if(s.session.phase==='title')await act('startGame');s=await observe();
+    // `requested`/`chosen`/`accepted` are this run's ask and the act() receipt;
+    // `actual` is read from the running world once play starts, so it reports
+    // the origin the session is really on rather than the one asked for. A
+    // resumed profile skips the menu and keeps its own origin: that is not an
+    // error here, and callers that need a match (issue #234) check it
+    // themselves. observedSystem is where the ship actually booted.
+    const originRec={requested:originId,phaseAtChoice:s.session.phase,offered:null,chosen:null,accepted:false,actual:null,observedSystem:null};
+    result.origin=originRec;
+    if(s.session.phase==='origin'){
+      const offered=Array.isArray(s.session.origins)?s.session.origins.map(o=>o.id).filter(id=>typeof id==='string'):[];
+      originRec.offered=offered;
+      if(offered.length&&!offered.includes(originId))throw Error('Requested origin '+originId+' is not offered by the live menu '+JSON.stringify(offered));
+      const chosen=await act('chooseOrigin',{id:originId});
+      originRec.chosen=originId;originRec.accepted=chosen.ok===true;
+    }
+    await wait(s=>s.session.phase==='playing',25,'playing');
+    originRec.actual=await c.eval('window.__ctx?.world?.origin ?? null');
+    originRec.observedSystem=(await observe()).world?.currentSystem??null;
     result.graphics=await c.eval(`(()=>{const canvas=document.querySelector('canvas'),g=canvas?.getContext('webgl2');if(!g)return null;const e=g.getExtension('WEBGL_debug_renderer_info');return {renderer:e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER),vendor:e?g.getParameter(e.UNMASKED_VENDOR_WEBGL):g.getParameter(g.VENDOR)};})()`);console.log('BOOT',name,JSON.stringify(result.graphics));
     await fn({c,result,save,observe,act,shot,checkpoint,wait,folder});
     result.consoleErrors=c.console.filter(e=>['error','assert'].includes(e.type));result.exceptions=c.exceptions;
