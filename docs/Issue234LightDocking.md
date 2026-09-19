@@ -449,3 +449,126 @@ unchanged from `eadcca5` through the final commits. The focused suites remain
 11 PASS, and `CASE=all` passes: the exact recorded-scalar negative baseline
 replay, the 16 synthetic sensitivity fixtures (not physical proof), the bounded
 added-10s budget fixture, and the 36.5s physical control dock with no contacts.
+
+## Resumed diagnosis — 2026-09-19
+
+This follow-up starts at `7862dfc40e0129b0145d18db1adc51d4fa2a4247`.
+It changes diagnosis scripts only: no gameplay source, navigation tuning,
+collision policy, helm authority, or watchdog accounting is changed. The four
+historical failures remain unresolved unless explicitly reproduced below.
+
+### Greenhand queued route
+
+The unchanged enriched probe ran from the ordinary Greenhand light-hull origin
+at Freehold with public route and queued-dock commands, normal clocks, intact
+traffic and collision damage. Raw artifacts are local and untracked at
+`out/issue-234/resumed-run1/natural-planner/`; its execution log is
+`out/mission-234-resumed/natural-run1.log`.
+
+| Destination | First-attempt docking time | Retries / cancellations |
+| --- | --- | --- |
+| Veridian | 80.524s | 0 / 0 |
+| Freehold | 140.009s | 0 / 0 |
+| Hollow Reach | 224.119s | 0 / 0 |
+
+The flight capture lasted 235.2 wall seconds, with 869 flight samples and 3,164
+controller decisions. Capture PASS is distinct from gameplay completion; this
+run achieved both clean capture and all three destinations. Console errors,
+exceptions, debugger pauses, instrumentation errors, dropped decisions, and
+unknown nearby NPC speeds were all zero. Actual berth screenshots were
+inspected. The source SHA-256 was identical at both ends:
+`3226e763c8816250c4f6e419a76ac40d6b68032909ec2123df10a7e9a9149b6c`.
+Chrome and Vite exited, with both loopback listeners closed.
+
+This was not a contact-free route. Two ship contacts were recorded: t=84.621,
+speed 40.712, damage 0 while departing Veridian; and t=182.142, speed 79.897,
+damage 0 in Redmarch. The neighboring flight samples show route mode with the
+dock controller inactive. Neither was a dock-approach cancellation. The probe's
+`bodyHitsHarmful` label means the contact would fail the dock harmless-touch
+predicate; it does not mean positive damage occurred. These route contacts do
+not prove the cause of any original arrival failure.
+
+### Direct Rim Drifter coverage and probe correction
+
+The shared live runner now accepts an optional `origin` argument, retaining
+Greenhand by default. The issue probe accepts `ISSUE234_ORIGIN=drifter` and
+`ISSUE234_DOCK_MODE=direct`. It records the requested origin separately from
+the actual running world's origin; unexpected inputs fail before browser
+startup. The default queued command sequence and shared boot/timeouts remain
+unchanged.
+
+Direct mode waits for each natural jump to finish before issuing another public
+command. An ordinary unqueued route deliberately drops helm authority at each
+jump. The probe therefore records its initial public `nav.path`, waits for the
+expected next system with `gate.jumping === false`, and explicitly continues
+an intermediate hop only after verifying an intact shorter route, both helm
+flags down, route mode, and no cancellation reason. It never resumes merely
+because the ship stopped in the same system. At the final destination it waits
+for route-arrived status and a completed jump before issuing `approachDock`.
+One total wall deadline bounds the direct route; the overall flight budget and
+existing dock retry limits also remain in force.
+
+The initial direct attempt at harness commit
+`b39acbf0b079d521b93fbb08d894f0f42c68c309` failed capture correctly. At the jump
+midpoint the public route already said arrived and helm flags were down, but
+`gate.jumping` was still true. `approachDock` correctly refused the request;
+subsequent route commands were also refused while jumping. No approach was
+flown, so this is a probe-readiness failure, not product arrival evidence.
+It remains at `out/issue-234/resumed-run2/natural-planner/`. Independent QA also
+identified the need to continue ordinary intermediate hops explicitly.
+Correction commit `ce5373403aa590b24cb47f022f20b522fbd50d5f` addresses both probe
+errors and preserves the failed evidence.
+
+### Corrected Rim Drifter direct route
+
+The final run used `ce5373403aa590b24cb47f022f20b522fbd50d5f` and finished at
+`2026-09-19T19:00:48.395Z`. Artifacts are
+`out/issue-234/resumed-run3/natural-planner/`. The runtime itself confirmed
+origin `drifter`, class `light`, and starting system `redmarch`.
+
+| Destination | First-attempt docking time | Retries / cancellations |
+| --- | --- | --- |
+| Veridian | 38.983s | 0 / 0 |
+| Freehold | 100.897s | 0 / 0 |
+| Hollow Reach | 177.660s | 0 / 0 |
+
+All three direct approaches were accepted after completed jumps; none was
+queued. The route flew five hops with two explicit intermediate continuations.
+The three-hop final leg recorded completed arrivals at Veridian (120.046s),
+Redmarch (134.560s), and Hollow Reach (147.776s), with `jumping: false`, route
+mode, and an empty reason at each continuation. All three berths were reached
+on the first dock attempt. Capture PASS covers 687 flight samples and 2,994
+controller decisions over 184.2 wall seconds. Console errors, exceptions,
+debugger pauses, instrumentation errors, dropped decisions, and unknown nearby
+NPC speeds were zero. Freehold's docked screenshot was inspected.
+
+Two ship contacts occurred under route mode with the dock controller inactive:
+t=117.288 in Freehold, speed 77.790, damage 0; and t=135.120 in Redmarch,
+speed 27.078, damage 0. Neighboring samples recorded hull 100. These are
+separately classified route contacts, not arrival cancellations or evidence
+that the original impacts were fixed.
+
+The source hash matched the Greenhand run at both ends, and Chrome (10544) and
+Vite (1724) exited with both listeners closed. Six first-attempt docks across
+the two successful runs did not reproduce any remaining `blocked` or `impact`
+cancellation. No new gameplay cause was confirmed; no speculative gameplay fix
+or new product regression test was added. This is a bounded diagnosis result,
+not completion of issue #234.
+
+### Verification and limits
+
+Build and the unchanged `npm run test:boot` passed; coordinator logs are
+`out/mission-234-resumed/build.log` and `out/mission-234-resumed/boot.log`.
+Focused checks passed using the repository's existing CSS-stub loader:
+`issue-234-cruise-heading-credit-test` with `CASE=all`,
+`issue-221-freighter-dock-test`, `issue-201-arrival-dock-test`, and
+`dock-approach-test`. Their logs are `out/mission-234-resumed/*-verified.log`.
+An initial invocation without the required loader failed on the CSS extension;
+those setup-failure logs are retained separately and are not product failures.
+
+The natural samples remain bounded observations, not an exhaustive reliability
+claim or a replay of the original random trajectories. Decisions are sampled
+at roughly 10 Hz and flight state at 4 Hz, nearby NPC lists are truncated, and
+solar pose remains best-effort. No causal body or exact collision frame is
+inferred from absent data. No new gameplay regression has been demonstrated
+by either completed run; issue #234 remains open.

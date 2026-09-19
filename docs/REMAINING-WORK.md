@@ -116,7 +116,13 @@ natural live run at `9a46a8e8` docked 3 of 3 destinations with no `blocked` or
 `impact` cancellation and one harmless zero-damage touch. The broader #234
 arrival impacts and the remaining blocked cases stay under investigation:
 collision avoidance and blocked-approach reliability remain open, and the four
-original failures are unproven. Issue #234 is not complete; final verification,
+original failures are unproven. A bounded 2026-09-19 follow-up completed three
+Greenhand queued arrivals and three Rim Drifter direct arrivals on the first
+attempt, with no blocked/impact cancellation and no new gameplay cause proven.
+Four zero-damage contacts occurred separately under route autopilot. Diagnosis
+scripts now verify actual origin, completed jumps, and explicit intermediate
+hop continuation for direct routes; no gameplay source was changed. The four
+historical cases remain unresolved. Issue #234 is not complete; final verification,
 merge and deployment remain separate. See
 [diagnosis and evidence limits](Issue234LightDocking.md).
 
