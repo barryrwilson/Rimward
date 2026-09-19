@@ -43,6 +43,18 @@
  * harness, which is outside this issue's write set.
  *
  * Usage: node scripts/issue-234-natural-planner-probe.mjs
+ *
+ * Optional environment:
+ *   ISSUE234_ORIGIN     'greenhand' (default, Freehold Greenhand) or 'drifter'
+ *                       (Rim Drifter, which boots in redmarch). The id is
+ *                       handed to the shared harness, which picks it from the
+ *                       live origin menu and records requested vs actual.
+ *   ISSUE234_DOCK_MODE  'queued' (default) — approachDock is armed while the
+ *                       route is still flying, so the dock helm takes over at
+ *                       arrival; or 'direct' — approachDock is issued only
+ *                       AFTER the route autopilot has finished at the
+ *                       destination system. Both use public Agent API
+ *                       commands only; neither is labelled as the other.
  */
 
 import { resolve } from 'node:path';
@@ -53,6 +65,18 @@ process.env.ISSUE74_PORT ||= '5236';
 
 const VITE_PORT = Number(process.env.ISSUE74_PORT);
 const WALL_BUDGET_MS = Number(process.env.ISSUE234_BUDGET_MS || 11 * 60 * 1000);
+
+// Both knobs are validated here, before the harness opens a port or a browser.
+const ORIGIN_LABELS = { greenhand: 'Freehold Greenhand', drifter: 'Rim Drifter' };
+const ORIGIN = process.env.ISSUE234_ORIGIN || 'greenhand';
+if (!Object.hasOwn(ORIGIN_LABELS, ORIGIN)) {
+  throw Error(`ISSUE234_ORIGIN must be one of ${Object.keys(ORIGIN_LABELS).join(', ')} (got ${JSON.stringify(ORIGIN)})`);
+}
+const DOCK_MODES = ['queued', 'direct'];
+const DOCK_MODE = process.env.ISSUE234_DOCK_MODE || 'queued';
+if (!DOCK_MODES.includes(DOCK_MODE)) {
+  throw Error(`ISSUE234_DOCK_MODE must be one of ${DOCK_MODES.join(', ')} (got ${JSON.stringify(DOCK_MODE)})`);
+}
 
 const { runLive } = await import('./issue-74-live-harness.mjs');
 
@@ -515,8 +539,16 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
 
   result.fixture = false;
   result.natural = true;
-  result.method = 'Natural starter light hull, Freehold Greenhand origin. Public Agent API only: '
-    + 'undock, plotRoute, engageAutopilot, approachDock (queued dock), dock. Intact traffic, damage, '
+  result.requestedOrigin = ORIGIN;
+  result.dockMode = DOCK_MODE;
+  // The method line states what this run actually did, not what the default
+  // run does: a direct-mode run must never read as a queued-dock run.
+  result.method = `Natural starter light hull, ${ORIGIN_LABELS[ORIGIN]} origin. Public Agent API only: `
+    + (DOCK_MODE === 'direct'
+      ? 'undock, plotRoute, engageAutopilot, then an explicit approachDock issued only AFTER the route '
+        + 'autopilot has completed at the destination system (direct dock; nothing is queued), dock. '
+      : 'undock, plotRoute, engageAutopilot, approachDock (queued dock), dock. ')
+    + 'Intact traffic, damage, '
     + 'solar clearance and clocks. No teleport, no timer change, no fixture, no auto-reacquisition. '
     + 'Instrumentation is read-only: 0.25 s sampler with the real live-ship fields, a pass-through '
     + 'ctx.emit tap, and CDP conditional-breakpoint logpoints that read the dock controller frame and '
@@ -643,10 +675,12 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
     if (d.errors && d.errors.length) result.pageErrors.push(...d.errors);
   };
 
-  await checkpoint('boot-docked-freehold');
   const boot = await observe();
   result.startClass = result.instrument?.classKey ?? null;
   result.startSystem = boot.world.currentSystem;
+  // Origin as the runtime reports it, not as it was asked for.
+  result.startOrigin = result.origin?.actual ?? null;
+  await checkpoint(`boot-docked-${sysKey(result.startSystem) || 'unknown'}`);
 
   const leg = async (dest, label, maxRetries = 3) => {
     const legRec = {
@@ -688,9 +722,38 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
     if (!plotted.ok) return refused(plotted, 'plotRoute');
     const engaged = await say('engageAutopilot');
     if (!engaged.ok) return refused(engaged, 'engageAutopilot');
-    const queued = await say('approachDock');
-    legRec.queuedAccepted = queued.ok === true;
-    if (!queued.ok) return refused(queued, 'approachDock');
+    legRec.dockMode = DOCK_MODE;
+    if (DOCK_MODE === 'direct') {
+      // Nothing is queued. The berth is asked for only once the ROUTE helm has
+      // finished, read from the public observation alone: nav.status is
+      // 'arrived' with the ship in `dest` (src/game/nav.js:L335-L351,
+      // src/game/agent-observe.js navSnap) and neither the route flag nor the
+      // autopilot channel is still engaged (apChannel).
+      try {
+        const arrived = await wait(
+          (o) => sameSystem(o.world?.currentSystem, dest)
+            && o.nav?.status === 'arrived'
+            && o.nav?.autopilot !== true
+            && o.autopilot?.engaged !== true,
+          Math.min(240, Math.max(30, left() / 1000 - 30)),
+          `${label} route completes at ${dest}`, budgetGuard);
+        legRec.routeArrivedAtT = arrived.t;
+        legRec.routeArrivedSystem = arrived.world?.currentSystem ?? null;
+      } catch (e) {
+        legRec.failed = { step: 'route-arrival', timeout: String(e).slice(0, 300) };
+        await drain();
+        await checkpoint(`${label}-timeout-route-arrival`);
+        legRec.wallEndMs = Date.now() - wallStart;
+        return legRec;
+      }
+      const direct = await say('approachDock');
+      legRec.directAccepted = direct.ok === true;
+      if (!direct.ok) return refused(direct, 'approachDock');
+    } else {
+      const queued = await say('approachDock');
+      legRec.queuedAccepted = queued.ok === true;
+      if (!queued.ok) return refused(queued, 'approachDock');
+    }
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (left() < 45000) { legRec.abortedForBudget = true; break; }
@@ -743,11 +806,34 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
     return legRec;
   };
 
-  await leg('veridian', 'freehold-to-veridian');
-  if (left() > 90000) await leg('freehold', 'veridian-to-freehold');
-  else result.skipped = ['veridian-to-freehold'];
-  if (left() > 120000) await leg('hollowreach', 'freehold-to-hollowreach');
-  else result.skipped = [...(result.skipped || []), 'freehold-to-hollowreach'];
+  // The itinerary is unchanged — veridian, freehold, hollowreach — and so are
+  // its wall-budget gates. Only the leg LABELS follow the system the ship
+  // actually booted in. A target that is already the current system is not a
+  // flyable leg: nav.js writes status 'arrived' for dest === here, and
+  // actPlotRoute (src/systems/agent-api.js:L263-L280) accepts only 'plotted'
+  // or 'blocked', so such a leg would refuse. It is reordered out instead.
+  const PLAN = ['veridian', 'freehold', 'hollowreach'];
+  const BUDGET_GATE_MS = [0, 90000, 120000];
+  const order = [];
+  const pending = [...PLAN];
+  let from = result.startSystem;
+  while (pending.length) {
+    const i = pending.findIndex((d) => !sameSystem(d, from));
+    if (i < 0) break;
+    const dest = pending.splice(i, 1)[0];
+    order.push({ dest, label: `${sysKey(from) || 'start'}-to-${sysKey(dest)}` });
+    from = dest;
+  }
+  result.itinerary = order.map((o) => o.label);
+  if (pending.length) result.itineraryDropped = pending;
+
+  for (let i = 0; i < order.length; i++) {
+    if (i > 0 && left() <= BUDGET_GATE_MS[i]) {
+      result.skipped = [...(result.skipped || []), ...order.slice(i).map((o) => o.label)];
+      break;
+    }
+    await leg(order[i].dest, order[i].label);
+  }
 
   await drain();
   result.debuggerPauses = pauses;
@@ -761,8 +847,18 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
     }));
   const withV = result.trace.filter((r) => r.nearWithin300 > 0);
   result.summary = {
+    dockMode: DOCK_MODE,
+    origin: {
+      requested: ORIGIN,
+      actual: result.origin?.actual ?? null,
+      startSystem: result.startSystem,
+      startClass: result.startClass,
+    },
+    itinerary: result.itinerary,
     legsRun: result.legs.length,
     legsCompleted: result.legs.filter((l) => l.completed).length,
+    legsQueuedAccepted: result.legs.filter((l) => l.queuedAccepted === true).length,
+    legsDirectAccepted: result.legs.filter((l) => l.directAccepted === true).length,
     cancellations: cancels.length,
     impactCancellations: cancels.filter((x) => x.reason === 'impact').length,
     blockedCancellations: cancels.filter((x) => x.reason === 'blocked').length,
@@ -804,6 +900,26 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
   ];
   const failures = [];
   if (pauses > 0) failures.push(`the page was paused ${pauses} time(s) by instrumentation`);
+  // The run must be able to prove which origin and which dock method it flew.
+  if (result.origin?.actual !== ORIGIN) {
+    failures.push(`origin '${ORIGIN}' was requested but the runtime reported `
+      + `${JSON.stringify(result.origin?.actual ?? null)}`);
+  }
+  if (DOCK_MODE === 'direct') {
+    // A direct run that carries a queued receipt, or that never proved the
+    // route had finished before the berth was asked for, is mislabelled
+    // evidence; these gates only apply to direct mode, so the default queued
+    // run is unchanged.
+    const mislabelled = result.legs.filter((l) => Object.hasOwn(l, 'queuedAccepted'));
+    if (mislabelled.length) {
+      failures.push(`${mislabelled.length} leg(s) recorded a queued dock receipt in direct mode`);
+    }
+    for (const l of result.legs) {
+      if (l.failed) failures.push(`direct leg '${l.label}' failed at ${l.failed.step}`);
+      else if (l.directAccepted !== true) failures.push(`direct leg '${l.label}' never had an accepted approachDock`);
+      else if (!Number.isFinite(l.routeArrivedAtT)) failures.push(`direct leg '${l.label}' has no route-arrival evidence`);
+    }
+  }
   if (result.pageErrors.length) {
     failures.push(`page instrumentation raised ${result.pageErrors.length} error(s): `
       + result.pageErrors.slice(0, 3).join(' | '));
@@ -853,4 +969,4 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
     throw Error('CAPTURE FAILED — this run is not usable as evidence:\n  - '
       + failures.join('\n  - '));
   }
-});
+}, { origin: ORIGIN });
