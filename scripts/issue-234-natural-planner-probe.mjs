@@ -53,8 +53,13 @@
  *                       route is still flying, so the dock helm takes over at
  *                       arrival; or 'direct' — approachDock is issued only
  *                       AFTER the route autopilot has finished at the
- *                       destination system. Both use public Agent API
- *                       commands only; neither is labelled as the other.
+ *                       destination system. Direct mode flies the route one
+ *                       hop at a time, re-engaging the helm with an explicit
+ *                       public engageAutopilot at each intermediate system,
+ *                       because an unqueued route releases the helm at every
+ *                       jump (src/game/nav.js:L321-L364). Both use public
+ *                       Agent API commands only; neither is labelled as the
+ *                       other.
  */
 
 import { resolve } from 'node:path';
@@ -545,8 +550,10 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
   // run does: a direct-mode run must never read as a queued-dock run.
   result.method = `Natural starter light hull, ${ORIGIN_LABELS[ORIGIN]} origin. Public Agent API only: `
     + (DOCK_MODE === 'direct'
-      ? 'undock, plotRoute, engageAutopilot, then an explicit approachDock issued only AFTER the route '
-        + 'autopilot has completed at the destination system (direct dock; nothing is queued), dock. '
+      ? 'undock, plotRoute, engageAutopilot, then one further explicit engageAutopilot per intermediate '
+        + 'jump (an unqueued route releases the helm at every hop), then an explicit approachDock issued '
+        + 'only AFTER the route autopilot has completed at the destination system (direct dock; nothing '
+        + 'is queued), dock. '
       : 'undock, plotRoute, engageAutopilot, approachDock (queued dock), dock. ')
     + 'Intact traffic, damage, '
     + 'solar clearance and clocks. No teleport, no timer change, no fixture, no auto-reacquisition. '
@@ -680,7 +687,7 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
   result.startSystem = boot.world.currentSystem;
   // Origin as the runtime reports it, not as it was asked for.
   result.startOrigin = result.origin?.actual ?? null;
-  await checkpoint(`boot-docked-${sysKey(result.startSystem) || 'unknown'}`);
+  await checkpoint(`boot-${sysKey(result.startSystem) || 'unknown'}`);
 
   const leg = async (dest, label, maxRetries = 3) => {
     const legRec = {
@@ -724,27 +731,146 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
     if (!engaged.ok) return refused(engaged, 'engageAutopilot');
     legRec.dockMode = DOCK_MODE;
     if (DOCK_MODE === 'direct') {
-      // Nothing is queued. The berth is asked for only once the ROUTE helm has
-      // finished, read from the public observation alone: nav.status is
-      // 'arrived' with the ship in `dest` (src/game/nav.js:L335-L351,
-      // src/game/agent-observe.js navSnap) and neither the route flag nor the
-      // autopilot channel is still engaged (apChannel).
-      try {
-        const arrived = await wait(
-          (o) => sameSystem(o.world?.currentSystem, dest)
-            && o.nav?.status === 'arrived'
-            && o.nav?.autopilot !== true
-            && o.autopilot?.engaged !== true,
-          Math.min(240, Math.max(30, left() / 1000 - 30)),
-          `${label} route completes at ${dest}`, budgetGuard);
-        legRec.routeArrivedAtT = arrived.t;
-        legRec.routeArrivedSystem = arrived.world?.currentSystem ?? null;
-      } catch (e) {
-        legRec.failed = { step: 'route-arrival', timeout: String(e).slice(0, 300) };
+      // Nothing is queued, and an UNQUEUED route releases the helm at EVERY
+      // jump, not only at the destination: recalcOnLoad keeps the lease across
+      // a jump only while a queued dock intent is bound to this very
+      // destination (src/game/nav.js:L321-L364, `keepLease`). With nothing
+      // queued the flag is cleared on each arrival, flyTick then sees
+      // `!flyingFlag(ctx)` and idles the channel (src/game/autopilot.js:L1539
+      // -L1546). So a multi-hop direct route stops dead in the first
+      // intermediate system, and a single wait on the FINAL destination hangs
+      // until the wall budget dies. Each hop is therefore waited for on its
+      // own and the helm is re-engaged with an explicit public
+      // `engageAutopilot`, whose receipt is recorded like every other command.
+      //
+      // The hop plan is read from `nav.path`, NOT from `nav.remaining`: the
+      // runtime `remaining` field is a jump COUNT and navSnap filters the
+      // snapshot for strings, so the public `nav.remaining` is always `[]`
+      // (src/game/agent-observe.js:L690-L701). `nav.path[0]` is always the
+      // system the route is currently in (nav.js writes `bfsPath(here, dest)`).
+      //
+      // nav.status can read 'arrived' with the autopilot already disengaged
+      // while the jump gate animation is still running, and approachDock
+      // refuses in that window (src/game/autopilot.js:L482). The public
+      // gate.jumping flag (src/game/agent-observe.js:L1135) is the gate: it
+      // must be observed as an explicit false, not merely absent. The same
+      // gate is applied at every hop, so a re-engage is never issued mid-jump.
+      const bail = async (step, detail) => {
+        legRec.failed = { step, ...detail };
+        console.log('LEG DIRECT BAIL', label, step, JSON.stringify(legRec.failed).slice(0, 700));
         await drain();
-        await checkpoint(`${label}-timeout-route-arrival`);
+        await checkpoint(`${label}-${step}`);
         legRec.wallEndMs = Date.now() - wallStart;
         return legRec;
+      };
+
+      // The public route as it stands immediately after plot + engage. This is
+      // the only place the hop count comes from; nothing is assumed about the
+      // map topology.
+      const plan = await observe();
+      const initialPath = Array.isArray(plan.nav?.path) ? plan.nav.path.slice() : [];
+      legRec.routePath = initialPath;
+      legRec.hops = [];
+      if (initialPath.length < 2
+        || !sameSystem(initialPath[0], plan.world?.currentSystem)
+        || !sameSystem(initialPath[initialPath.length - 1], dest)) {
+        return bail('route-path', {
+          path: initialPath, here: plan.world?.currentSystem ?? null, dest,
+          navStatus: plan.nav?.status ?? null,
+        });
+      }
+
+      // ONE budget for the whole direct arrival, shared by every hop. A fresh
+      // 240 s per hop would let a four-jump route spend four full budgets and
+      // silently overrun the wall bound this probe is gated on.
+      const arrivalBudgetS = Math.min(240, Math.max(30, left() / 1000 - 30));
+      const arrivalDeadline = Date.now() + arrivalBudgetS * 1000;
+      legRec.arrivalBudgetS = +arrivalBudgetS.toFixed(1);
+      const hopSeconds = () => Math.max(5, Math.min(
+        arrivalBudgetS, (arrivalDeadline - Date.now()) / 1000, left() / 1000 - 30));
+
+      const maxJumps = initialPath.length - 1;
+      let expectedPath = initialPath;
+      for (let hop = 1; hop <= maxJumps; hop++) {
+        const from = expectedPath[0];
+        const next = expectedPath[1];
+        const finalHop = hop === maxJumps;
+        let landed;
+        try {
+          landed = await wait(
+            // The system must have CHANGED to exactly the hop this route
+            // planned, with the gate animation finished, the destination
+            // untouched, both helm flags down, and nothing queued behind us.
+            (o) => sameSystem(o.world?.currentSystem, next)
+              && o.gate?.jumping === false
+              && sameSystem(o.nav?.dest, dest)
+              && o.nav?.autopilot === false
+              && o.autopilot?.engaged === false
+              && !o.autopilot?.queuedDock,
+            hopSeconds(),
+            `${label} hop ${hop}/${maxJumps} ${sysKey(from)}->${sysKey(next)}`,
+            () => {
+              budgetGuard();
+              if (Date.now() >= arrivalDeadline) {
+                throw Error('direct route arrival wall budget exhausted');
+              }
+            });
+        } catch (e) {
+          return bail(`route-hop-${hop}`, {
+            from, to: next, finalHop, timeout: String(e).slice(0, 300),
+          });
+        }
+        const hopRec = {
+          hop, final: finalHop, t: landed.t,
+          from, expected: next,
+          system: landed.world?.currentSystem ?? null,
+          status: landed.nav?.status ?? null,
+          path: Array.isArray(landed.nav?.path) ? landed.nav.path.slice() : null,
+          mode: landed.autopilot?.mode ?? null,
+          reason: landed.autopilot?.reason ?? null,
+          jumping: landed.gate?.jumping ?? null,
+        };
+        legRec.hops.push(hopRec);
+        console.log('HOP', label, hop + '/' + maxJumps, JSON.stringify(hopRec));
+
+        if (finalHop) {
+          // Final arrival: the route is done, so nav.status must say so and
+          // both helm flags must already be down (the wait proved that).
+          if (hopRec.status !== 'arrived') {
+            return bail('route-arrival-status', { hop, observed: hopRec });
+          }
+          legRec.routeArrivedAtT = landed.t;
+          legRec.routeArrivedSystem = hopRec.system;
+          legRec.routeArrivedJumping = hopRec.jumping;
+          break;
+        }
+
+        // Intermediate hop. Re-engaging is only safe when the route is intact
+        // and genuinely one jump shorter; anything else is a route mutation or
+        // a real cancellation, and this fails closed rather than pushing the
+        // helm back on over the top of it.
+        const nextPath = hopRec.path;
+        const bad = [];
+        if (hopRec.status !== 'plotted') bad.push(`nav.status is ${JSON.stringify(hopRec.status)}, not 'plotted'`);
+        if (sameSystem(hopRec.system, from)) bad.push('the ship is still in the system it started the hop in');
+        if (!Array.isArray(nextPath) || nextPath.length < 2) {
+          bad.push(`nav.path is ${JSON.stringify(nextPath)}`);
+        } else {
+          if (!sameSystem(nextPath[0], hopRec.system)) bad.push('nav.path[0] is not the current system');
+          if (!sameSystem(nextPath[nextPath.length - 1], dest)) bad.push('nav.path does not end at the destination');
+          if (nextPath.length >= expectedPath.length) bad.push('nav.path did not get strictly shorter');
+        }
+        if (hopRec.mode !== 'route') bad.push(`autopilot.mode is ${JSON.stringify(hopRec.mode)}, not 'route'`);
+        if (hopRec.reason) bad.push(`autopilot carries cancellation reason ${JSON.stringify(hopRec.reason)}`);
+        if (bad.length) return bail(`route-hop-${hop}-guard`, { hop, reasons: bad, observed: hopRec });
+
+        const again = await say('engageAutopilot');
+        hopRec.reengaged = again.ok === true;
+        if (!again.ok) return refused(again, `engageAutopilot-hop-${hop}`);
+        expectedPath = nextPath;
+      }
+      if (!Number.isFinite(legRec.routeArrivedAtT)) {
+        return bail('route-arrival', { hops: legRec.hops.length, maxJumps, dest });
       }
       const direct = await say('approachDock');
       legRec.directAccepted = direct.ok === true;
@@ -859,6 +985,11 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
     legsCompleted: result.legs.filter((l) => l.completed).length,
     legsQueuedAccepted: result.legs.filter((l) => l.queuedAccepted === true).length,
     legsDirectAccepted: result.legs.filter((l) => l.directAccepted === true).length,
+    // Direct mode only: how many route hops were flown, and how many of them
+    // needed an explicit re-engage because the unqueued helm came off at a jump.
+    directHopsFlown: result.legs.reduce((n, l) => n + (l.hops?.length ?? 0), 0),
+    directReengages: result.legs.reduce(
+      (n, l) => n + (l.hops?.filter((h) => h.reengaged === true).length ?? 0), 0),
     cancellations: cancels.length,
     impactCancellations: cancels.filter((x) => x.reason === 'impact').length,
     blockedCancellations: cancels.filter((x) => x.reason === 'blocked').length,
@@ -918,6 +1049,14 @@ await runLive('natural-planner', async ({ c, result, act, observe, wait, checkpo
       if (l.failed) failures.push(`direct leg '${l.label}' failed at ${l.failed.step}`);
       else if (l.directAccepted !== true) failures.push(`direct leg '${l.label}' never had an accepted approachDock`);
       else if (!Number.isFinite(l.routeArrivedAtT)) failures.push(`direct leg '${l.label}' has no route-arrival evidence`);
+      // The berth was asked for the instant the route finished, so the run
+      // must be able to prove the jump gate was idle at that instant. An
+      // absent or true flag means approachDock was issued in the window where
+      // it refuses, and the leg is not evidence about the dock planner.
+      else if (l.routeArrivedJumping !== false) {
+        failures.push(`direct leg '${l.label}' recorded gate.jumping=`
+          + `${JSON.stringify(l.routeArrivedJumping ?? null)} at route arrival, not an explicit false`);
+      }
     }
   }
   if (result.pageErrors.length) {
