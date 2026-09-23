@@ -11,7 +11,7 @@ import { JUMP, U } from './state.js';
 import { applyAvoidBias, appendSunBody } from '../systems/npc.js';
 import { resolveNavGatePos, navSystemName } from '../systems/nav-guidance.js';
 import { lookupLiveNavHopKind } from '../systems/gate.js';
-import { planApPath, throttleForPath, keepRadius, sphereChordHit } from './ap-path.js';
+import { planApPath, throttleForPath, keepRadius, sphereChordHit, AP_KEEP_PAD } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
 import { collectDockCruiseBodies, dockCruiseExitAim, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
 import { agentPulse, agentCombatActive, agentClearFullStop, commandFullStop, markAgentHelm, agentControlStatus } from '../systems/controls.js';
@@ -618,6 +618,11 @@ export function queueApproachDock(ctx) {
   if (!authoredStation(ctx, dest)) return 'no-station';
   queueDockAt(dest);
   return '';
+}
+
+/** Issue #234: true while a gate/hub ring's dock keep sphere holds the hull. */
+function ringHolds(p, b) {
+  return Math.hypot(p.x - b.x, p.y - b.y, p.z - b.z) <= b.r + b.y0 + PHY.PLAYER_RADIUS + AP_KEEP_PAD;
 }
 
 /**
@@ -1257,16 +1262,17 @@ function dockTick(ctx) {
   // Once outside the bore, a station behind/beside the arrival gate must
   // route around its outer rim instead of turning cruise back through it.
   // This private bag is rebuilt each tick; other gate/route policies keep
-  // treating the opening as traversable.
-  if (dockArrivalGate !== null) {
-    for (let i = 0; i < _apBodies.count; i++) {
-      const b = _apBodies.items[i];
-      if (b.kind === 'gate' && b.id === dockArrivalGate) {
-        b.kind = 'dock-gate';
-        b.r += b.y0;
-        break;
-      }
-    }
+  // treating the opening as traversable. Issue #234: every other ring is
+  // solid here too. No berth needs a bore, and hub junctions sit near the
+  // Redmarch and Hollow Reach approaches, where stage and cruise clipped their
+  // tubes. A ring whose keep sphere already holds the hull stays open, because
+  // a keep-out around the hull pins the planner.
+  for (let i = 0; i < _apBodies.count; i++) {
+    const b = _apBodies.items[i];
+    if (b.kind !== 'gate') continue;
+    if (b.id !== dockArrivalGate && ringHolds(p, b)) continue;
+    b.kind = 'dock-gate';
+    b.r += b.y0;
   }
 
   if (ap.phase === 'stage' || ap.phase === 'cruise') {

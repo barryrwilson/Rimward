@@ -122,7 +122,14 @@ attempt, with no blocked/impact cancellation and no new gameplay cause proven.
 Four zero-damage contacts occurred separately under route autopilot. Diagnosis
 scripts now verify actual origin, completed jumps, and explicit intermediate
 hop continuation for direct routes; no gameplay source was changed. The four
-historical cases remain unresolved. Issue #234 is not complete; final verification,
+historical cases remain unresolved. A 2026-09-22 follow-up places both
+historical impacts at an arrival gate bore: the jump arrival faces the ship
+back at the gate, and the creep floor carries it into the zone where fleeing
+NPCs charge. That fix needs an arrival-hold design and is split into #255. The
+same work fixed hub junction rings being invisible to the dock planner
+(Redmarch and Hollow Reach approaches; census hub contacts 11 to 0), pinned by
+`issue-234-hub-ring-dock-test`. The two blocked cases stay unreproduced.
+Issue #234 is not complete; final verification,
 merge and deployment remain separate. See
 [diagnosis and evidence limits](Issue234LightDocking.md).
 
