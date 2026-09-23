@@ -164,8 +164,11 @@ export function initJump(ctx) {
       lookTarget.copy(shipObj.position).sub(towardCenter);
       shipObj.lookAt(lookTarget);
     }
-    ctx.ship.velocity.set(0, 0, 0);
-    // Idle arrival holds station until the player or a helm moves her.
+    // Arrive with a slow forward momentum (JUMP.arrivalDrift, into the
+    // system); the hold keeps it until the player or a helm moves her.
+    if (shipObj) ctx.ship.velocity.set(0, 0, -1).applyQuaternion(shipObj.quaternion)
+      .multiplyScalar(JUMP.arrivalDrift);
+    else ctx.ship.velocity.set(0, 0, 0);
     ctx.ship.postJumpHold = true;
 
     ctx.world.jumpGraceUntil = ctx.world.time + JUMP.graceSeconds;
