@@ -10,8 +10,9 @@
  * Real boot, real gate jumps, real ship flight. Checks:
  *  - every authored arrival (Freehold -> Veridian -> Redmarch -> Hollow Reach)
  *    ends the jump with the nose on the system centre and the hold set;
- *  - the arrival carries JUMP.arrivalDrift (5 u/s) forward, and 30 s idle
- *    keeps that drift into the system, away from the bore, hitting nothing;
+ *  - the arrival carries JUMP.arrivalDrift (5 u/s) forward, out of the
+ *    JUMP.zone, then settles to rest: 60 s idle stays there, away from the
+ *    bore and the sun, hitting nothing;
  *  - player throttle releases the hold, and the normal creep floor returns;
  *  - the hold is transient: the save snapshot does not carry it.
  *
@@ -69,7 +70,8 @@ function checkArrival(to) {
   const arrivalSpeed = ctx.ship.speed;
   assert.ok(Math.abs(arrivalSpeed - JUMP.arrivalDrift) < 0.1,
     `${from}->${to}: arrives at ${arrivalSpeed.toFixed(2)} u/s`);
-  // Idle arrival: a slow drift into the system, no creep floor, no bore.
+  // Idle arrival: a slow drift out of the jump zone, then rest. No creep
+  // floor, no bore, and no drift on toward the sun.
   for (const live of [...ctx.ships]) binds.removeLiveShip(ctx, live);
   ctx.ships.length = 0;
   hits = [];
@@ -78,15 +80,19 @@ function checkArrival(to) {
   tick(30 * 60);
   const moved = obj.position.distanceTo(start);
   const inward = centreRange0 - obj.position.length();
-  assert.ok(Math.abs(moved - 30 * JUMP.arrivalDrift) < 3,
-    `${from}->${to}: idle arrival drifted ${moved.toFixed(2)}u in 30 s`);
-  assert.ok(inward > moved - 3, `${from}->${to}: drift heads into the system (${inward.toFixed(1)}u inward)`);
-  assert.ok(Math.abs(ctx.ship.speed - JUMP.arrivalDrift) < 0.1,
-    `${from}->${to}: idle speed stays ${ctx.ship.speed.toFixed(2)} u/s`);
+  assert.ok(ctx.gate.inZone === false, `${from}->${to}: drift leaves the jump zone`);
+  assert.ok(moved < JUMP.zone - JUMP.arrivalOffset + 5,
+    `${from}->${to}: idle arrival drifted ${moved.toFixed(2)}u, then stopped`);
+  assert.ok(inward > moved - 1, `${from}->${to}: drift heads into the system (${inward.toFixed(1)}u inward)`);
+  assert.ok(ctx.ship.speed < 0.1, `${from}->${to}: idle arrival rests (${ctx.ship.speed.toFixed(2)} u/s)`);
+  start.copy(obj.position);
+  tick(30 * 60);
+  const rested = obj.position.distanceTo(start);
+  assert.ok(rested < 0.5, `${from}->${to}: idle arrival stays at rest (${rested.toFixed(2)}u in 30 s)`);
   assert.deepEqual(hits, [], `${from}->${to}: idle arrival hit nothing`);
   const gate = SYSTEMS[to].gates.find(g => g.to === from) ?? SYSTEMS[to].gates[0];
   const gateRange = obj.position.distanceTo(new THREE.Vector3(...gate.position));
-  assert.ok(gateRange >= JUMP.arrivalOffset - 1, `${from}->${to}: hull stays clear of the bore (${gateRange.toFixed(1)}u)`);
+  assert.ok(gateRange > JUMP.zone, `${from}->${to}: hull rests outside the jump zone (${gateRange.toFixed(1)}u)`);
   console.log('ISSUE255 ARRIVAL', JSON.stringify({ from, to, facing: +facing.toFixed(4),
     arrivalSpeed: +arrivalSpeed.toFixed(2), moved: +moved.toFixed(1), gateRange: +gateRange.toFixed(1) }));
 }

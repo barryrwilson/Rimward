@@ -1023,7 +1023,8 @@ export function initShip(ctx) {
         const steerX = holdApJump ? 0 : (apOn && ap ? ap.yaw : (amOn ? am.yaw : (fleeOn ? flee.yaw : input.steerX)));
         const throttleSet = holdApJump ? 0 : (apOn && ap ? ap.throttle : (amOn ? am.throttle : (fleeOn ? flee.throttle : input.throttle)));
         // Jump arrival hold (#255): an unhelmed idle arrival keeps a slow
-        // JUMP.arrivalDrift forward momentum instead of the creep floor.
+        // JUMP.arrivalDrift forward momentum out of the jump zone, then
+        // rests, instead of the creep floor.
         // Released by player thrust or burn, or by a helm once the jump ends.
         const helmOn = apOn || amOn || fleeOn;
         if (ship.postJumpHold && ((helmOn && !ctx.gate.jumping)
@@ -1057,7 +1058,11 @@ export function initShip(ctx) {
           const apIdle = apOn && ap && ap.mode === 'dock' && ap.idle === true
             && throttleSet < 0.02;
           const helmIdle = amIdle || apIdle;
-          const arrivalFwd = arrivalIdle ? JUMP.arrivalDrift : 0;
+          // The drift only carries her out of the jump zone. Past it she
+          // settles to rest, still held off the creep floor, so an idle
+          // arrival never drifts on into the sun.
+          const arrivalFwd = arrivalIdle && (ctx.gate.jumping || ctx.gate.inZone)
+            ? JUMP.arrivalDrift : 0;
           const rockMatch = (ctx.flags.matchSpeed || amOn) && rockLock && lockPosOk && velOk;
           if (rockMatch) {
             // Hold the rock's world vector. Scalar-along-nose misses a slide.
@@ -1105,7 +1110,7 @@ export function initShip(ctx) {
           // Artificial drag at (near) zero throttle: settle in ~stopTime
           // instead of drifting forever (§5.1, §5.3 light row).
           // Rock MATCH: damping would bleed the hold back to world rest.
-          if (throttleSet < 0.02 && !rockMatch && !arrivalIdle) {
+          if (throttleSet < 0.02 && !rockMatch && !(arrivalFwd > 0)) {
             ship.velocity.multiplyScalar(Math.exp(-shipCfg.damping * dt));
           }
         }

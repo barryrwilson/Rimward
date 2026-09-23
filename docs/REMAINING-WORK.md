@@ -127,7 +127,9 @@ historical impacts at an arrival gate bore: the jump arrival faces the ship
 back at the gate, and the creep floor carries it into the zone where fleeing
 NPCs charge. That fix needs an arrival-hold design and is split into #255
 (fixed 2026-09-23: arrivals face the system centre and an idle arrival holds
-station until the player throttles or a helm takes over). The
+station until the player throttles or a helm takes over; a later change
+adds a 5 u/s forward drift that carries an idle arrival out of the 60u jump
+zone, where it rests, so it never drifts on into the sun). The
 same work fixed hub junction rings being invisible to the dock planner
 (Redmarch and Hollow Reach approaches; census hub contacts 11 to 0), pinned by
 `issue-234-hub-ring-dock-test`. The two blocked cases stay unreproduced.
