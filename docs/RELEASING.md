@@ -5,7 +5,7 @@ v0.1.0. It does not deploy or change a hosted environment.
 
 ## Prerequisites
 
-- Node.js 22 and PowerShell 7.
+- Node.js 24.14.1 (pinned in `.nvmrc`) and PowerShell 7.
 - Git and GitHub CLI authenticated for `barryrwilson/Rimward`.
 - A clean `master` worktree with `origin/master` fetched.
 - No existing tag or GitHub Release for the version being published.

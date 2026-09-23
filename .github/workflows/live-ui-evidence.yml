@@ -36,10 +36,10 @@ jobs:
           persist-credentials: false
 
       # The probe uses the global WebSocket, which Node enables by default
-      # from 22. The other CI jobs stay on 20.
+      # from 22. Every workflow uses the version pinned in .nvmrc.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci

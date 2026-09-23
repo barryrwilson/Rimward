@@ -6,7 +6,7 @@ exploration, ship ownership, and agent-driven play in a persistent world.
 
 ## Run locally
 
-Requirements: Node.js 20 or newer.
+Requirements: Node.js 24.14.1, pinned in `.nvmrc` (the same version CI and releases use).
 
 ```bash
 npm ci
@@ -53,7 +53,7 @@ root; the generated build uses root-absolute `/assets/` URLs. Opening
 `dist/index.html` through `file://` or mounting it only below a URL subpath is
 not a supported v0.1.0 distribution mode.
 
-See [the release procedure](docs/RELEASING.md) for the exact Node 22 commands,
+See [the release procedure](docs/RELEASING.md) for the exact Node 24 commands,
 validation gates, publication checklist, and immutable replacement policy.
 Release notes and known limitations are maintained in [CHANGELOG.md](CHANGELOG.md).
 
