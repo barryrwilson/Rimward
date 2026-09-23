@@ -774,6 +774,7 @@ export const JUMP = {
   zone: 60, // activation range from gate
   chargeTime: 2.5, // s of tunnel/fade before arrival
   arrivalOffset: 50, // u past the destination gate toward system center
+  arrivalDrift: 5, // u/s forward momentum an idle arrival keeps (#255 hold)
   graceSeconds: 60, // no hostile intent on arrival or new-game start (covers a gate hop)
   saveOnJump: true, // like dock/undock autosave §4.4
 };

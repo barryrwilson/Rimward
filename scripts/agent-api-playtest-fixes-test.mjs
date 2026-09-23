@@ -29,6 +29,7 @@ const checks = [
   ['stationaryCruisePadExit', 'issue-168-cruise-pad-exit-test.mjs', { STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-cruise-pad-exit','gate') }],
   ['cruiseExitGeometry', 'issue-168-cruise-exit-geometry-test.mjs', { STAGE_RUNTIME: root, STAGE_OUT: join(root,'out','issue-168-cruise-exit-geometry','gate') }],
   ['stageHoldNearStation', 'issue-261-stage-hold-dock-test.mjs'],
+  ['idleArrivalRests', 'issue-255-arrival-hold-test.mjs'],
   ['rawSteering', 'issue-103-throttle-observability-test.mjs'],
   ['deskAndHaulQuotes', 'issue-170-desk-test.mjs'],
   ['rawBurnerDockHandoff', 'issue-171-burner-test.mjs'],

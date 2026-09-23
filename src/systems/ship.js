@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createShipState, U, POWER } from '../game/state.js';
+import { createShipState, U, POWER, JUMP } from '../game/state.js';
 import { hoverTurnRateFor } from '../game/flight-feel.js';
 import { PHY } from '../game/physics.js';
 import { collectBodies, resolveMover } from '../game/collision.js';
@@ -1022,8 +1022,10 @@ export function initShip(ctx) {
         const steerY = holdApJump ? 0 : (apOn && ap ? ap.pitch : (amOn ? am.pitch : (fleeOn ? flee.pitch : input.steerY)));
         const steerX = holdApJump ? 0 : (apOn && ap ? ap.yaw : (amOn ? am.yaw : (fleeOn ? flee.yaw : input.steerX)));
         const throttleSet = holdApJump ? 0 : (apOn && ap ? ap.throttle : (amOn ? am.throttle : (fleeOn ? flee.throttle : input.throttle)));
-        // Jump arrival hold (#255): released by player thrust or burn, or by
-        // a helm once the jump ends. Only an unhelmed idle ship is held.
+        // Jump arrival hold (#255): an unhelmed idle arrival keeps a slow
+        // JUMP.arrivalDrift forward momentum out of the jump zone, then
+        // rests, instead of the creep floor.
+        // Released by player thrust or burn, or by a helm once the jump ends.
         const helmOn = apOn || amOn || fleeOn;
         if (ship.postJumpHold && ((helmOn && !ctx.gate.jumping)
           || throttleSet >= 0.02 || ship.burnerActive)) ship.postJumpHold = false;
@@ -1055,13 +1057,18 @@ export function initShip(ctx) {
           const amIdle = amOn && throttleSet < 0.02;
           const apIdle = apOn && ap && ap.mode === 'dock' && ap.idle === true
             && throttleSet < 0.02;
-          const helmIdle = amIdle || apIdle || arrivalIdle;
+          const helmIdle = amIdle || apIdle;
+          // The drift only carries her out of the jump zone. Past it she
+          // settles to rest, still held off the creep floor, so an idle
+          // arrival never drifts on into the sun.
+          const arrivalFwd = arrivalIdle && (ctx.gate.jumping || ctx.gate.inZone)
+            ? JUMP.arrivalDrift : 0;
           const rockMatch = (ctx.flags.matchSpeed || amOn) && rockLock && lockPosOk && velOk;
           if (rockMatch) {
             // Hold the rock's world vector. Scalar-along-nose misses a slide.
             // Creep/throttle/strafe ride in the rock rest frame; idle holds.
             const relFwd = (input.fullStop || helmIdle || throttleEff < 0.02)
-              ? 0
+              ? (input.fullStop || helmIdle ? 0 : arrivalFwd)
               : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
                 ctx.bio.speedFactor *
                 burnMult;
@@ -1081,7 +1088,9 @@ export function initShip(ctx) {
             } else {
               fwdSpeed = (input.fullStop || helmIdle)
                 ? 0
-                : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
+                : arrivalIdle
+                  ? arrivalFwd
+                  : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
                   ctx.bio.speedFactor *
                   burnMult;
             }
@@ -1101,7 +1110,7 @@ export function initShip(ctx) {
           // Artificial drag at (near) zero throttle: settle in ~stopTime
           // instead of drifting forever (§5.1, §5.3 light row).
           // Rock MATCH: damping would bleed the hold back to world rest.
-          if (throttleSet < 0.02 && !rockMatch) {
+          if (throttleSet < 0.02 && !rockMatch && !(arrivalFwd > 0)) {
             ship.velocity.multiplyScalar(Math.exp(-shipCfg.damping * dt));
           }
         }
