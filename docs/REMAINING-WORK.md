@@ -105,37 +105,20 @@ is claimed; the everyday checkout remains unchanged.
 
 ## Light-hull arrival diagnosis and recovery guidance — #234
 
-Partial candidate only: impact and blocked-approach messages now tell the pilot
-to wait for clearance or steer clear, then retry the approach. The distinct
-reason tokens and cancellation behavior remain intact. A natural browser route
-reproduced ship/gate impacts and repeated blocked approaches with traffic and
-safety checks enabled; the recovery wording does not fix those arrival failures.
-One class is now traced and fixed: the cruise turn-progress defect that
-cancelled `blocked` while a light hull was turning back onto a clear line. A
-natural live run at `9a46a8e8` docked 3 of 3 destinations with no `blocked` or
-`impact` cancellation and one harmless zero-damage touch. The broader #234
-arrival impacts and the remaining blocked cases stay under investigation:
-collision avoidance and blocked-approach reliability remain open, and the four
-original failures are unproven. A bounded 2026-09-19 follow-up completed three
-Greenhand queued arrivals and three Rim Drifter direct arrivals on the first
-attempt, with no blocked/impact cancellation and no new gameplay cause proven.
-Four zero-damage contacts occurred separately under route autopilot. Diagnosis
-scripts now verify actual origin, completed jumps, and explicit intermediate
-hop continuation for direct routes; no gameplay source was changed. The four
-historical cases remain unresolved. A 2026-09-22 follow-up places both
-historical impacts at an arrival gate bore: the jump arrival faces the ship
-back at the gate, and the creep floor carries it into the zone where fleeing
-NPCs charge. That fix needs an arrival-hold design and is split into #255
-(fixed 2026-09-23: arrivals face the system centre and an idle arrival holds
-station until the player throttles or a helm takes over; a later change
-adds a 5 u/s forward drift that carries an idle arrival out of the 60u jump
-zone, where it rests, so it never drifts on into the sun). The
-same work fixed hub junction rings being invisible to the dock planner
-(Redmarch and Hollow Reach approaches; census hub contacts 11 to 0), pinned by
-`issue-234-hub-ring-dock-test`. The two blocked cases stay unreproduced.
-Issue #234 is not complete; final verification,
-merge and deployment remain separate. See
-[diagnosis and evidence limits](Issue234LightDocking.md).
+Closed by the owner on 2026-09-23 as not planned; not complete. The issue had
+no measurable finish line, and each fix moved failures between classes. Merged
+work: recovery wording for `impact` and `blocked`, the cruise turn-progress
+fix, hub junction rings solid to the dock planner, and the child issues #255
+(arrival faces the system and holds; later a 5 u/s drift out of the jump
+zone), #258 (route dock test traffic isolated) and #261 (stage leg after a
+traffic hold).
+
+Census at `227ad8c` (seeds 1-8, 94 legs): 90 docked, 76 on the first attempt,
+11 `impact` cancellations, 4 damaging contacts, and 22 `blocked` cancellations
+on 9 legs. 9 of the 22 `blocked` had no hull within 120u. A suspected planner
+pin at the sun keep sphere (seed 5 leg 7, seed 7 leg 8) is not proved. The
+four original playtest failures stay unreproduced. The owner will file narrow
+issues if necessary. See [diagnosis and evidence limits](Issue234LightDocking.md).
 
 ## Collected spy intel status — #235
 
