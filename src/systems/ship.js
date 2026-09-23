@@ -776,6 +776,7 @@ export function initShip(ctx) {
    * re-align window, and the match-speed flag. Idempotent.
    */
   function parkForBerth() {
+    ship.postJumpHold = false;
     ship.velocity.set(0, 0, 0);
     ship.speed = 0;
     ship.driftActive = false;
@@ -1021,6 +1022,12 @@ export function initShip(ctx) {
         const steerY = holdApJump ? 0 : (apOn && ap ? ap.pitch : (amOn ? am.pitch : (fleeOn ? flee.pitch : input.steerY)));
         const steerX = holdApJump ? 0 : (apOn && ap ? ap.yaw : (amOn ? am.yaw : (fleeOn ? flee.yaw : input.steerX)));
         const throttleSet = holdApJump ? 0 : (apOn && ap ? ap.throttle : (amOn ? am.throttle : (fleeOn ? flee.throttle : input.throttle)));
+        // Jump arrival hold (#255): released by player thrust or burn, or by
+        // a helm once the jump ends. Only an unhelmed idle ship is held.
+        const helmOn = apOn || amOn || fleeOn;
+        if (ship.postJumpHold && ((helmOn && !ctx.gate.jumping)
+          || throttleSet >= 0.02 || ship.burnerActive)) ship.postJumpHold = false;
+        const arrivalIdle = ship.postJumpHold === true && !helmOn;
         if (steerY) root.rotateX(steerY * rs);
         if (steerX) root.rotateY(-steerX * rs);
         if (!apOn && !amOn && !fleeOn && input.roll) root.rotateZ(input.roll * rs);
@@ -1048,7 +1055,7 @@ export function initShip(ctx) {
           const amIdle = amOn && throttleSet < 0.02;
           const apIdle = apOn && ap && ap.mode === 'dock' && ap.idle === true
             && throttleSet < 0.02;
-          const helmIdle = amIdle || apIdle;
+          const helmIdle = amIdle || apIdle || arrivalIdle;
           const rockMatch = (ctx.flags.matchSpeed || amOn) && rockLock && lockPosOk && velOk;
           if (rockMatch) {
             // Hold the rock's world vector. Scalar-along-nose misses a slide.

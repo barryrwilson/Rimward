@@ -1476,6 +1476,7 @@ function sanitizeRestored(ctx) {
     so.quaternion.identity();
     ctx.ship.velocity.set(0, 0, 0);
     ctx.ship.speed = 0;
+    ctx.ship.postJumpHold = false;
   }
   if (!Array.isArray(ctx.cargo)) ctx.cargo = [];
   const cargo = sanitizeCargoList(ctx.cargo);
@@ -1709,6 +1710,7 @@ export function restore(ctx, snap) {
     ctx.ship.object.quaternion.fromArray(snap.ship.quaternion);
     ctx.ship.velocity.set(0, 0, 0);
     ctx.ship.speed = 0;
+    ctx.ship.postJumpHold = false;
   }
   // Announce the system swap so station/solar/asteroid/world modules rebuild
   // into the restored system (consumed via lastEvents next frame). Covers
@@ -1761,6 +1763,7 @@ function freshStart(ctx) {
     ctx.ship.object.quaternion.identity();
     ctx.ship.velocity.set(0, 0, 0);
     ctx.ship.speed = 0;
+    ctx.ship.postJumpHold = false;
   }
   // Death always returns you to Freehold Drift — the Compact's berth is home.
   ctx.world.currentSystem = 'freehold';
