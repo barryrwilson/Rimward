@@ -73,6 +73,7 @@
     "test:refusal-tokens": "node --import ./scripts/with-css-stub.mjs scripts/issue-118-refusal-tokens-test.mjs",
     "test:attacker-identity": "node --import ./scripts/with-css-stub.mjs scripts/issue-117-attacker-identity-test.mjs",
     "test:nearby-rows": "node --import ./scripts/with-css-stub.mjs scripts/issue-116-nearby-rows-test.mjs",
+    "test:current-bearing": "node --import ./scripts/with-css-stub.mjs scripts/issue-266-current-bearing-test.mjs",
     "test:agent-hardening": "node scripts/agent-api-hardening-test.mjs",
     "test:agent-playtest-fixes": "node scripts/agent-api-playtest-fixes-test.mjs",
     "test:agent-cruise": "node --import ./scripts/with-css-stub.mjs scripts/issue-168-cruise-test.mjs",
