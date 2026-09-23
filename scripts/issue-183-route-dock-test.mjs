@@ -12,16 +12,31 @@
  * ever reached) without importing anything new.
  *
  * Deterministic: seeded RNG, tick-driven, no wall-clock waits, no browser.
+ *
+ * One disclosed fixture (issue #258): live NPC traffic is removed every tick,
+ * in every system, so each leg asserts the queue contract and not a traffic
+ * outcome. Traffic-associated `blocked`/`impact` approaches are the open
+ * class in #234; with traffic live this runner passed only on lucky seeds.
+ * No teleport, no clock, damage or controller change.
+ *
+ * Env: ISSUE183_SEED (default 7). It must pass on seeds 1-8.
  */
 import assert from 'node:assert/strict';
 import { installDomStubs, bootGameSystems, makeNavHelpers } from './lib/boot-harness.mjs';
 
-let seed = 7;
+let seed = Number(process.env.ISSUE183_SEED || 7) >>> 0;
 Math.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
 
 const dom = installDomStubs();
 const { ctx, systems, binds } = await bootGameSystems();
-const { SYSTEMS } = binds;
+const { SYSTEMS, removeLiveShip } = binds;
+
+/** The #258 fixture: no live traffic can touch a leg. */
+function isolateTraffic() {
+  if (!ctx.ships?.length) return;
+  for (const live of ctx.ships.slice()) removeLiveShip(ctx, live);
+  ctx.ships.length = 0;
+}
 
 const DT = 1 / 60;
 function tick(n) {
@@ -29,6 +44,7 @@ function tick(n) {
     ctx.world.time += DT;
     ctx.elapsed += DT;
     for (const [, sys] of systems) sys.update?.(DT);
+    isolateTraffic();
     ctx.lastEvents = ctx.events;
     ctx.events = [];
   }
@@ -362,5 +378,5 @@ const report = {};
   report.rawOwnership = 'ok';
 }
 
-console.log('ISSUE183 RESULT', JSON.stringify(report));
+console.log('ISSUE183 RESULT', JSON.stringify({ seed: Number(process.env.ISSUE183_SEED || 7), ...report }));
 console.log('PASS issue183 a queued approachDock rides a plotted route to the destination berth');

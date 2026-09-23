@@ -753,6 +753,7 @@ pose, contacts and cancellations; `ISSUE234_TRACE_LEG` prints one leg per tick.
 - The two historical `blocked` cases and the live Hollow Reach stage `blocked`
   are traffic-associated and unreproduced as a defect.
 - Arrival facing and the gate-bore exposure: #255.
+- `issue-183-route-dock-test` seed fragility: #258 isolates its traffic.
 - The census seed 1 arrival-ring scrape depends on #255; seed 8 is untraced.
 - Route-helm hub contacts (live run, Redmarch) are outside this change.
 - Issue #234 stays open.
