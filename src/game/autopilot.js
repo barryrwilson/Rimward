@@ -957,6 +957,42 @@ function bodyBlocksStageChord(p, stage, kind) {
   return false;
 }
 
+function stageChordClear(p, aim, bodies) {
+  if (!Number.isFinite(aim.ax) || !Number.isFinite(aim.ay) || !Number.isFinite(aim.az)) return false;
+  for (let i = 0; i < bodies.count; i++) {
+    const body = bodies.items[i];
+    const keep = keepRadius(body, PHY.PLAYER_RADIUS);
+    if (!(keep > 0)) continue;
+    const hit = sphereChordHit(p.x, p.y, p.z, aim.ax, aim.ay, aim.az,
+      body.x, body.y, body.z, keep);
+    const outward = (p.x - body.x) * (aim.ax - p.x)
+      + (p.y - body.y) * (aim.ay - p.y) + (p.z - body.z) * (aim.az - p.z) >= 0;
+    if (hit.hit && (!hit.inside || !outward)) return false;
+  }
+  return true;
+}
+
+function stageDetourLength(p, plan, stage) {
+  return Math.hypot(plan.ax - p.x, plan.ay - p.y, plan.az - p.z)
+    + Math.hypot(stage.x - plan.ax, stage.y - plan.ay, stage.z - plan.az);
+}
+
+function stageNoseHitsStation(p, fwd) {
+  const count = _apBodies.count || 0;
+  for (let i = 0; i < count; i++) {
+    const body = _apBodies.items[i];
+    if (!body || body.kind !== 'station') continue;
+    const hard = body.r + PHY.PLAYER_RADIUS;
+    const range = Math.hypot(p.x - body.x, p.y - body.y, p.z - body.z);
+    if (!(hard > 0) || !Number.isFinite(range) || range <= hard) continue;
+    const hit = sphereChordHit(p.x, p.y, p.z,
+      p.x + fwd.x * range, p.y + fwd.y * range, p.z + fwd.z * range,
+      body.x, body.y, body.z, hard);
+    if (hit.hit) return true;
+  }
+  return false;
+}
+
 function aimDockShip(obj, ap, target, classKey) {
   if (!obj || !finitePose(obj.position) || !obj.quaternion || !finitePose(target)) return null;
   const q = obj.quaternion;
@@ -1299,7 +1335,7 @@ function dockTick(ctx) {
       Math.max(speed, Number.isFinite(plannedSpeed) ? plannedSpeed : speed),
       acceleration, _cruiseBodies, ctx.asteroids?.list, ctx.world?.time, stageTransit);
     if (!planningBodies) { disengage(ctx, 'stale'); return; }
-    const planned = planApPath({
+    const stagePlan = {
       px: p.x, py: p.y, pz: p.z,
       gx: points.stage.x, gy: points.stage.y, gz: points.stage.z,
       hx: _fwd.x, hy: _fwd.y, hz: _fwd.z,
@@ -1311,7 +1347,8 @@ function dockTick(ctx) {
       speed,
       zone: DOCK_STAGE_ARRIVE,
       sideHint: pathSign,
-    });
+    };
+    let planned = planApPath(stagePlan);
     if (!planned.ok || !Number.isFinite(planned.ax)
       || !Number.isFinite(planned.ay) || !Number.isFinite(planned.az)) {
       disengage(ctx, 'blocked');
@@ -1320,6 +1357,18 @@ function dockTick(ctx) {
     pathSign = planned.sign || pathSign;
     const stationBlocked = bodyBlocksStageChord(p, points.stage, 'station');
     if (planned.hold === 'detour' && stationBlocked && !dockDetourValid && ap.phase !== 'cruise') {
+      // Issue #261: the side hint only carries the cruise side, so a hull
+      // stopped by a traffic hold can latch the far way round. At creep it
+      // can turn either way: latch the shorter clear side to the stage point.
+      // A faster hull keeps its side, because its momentum already commits it.
+      const other = speed <= ctx.config.ship.creep
+        ? planApPath({ ...stagePlan, sideHint: -(planned.sign || 1) }) : null;
+      if (other && other.ok && other.hold === 'detour' && other.sign !== planned.sign
+        && stageChordClear(p, other, stagePlan.bodies)
+        && stageDetourLength(p, other, points.stage) < stageDetourLength(p, planned, points.stage)) {
+        planned = other;
+        pathSign = other.sign || pathSign;
+      }
       dockDetourValid = true;
       dockDetourX = planned.ax;
       dockDetourY = planned.ay;
@@ -1459,7 +1508,10 @@ function dockTick(ctx) {
     // and the 10 s blocked watch fires before it reaches +X. A clear chord
     // from live spawn must idle-turn first: spawn faces the station, and
     // thrusting off-axis dives past the pad at 30 u/s.
-    const needTurn = !aligned && (!detouring || trafficDetour);
+    // Issue #261: except when the nose points into the station body. A
+    // traffic hold can stop the hull near the station, nose-in, and creep
+    // while turning onto the detour then carries it into the hull.
+    const needTurn = !aligned && (!detouring || trafficDetour || stageNoseHitsStation(p, _fwd));
     const stageOvershot = !dockRecovering
       && !detouring
       && Number.isFinite(dockBestRange)

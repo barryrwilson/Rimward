@@ -476,6 +476,18 @@ NPC traffic every tick as one disclosed fixture, takes `ISSUE183_SEED`
 and 8 on `master` at `0d45aa9f`. No assertion or boot-harness line changed.
 Traffic-associated dock failures stay with #234.
 
+Issue [#261](https://github.com/barryrwilson/Rimward/issues/261): after a
+traffic hold stopped the light hull 79u from the Veridian station, the stage
+leg hit the station at 27 u/s and cancelled as `impact`. Two faults caused it.
+The detour side came from the cruise side hint, so the helm latched the far
+way round; and a station detour kept creep while the nose still pointed at the
+station. Now a hull at creep or slower latches the shorter clear side to the
+stage point, and a stage detour turns in place while its nose is on the station
+body. `issue-261-stage-hold-dock-test` pins it as a checked child of
+`npm run test:boot` and fails on the pre-fix source. With the #255 arrival
+drift applied, `issue-168-cruise-test` seeds 1-12 have no station impact; seed
+12 still ends `blocked`, as on the base code (the #234 class).
+
 Issue [#201](https://github.com/barryrwilson/Rimward/issues/201) is implemented
 on `codex/issue-201-arrival-dock`. Only queued handovers that would start a
 cruise leg enter the gate-departure guard: align while stopped, then clear the
