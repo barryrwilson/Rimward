@@ -5,6 +5,9 @@ Status: partial progress. The missing recovery instruction is addressed
 a specific accounting defect and fixed (sections from "Traced cause" onward).
 Arrival collision avoidance and the four original cases remain unresolved. This
 document does not claim that issue #234's overall arrival outcome is complete.
+The 2026-09-22 section at the end places both historical impacts at an arrival
+gate bore, splits the arrival-facing cause into #255, and fixes a second
+gate-related cause: hub rings were invisible to the dock planner.
 
 ## Scope and evidence identity
 
@@ -572,3 +575,184 @@ at roughly 10 Hz and flight state at 4 Hz, nearby NPC lists are truncated, and
 solar pose remains best-effort. No causal body or exact collision frame is
 inferred from absent data. No new gameplay regression has been demonstrated
 by either completed run; issue #234 remains open.
+
+## Gate-bore arrivals and hub rings — 2026-09-22
+
+This follow-up starts at `c5bc8f44eb5f23537139af92386ba67d0dcbc99a`. It
+characterizes both historical `impact` cases, confirms two gate-related causes,
+fixes one of them, and splits the other into
+[#255](https://github.com/barryrwilson/Rimward/issues/255).
+
+### Historical impacts: the arrival bore
+
+Re-reading the original spy capture (`C:/Projects/WebSim/out/spy-playtest-20260917/`)
+places both historical impacts at an arrival gate:
+
+| Case | Arrival | Contact | Pose when failure was observed | Gate traffic |
+| --- | --- | --- | --- | --- |
+| Hollow Reach impact | route `arrive` at t=752.540 | t=753.982, ship, speed 10.10, damage 3.54 | `[0.0, 69.1, 1086.4]`, 13.6u from the Redmarch gate `[0, 70, 1100]` | Tithe Pick and Freighter hollowreach-1 escaped through that gate at t=755.2 |
+| Freehold impact | during the t=992.8 queued route | not retained | `[0.7, 58.4, -883.0]`, 17.0u from the Veridian gate `[0, 60, -900]` | Cinder Halvard and Pit Lamp escaped through that gate at t=1009.9 and t=1011.6 |
+
+The 1.44s gap between arrival and the Hollow Reach contact matches the jump
+tail: the route helm releases at the midpoint swap, and collision checks resume
+1.25s later when `gate.jumping` clears.
+
+### Cause 1 (split to #255): the arrival faces the gate
+
+`midpointSwap` in `src/game/jump.js` places the hull 50u past the gate and calls
+`shipObj.lookAt(0, 0, 0)` "to face into the new system". `Object3D.lookAt`
+points +Z at its target and the nose is -Z, so the nose points back at the gate
+(`fwd · toCentre = -1.000` on every measured arrival). With no helm during the
+jump tail, the creep floor carries the hull about 33u back to 13-17u from the
+gate centre. That is inside the 60u `JUMP.zone` where fleeing NPCs hold at
+`ESCAPE.holdSpeed` and charge `JUMP.chargeTime`. A dock helm then turns about
+180° in place (4-12s observed) before it can leave.
+
+A correction of the facing alone was built and measured, then reverted:
+
+| Census, 8 seeds x 12 legs | Legs | Near-gate resumes | Contacts at resume |
+| --- | --- | --- | --- |
+| Pre-fix code | 74 | 70 of 70 | 9 |
+| Facing corrected | 96 | 0 | 1 |
+
+It also makes the creep floor carry an unattended arrival toward the sun at the
+system centre (about 28s). `issue-183-route-dock-test` then fails because its
+idle hull pins itself against the Veridian sun. `input.fullStop` is not an
+arrival hold, because it also zeroes helm thrust. The fix needs an explicit
+arrival-hold design, so it moved to #255 and no facing change ships here.
+
+### Cause 2 (fixed): hub rings were invisible to the dock planner
+
+`ap-path.js` gives gate bodies no keep radius so route flight can use their
+bores. The dock helm made only its own inbound arrival gate solid. Hub junction
+rings stayed invisible, and two authored arrivals pass one:
+
+- Redmarch from Veridian: hub `[140, 60, -720]`, on the stage chord.
+- Hollow Reach from Redmarch: hub `[-80, 65, 950]`, 23u off the arrival-to-station line.
+
+Evidence before the fix:
+
+- Natural Rim Drifter queued browser run (`ISSUE234_ORIGIN=drifter`, queued,
+  `out/issue-234/resumed-run4/natural-planner/`, capture PASS): in Hollow Reach
+  the hull waited 12s about 13u from the arrival gate while turning, then hit
+  the hub ring at 114.4 u/s under the dock cruise helm, 40.0 damage, two
+  `impact` cancellations; docked after explicit retries.
+- Census on the pre-fix code: 11 hub-ring contacts in 3 of 8 seeds (damage 9.1,
+  12.5 and 26.8), in both stage and cruise, often with no traffic nearby.
+- Clear-lane control: the pre-fix Redmarch leg touches the hub at 23.7 u/s and
+  cancels `impact` on every seed tried (1-6).
+
+The fix, `src/game/autopilot.js` only: the dock helm's private body bag now
+makes every gate and hub ring solid, using the same `dock-gate` conversion the
+inbound arrival gate already used. One exemption, found by measurement: a ring
+whose keep sphere already holds the hull stays open. Making it solid put the
+planner inside a keep-out and produced `blocked` cancellations in five focused
+suites. It adds no export, persistent field, tuning value, key or gauge. Route
+flight, traffic, collision, solar clearance, watchdog and freighter logic are
+unchanged.
+
+Two stricter variants were built and rejected. Keeping every other ring open
+while the hull is still beside its arrival ring removed one census failure
+(below) but broke `issue-183-route-dock-test` and `issue-172-dock-sun-test`:
+the later hub detour changed the side the planner took around the sun. Keeping
+entered rings solid pinned the planner in Hollow Reach (`blocked`).
+
+### Census with the fix
+
+Same census, same 8 seeds. The random trajectories diverge between code
+versions, so this is not a paired comparison.
+
+| Measure | Pre-fix | Fixed |
+| --- | --- | --- |
+| Legs flown | 74 | 88 |
+| Hub-ring contacts | 11 | 0 |
+| Arrival-ring contacts | 0 | 8, in 2 legs |
+| Legs docked | 69 | 76 |
+| Route legs that never reached the destination in 240s | 0 | 8, in seeds 1 and 3 |
+
+The two arrival-ring legs failed after four `impact` retries each:
+
+- Seed 1, Redmarch from Veridian. Traced: the hull sat 13u in front of the open
+  arrival ring with its nose on the gate (cause 1). The now-solid Redmarch hub
+  moved the stage aim to a lateral tangent in the ring plane, and the turning
+  hull scraped the ring from inside, 25.4u from its centre. This depends on the
+  #255 facing: with the facing corrected the hull resumes 83u out, outside the
+  ring's keep sphere.
+- Seed 8, Redmarch from Hollow Reach, 21s after arrival in cruise, beside a
+  freighter; the Redmarch hub is about 1000u away. Not traced.
+
+The 8 route stalls happened with the dock helm not engaged (no arrival was
+recorded) and were not investigated. The pre-fix census ended 4 seeds early on
+`plotRoute` refusals, so it flew fewer legs in which a stall could appear.
+### Regression pin
+
+`scripts/issue-234-hub-ring-dock-test.mjs` flies real queued routes into
+Redmarch and then Hollow Reach with the starter light hull. Its one disclosed
+fixture removes live traffic in the destination system. It asserts no gate
+contact, no cancellation, a berth, and tube clearance measured with the
+`torusOverlap` geometry.
+
+| Leg | Pre-fix | Fixed (seeds 7, 1, 4) |
+| --- | --- | --- |
+| Redmarch | `impact` at 23.7 u/s, tube clearance 2.4u (contact) | docked, tube clearance 32.5-33.7u |
+| Hollow Reach | not reached (the test stops at Redmarch) | docked, tube clearance 7.0u |
+
+Stated limit: in the Hollow Reach clear lane the planner reacts to the hub at
+cruise speed and the hull's turn lags its aim, so it passes 36.8u from the hub
+centre, inside the 46.6u keep sphere, with 7.0u of tube clearance. Once inside,
+the exemption opens that ring. Tracking lag at cruise speed is existing
+behaviour for every static keep sphere and is not changed here.
+
+### Live run on the fix
+
+Natural Rim Drifter queued browser run on the final `autopilot.js`
+(`ISSUE234_ORIGIN=drifter`, queued, `out/issue-234/final-live/natural-planner/`,
+untracked). Runtime `src` SHA-256
+`9cdb12140bb3b94af79f90e1b2ecd60ccae123dbf85a24774d534c63fa3501b7` was the same
+at start and end. Public Agent API commands only; traffic, collision damage,
+solar clearance and clocks intact. Capture PASS, 260 wall seconds; console
+errors, exceptions, debugger pauses, instrumentation errors and dropped
+decisions were all zero. Chrome and Vite exited and port 5236 was closed.
+
+| Measure | Result |
+| --- | --- |
+| Destinations | 3 of 3 docked (Veridian, Freehold, Hollow Reach) |
+| `impact` cancellations | 0 (the pre-fix run on the same setup had 2) |
+| `blocked` cancellations | 1: Hollow Reach stage, 100u from the station, 10.0s stall, hunting pirate at 155u; the explicit retry docked |
+| Closest approach to the Hollow Reach hub | 91.2u from its centre |
+
+The one contact happened before the first jump. It was under the **route**
+helm leaving Redmarch, against the Redmarch hub at 76.0 u/s, 0 damage. Route
+flight deliberately ignores gate bodies and is not changed here; this is a
+separate observation, not evidence about the dock fix. The Hollow Reach
+berth screenshot was inspected. This is one natural sample, not a reliability
+claim, and it does not re-fly the original trajectories.
+
+### Verification
+
+On the final `autopilot.js` (SHA-256 checked unchanged across the run):
+`npm run build` PASS; unchanged `npm run test:boot` PASS; and PASS for
+`issue-234-hub-ring-dock-test`, `issue-183-route-dock-test`,
+`issue-201-arrival-dock-test`, `issue-221-freighter-dock-test`,
+`dock-approach-test`, `issue-172-dock-sun-test`, all seven `issue-168` cruise,
+stage, detour and exit suites, `issue-168-hold-traffic-test` in all four
+`HOLD_CASE` modes, `issue-68-gate-escape-test`, `issue-182-arrival-cargo-test`,
+`issue-176-two-gate-jobs-test`, and `issue-234-cruise-heading-credit-test`
+with `CASE=all`. Logs are under `out/issue-234/reg5/` (untracked).
+
+One earlier boot failure (`AP_KEEP_PAD is not defined`) came from a run that
+overlapped a mid-edit state of the file; it is not a product result. The
+rerun on restored code passed.
+
+`scripts/issue-234-gate-arrival-census.mjs` is diagnosis only. It flies public
+route and queued-dock legs headless with traffic intact and records arrival
+pose, contacts and cancellations; `ISSUE234_TRACE_LEG` prints one leg per tick.
+
+### Still open
+
+- The two historical `blocked` cases and the live Hollow Reach stage `blocked`
+  are traffic-associated and unreproduced as a defect.
+- Arrival facing and the gate-bore exposure: #255.
+- The census seed 1 arrival-ring scrape depends on #255; seed 8 is untraced.
+- Route-helm hub contacts (live run, Redmarch) are outside this change.
+- Issue #234 stays open.
