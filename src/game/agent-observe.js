@@ -140,21 +140,32 @@ function targetRow(kind, id, name, range) {
   };
 }
 
-function describeTarget(ctx, origin, t, extended) {
+// Issue #266: the locked row carries the same ship-local bearing as its
+// nearby row (x right, y up, nose -z) for the kinds nearby rows bear.
+function withBearing(row, origin, p, quat) {
+  if (origin && p && quat) {
+    const b = localDir(quat, p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]);
+    if (b) row.bearing = b;
+  }
+  return row;
+}
+
+function describeTarget(ctx, origin, t, extended, quat) {
   if (!t || typeof t !== 'object') return null;
   if (isLiveShip(t)) {
     const p = posOf(t.object);
     const row = targetRow('ship', own(t, 'id'), shipDisplayName(ctx, t), rangeTo(origin, p));
     if (extended) shipCondition(ctx, t, row);
     else shipPublicCondition(ctx, t, row);
-    return row;
+    return withBearing(row, origin, p, quat);
   }
   if (isRockLock(ctx, t)) {
     const list = ctx.asteroids && ctx.asteroids.list;
     const idx = list ? list.indexOf(t) : -1;
-    const row = targetRow('rock', idx >= 0 ? idx : null, 'rock', rangeTo(origin, posOf(t)));
+    const p = posOf(t);
+    const row = targetRow('rock', idx >= 0 ? idx : null, 'rock', rangeTo(origin, p));
     if (extended) rockCondition(ctx, t, row);
-    return row;
+    return withBearing(row, origin, p, quat);
   }
   const kind = lockKind(t);
   if (kind === 'station') {
@@ -170,9 +181,10 @@ function describeTarget(ctx, origin, t, extended) {
   if (kind === 'pod') {
     const pod = t.pod;
     const id = pod && Object.hasOwn(pod, 'id') ? pod.id : null;
-    const row = targetRow('pod', id, 'pod', rangeTo(origin, posOf(t)));
+    const p = posOf(t);
+    const row = targetRow('pod', id, 'pod', rangeTo(origin, p));
     row.units = podUnits(pod);
-    return row;
+    return withBearing(row, origin, p, quat);
   }
   if (kind === 'landmark') {
     const id = typeof t.id === 'string' ? t.id : null;
@@ -418,7 +430,7 @@ function nearbyTargets(ctx, origin, current, group, quat) {
   }
   rows.sort((a, b) => a.range - b.range);
   if (current && !seen.has(current)) {
-    const extra = describeTarget(ctx, origin, current);
+    const extra = describeTarget(ctx, origin, current, false, quat);
     if (extra) rows.unshift(extra);
   }
   if (rows.length > NEARBY_CAP) rows.length = NEARBY_CAP;
@@ -1155,7 +1167,7 @@ export function buildObservation(ctx) {
       jobs: jobsBlock(ctx, docked),
       market: marketBlock(ctx, docked, service),
       targets: {
-        current: describeTarget(ctx, origin, current, true),
+        current: describeTarget(ctx, origin, current, true, quat),
         nearby: nearbyTargets(ctx, origin, current, group, object ? object.quaternion : null),
         aim: aimDigestOf(ctx),
       },
