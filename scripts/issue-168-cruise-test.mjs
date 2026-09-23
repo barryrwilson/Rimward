@@ -38,9 +38,11 @@ for (let i = 0; i < 60 * 120 && !ctx.flags.docked && ctx.autopilot.engaged; i++)
 const evidence = { elapsed: ctx.world.time - began, docked: ctx.flags.docked, phases: [...phases], maxSpeed, events, ap: ctx.autopilot };
 console.log('RESULT', JSON.stringify(evidence));
 assert.equal(ctx.flags.docked, true);
-assert.ok(evidence.elapsed < 40, `dock took ${evidence.elapsed}s`);
+// Issue #255: owner-set bound. Live traffic waits at the station swing seed
+// runs from about 31 s to 55 s; the cruise contract is under a minute.
+assert.ok(evidence.elapsed < 60, `dock took ${evidence.elapsed}s`);
 assert.equal(events.some(e => e.type === 'sunHeat' || e.type === 'bodyHit'), false);
 assert.ok(phases.has('cruise') && phases.has('stage') && phases.has('corridor'));
 assert.ok(maxSpeed > 100);
-console.log('PASS issue168 Veridian arrival cruises safely to berth in under 40 sim seconds');
+console.log('PASS issue168 Veridian arrival cruises safely to berth in under 60 sim seconds');
 

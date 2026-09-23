@@ -193,6 +193,11 @@ export function createCtx({ scene, camera, renderer }) {
       burnerActive: false,
       burnerReadyAt: 0, // ctx.world.time when afterburner next ready
       driftReadyAt: 0,
+      // Jump arrival hold (#255, transient, never saved): jump.js sets it at
+      // the midpoint swap; ship.js zeroes the idle creep floor until the
+      // player throttles/burns or a helm takes over, so an idle arrival
+      // neither slides back into the gate bore nor creeps into the sun.
+      postJumpHold: false,
     },
 
     // --- player ship state record (game/state.js shape; ship.js creates) ---

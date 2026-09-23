@@ -71,7 +71,8 @@ export function arrivalBeltLine(def) {
  *      empty ctx.ships (traffic.js owns membership but is rebuilding from
  *      the new cast anyway); set ctx.world.currentSystem = to; relocate the
  *      player to the destination gate + JUMP.arrivalOffset toward the
- *      system center (origin); zero ctx.ship.velocity; set
+ *      system center (origin), nose facing the center; zero
+ *      ctx.ship.velocity; set ctx.ship.postJumpHold; set
  *      ctx.world.jumpGraceUntil = time + JUMP.graceSeconds; emit
  *      'systemLoaded' { to }, a band-aware arrival 'commLine' (§13.5 +
  *      designed silence: band 0 warm, band 1 sparse, band 2 near-silent),
@@ -86,7 +87,8 @@ export function arrivalBeltLine(def) {
  *
  * Ownership: writes ctx.gate.{jumping,progress,destination},
  * ctx.world.currentSystem, ctx.world.jumpGraceUntil, ctx.ship.object
- * position, ctx.ship.velocity. Everything else is read-only.
+ * position/facing, ctx.ship.velocity, ctx.ship.postJumpHold (set only).
+ * Everything else is read-only.
  *
  * Per-frame cost is a scalar advance; Vector3 scratch is preallocated. The
  * midpoint allocations (the ctx.ships copy) happen once per jump.
@@ -95,6 +97,7 @@ export function initJump(ctx) {
   // Scratch for the arrival position math — never allocated per frame.
   const gatePos = new THREE.Vector3();
   const towardCenter = new THREE.Vector3();
+  const lookTarget = new THREE.Vector3();
 
   let timer = 0;
   let swapped = false;
@@ -156,9 +159,14 @@ export function initJump(ctx) {
     const shipObj = ctx.ship.object;
     if (shipObj) {
       shipObj.position.copy(gatePos).addScaledVector(towardCenter, JUMP.arrivalOffset);
-      shipObj.lookAt(0, 0, 0); // face into the new system
+      // Object3D lookAt points +Z at its target and the nose is -Z, so aim
+      // +Z back at the gate to face the nose into the new system (#255).
+      lookTarget.copy(shipObj.position).sub(towardCenter);
+      shipObj.lookAt(lookTarget);
     }
     ctx.ship.velocity.set(0, 0, 0);
+    // Idle arrival holds station until the player or a helm moves her.
+    ctx.ship.postJumpHold = true;
 
     ctx.world.jumpGraceUntil = ctx.world.time + JUMP.graceSeconds;
 

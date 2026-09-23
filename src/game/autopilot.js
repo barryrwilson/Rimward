@@ -173,6 +173,9 @@ let dockDetourZ = 0;
 let dockStationArc = null;
 let dockGateExit = null;
 let dockArrivalGate = null;
+// Issue #255: ring ids whose keep sphere held the hull on the leg's first
+// planner tick (null = not captured yet). Only these may stay open.
+let dockOpenRings = null;
 let dockReplans = 0;
 let dockGateCheckPending = false;
 
@@ -266,6 +269,7 @@ function resetDockScratch() {
   dockGateCheckPending = false;
   dockGateExit = null;
   dockArrivalGate = null;
+  dockOpenRings = null;
   dockStationArc = null;
   dockStartRange = 0;
   dockStartSystem = '';
@@ -519,6 +523,7 @@ export function tryApproachDock(ctx) {
   dockGateCheckPending = false;
   dockGateExit = null;
   dockArrivalGate = null;
+  dockOpenRings = null;
   dockStationArc = null;
   dockStartSystem = station.system;
   dockStationName = station.name;
@@ -1266,11 +1271,22 @@ function dockTick(ctx) {
   // solid here too. No berth needs a bore, and hub junctions sit near the
   // Redmarch and Hollow Reach approaches, where stage and cruise clipped their
   // tubes. A ring whose keep sphere already holds the hull stays open, because
-  // a keep-out around the hull pins the planner.
+  // a keep-out around the hull pins the planner. Issue #255: only a ring that
+  // held the hull when the leg began, and only until the hull leaves it. A
+  // hull that turns into a solid ring's pad on a detour keeps it solid, or
+  // the next plan aims straight through the tube.
+  const captureOpen = dockOpenRings === null;
+  if (captureOpen) dockOpenRings = new Set();
   for (let i = 0; i < _apBodies.count; i++) {
     const b = _apBodies.items[i];
     if (b.kind !== 'gate') continue;
-    if (b.id !== dockArrivalGate && ringHolds(p, b)) continue;
+    if (b.id !== dockArrivalGate) {
+      if (captureOpen && ringHolds(p, b)) dockOpenRings.add(b.id);
+      if (dockOpenRings.has(b.id)) {
+        if (ringHolds(p, b)) continue;
+        dockOpenRings.delete(b.id);
+      }
+    }
     b.kind = 'dock-gate';
     b.r += b.y0;
   }

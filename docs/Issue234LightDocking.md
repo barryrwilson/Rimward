@@ -752,8 +752,53 @@ pose, contacts and cancellations; `ISSUE234_TRACE_LEG` prints one leg per tick.
 
 - The two historical `blocked` cases and the live Hollow Reach stage `blocked`
   are traffic-associated and unreproduced as a defect.
-- Arrival facing and the gate-bore exposure: #255.
+- Arrival facing and the gate-bore exposure: fixed by #255 (see below).
 - `issue-183-route-dock-test` seed fragility: #258 isolates its traffic.
-- The census seed 1 arrival-ring scrape depends on #255; seed 8 is untraced.
+- The census seed 1 arrival-ring scrape depended on #255; the #255 census
+  records no ring contact. Seed 8 was untraced.
 - Route-helm hub contacts (live run, Redmarch) are outside this change.
 - Issue #234 stays open.
+
+## Arrival hold — #255 (2026-09-23)
+
+`src/game/jump.js` now aims the hull's +Z tail back at the arrival gate, so
+the -Z nose faces the system centre, and sets the transient
+`ctx.ship.postJumpHold`. `src/systems/ship.js` treats an unhelmed ship with
+the hold as idle (no creep floor) until player throttle, a burn, or a helm
+after the jump ends releases it. Berth park and save restore clear it; the
+save snapshot never carries it.
+
+With the hull held 50u from the gate instead of creeping to about 15u, the
+Redmarch-from-Veridian leg of `issue-172-dock-sun-test` detoured around the
+Redmarch hub and dipped into the hub's padded keep sphere. The #234
+exemption ("a ring whose keep sphere holds the hull stays open") then opened
+the hub, and the next plan flew straight into its tube (`impact`). The dock
+helm now opens only rings that held the hull on the leg's first planner tick,
+and only until the hull leaves them. A ring that was solid at the start stays
+solid for the leg.
+
+Census, same script and 8 seeds, base `0d45aa9` against the fix. Not paired:
+trajectories diverge.
+
+| Measure | Base | #255 |
+| --- | --- | --- |
+| Legs flown | 88 | 91 |
+| Legs docked | 76 | 85 |
+| Docked on first attempt | 58 | 78 |
+| `impact` cancellations | 24 | 4 |
+| Damaging contacts | 15 | 4 |
+| Ring contacts | 8 | 0 |
+| `blocked` cancellations | 7 | 22 |
+
+The `blocked` rise is not the ring rule: seeds 6 and 8 with the old rule still
+gave 4 and 9. The traced seed 8 Veridian leg stops and starts beside two
+traffic hulls on the lane and ends inside the sun keep sphere, where the
+planner pins. It is the traffic-associated `blocked` class above; the new
+arrival pose changes which legs meet traffic. `resumeNearGate` now counts
+every leg, because the held hull stays at the 50u arrival offset inside the
+60u jump zone; arrival offset and zone tuning were out of scope.
+
+`issue-168-cruise-test` (a `test:boot` child, live traffic kept) docked in
+44.2s on its seed against a 40s bound. Seeds 1-8: base 39.2-63.0s (1 of 8
+under 40s), fix 31.4-54.4s (4 of 8). The owner set the bound to 60s.
+
