@@ -466,6 +466,14 @@ one-hop and a two-hop case and runs as a checked child of `npm run test:boot`;
 its queue pins fail on the pre-fix source. Independent QA and live browser
 validation remain pending; this is not a merge or deployment claim.
 
+Issue [#258](https://github.com/barryrwilson/Rimward/issues/258): the #183
+runner passed only on its pinned seed, because live traffic could block or
+strike its approaches (the open traffic class in #234). It now removes live
+NPC traffic every tick as one disclosed fixture, takes `ISSUE183_SEED`
+(default 7), and passes on seeds 1-8; the pre-fix runner fails seeds 4, 5, 6
+and 8 on `master` at `0d45aa9f`. No assertion or boot-harness line changed.
+Traffic-associated dock failures stay with #234.
+
 Issue [#201](https://github.com/barryrwilson/Rimward/issues/201) is implemented
 on `codex/issue-201-arrival-dock`. Only queued handovers that would start a
 cruise leg enter the gate-departure guard: align while stopped, then clear the
