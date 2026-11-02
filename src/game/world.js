@@ -240,22 +240,68 @@ function systemAnchor(sysId) {
 }
 
 // ---------- Record generation §8.2 ----------
+// Issue #270: every cast slot needs a readable name. Authored systems get
+// authored pools below; generated systems (94 reachable hubs) have no pools,
+// so poolName falls through to a deterministic name instead of the old
+// `<Role> <sysId>-<n>` debug label. The generator is seeded by system id,
+// role and slot, so a record keeps its name across save/reload; role offsets
+// keep generated names unique within one system (cast counts stay far below
+// the 40-name stride). scripts/issue-270-npc-names-test.mjs covers every
+// system and fails if a cast outgrows its authored pool.
+const GEN_NAME_ADJECTIVES = [
+  'Red', 'Pale', 'Iron', 'Quiet', 'Slow', 'Gilt', 'Ash', 'Marrow',
+  'Broken', 'Still', 'Late', 'Hollow', 'Cinder', 'Salt', 'Copper', 'Long',
+  'Low', 'Old', 'Grey', 'Bitter', 'Bright', 'Black', 'Worn', 'Silver',
+];
+const GEN_NAME_NOUNS = [
+  'Vane', 'Marlow', 'Wren', 'Quill', 'Tooth', 'Ilex', 'Tally', 'Rook',
+  'Oath', 'Jack', 'Bell', 'Whisper', 'Harrow', 'Mercy', 'Consign', 'Orchard',
+  'Cart', 'Tithe', 'Reckoning', 'Lantern', 'Reed', 'Sparrow', 'Gale', 'Frost',
+];
+const GEN_NAME_SPACE = GEN_NAME_ADJECTIVES.length * GEN_NAME_NOUNS.length;
+const GEN_ROLE_OFFSET = { Freighter: 0, Reaver: 40, Patrol: 80, Miner: 120, Hauler: 240 };
+
+function nameHash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function generatedName(sysId, role, i) {
+  const offset = GEN_ROLE_OFFSET[role] ?? 300;
+  const k = (nameHash(sysId) + offset + i) % GEN_NAME_SPACE;
+  return `${GEN_NAME_ADJECTIVES[k % GEN_NAME_ADJECTIVES.length]} ${GEN_NAME_NOUNS[(k / GEN_NAME_ADJECTIVES.length) | 0]}`;
+}
+
 const TRADER_NAMES = {
   freehold: ['Hauler Mink', 'Vesper-9', 'Cartwheel Ann', 'Slow Orison', 'Pale Freida', 'Kestrel Mercy', 'Tallow-3', 'Innisfree'],
   veridian: ['Cinder Halvard', 'Loom-5', 'Patient Sorrow', 'Glass Ansel', 'Tessellate', 'Wrenhollow', 'Low Meridian'],
+  redmarch: ['Tithe Mule', 'Ledger-7', 'Slow Reckoning', 'Gilt Hauler', 'Ash Cart'],
+  hollowreach: ['Last Light', 'Quiet Cart'],
+  hush: ['Quiet Consign'],
 };
 const PIRATE_NAMES = {
   freehold: ['Red Marlow', 'Gallows Wren', 'Ninth Tooth', 'Sable Ilex'],
   veridian: ['Copper Vane', 'Hollow Quill', 'Bracken-12'],
+  redmarch: ['Iron Tally', 'Debt Hound', 'Cinder Rook', 'Broken Oath', 'Toll Keeper', 'Ash Vane', 'Marrow Jack'],
+  hollowreach: ['Hollow Bell', 'Stillwater Jack', 'Pale Harrow'],
+  hush: ['Mute Bell', 'Last Whisper'],
   verge: ['Old Callow'],
 };
 const QSHIP_COVERS = {
   freehold: ['Mercy of Tarsus', 'Long Orchard'],
   veridian: ['Pale Consign'],
+  redmarch: ['Gilt Promise', 'Quiet Tithe', 'Late Mercy'],
+  hollowreach: ['Silent Orchard'],
+  hush: ['Still Mercy'],
 };
 const PATROL_NAMES = {
   freehold: ['Watchful Apt', 'Lancer Po'],
   veridian: ['Steadfast Ivo', 'Pale Warrant', 'Crescent Anh'],
+  redmarch: ['Assessor Vex'],
 };
 const MINER_NAMES = {
   freehold: ['Claim Wren', 'Pit Lamp'],
@@ -295,9 +341,9 @@ function computeLegLens(plain) {
   return legLens;
 }
 
-function poolName(pool, sysId, i, fallback) {
+function poolName(pool, sysId, i, role) {
   const names = pool[sysId];
-  return (names && names[i]) ?? `${fallback} ${sysId}-${i + 1}`;
+  return (names && names[i]) ?? generatedName(sysId, role, i);
 }
 
 function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty = 0, system, outboundTo = null, id = null }) {
@@ -453,8 +499,12 @@ function createRecords(ctx, sysId) {
   return records;
 }
 
-/** Lazily generate (once) and return a system's record bank. */
-function ensureBank(ctx, sysId) {
+/**
+ * Lazily generate (once) and return a system's record bank. Exported for
+ * scripts/issue-270-npc-names-test.mjs, which needs every authored bank
+ * without visiting each system in a live boot.
+ */
+export function ensureBank(ctx, sysId) {
   const banks = ctx.world.recordBanks ?? (ctx.world.recordBanks = {});
   return banks[sysId] ?? (banks[sysId] = createRecords(ctx, sysId));
 }
