@@ -45,7 +45,7 @@ await runLive('ace-bounty', async ({ c, result, act, observe, wait, checkpoint }
   await checkpoint('freehold-jobs');
 
   // B. Veridian has no authored ace cast: the row must still name a real ace at
-  // its own bounty, never the local 300 UU pirate, and must say where he hunts.
+  // its own bounty, never the local 300 UU pirate, and must say where it hunts.
   const veridian = await dockAndOpenJobs('veridian');
   const veridianAce = veridian.cards.find((card) => strip(card.title).startsWith('Bounty:'));
   assert.ok(veridianAce, 'Veridian board renders a bounty card');
@@ -53,7 +53,7 @@ await runLive('ace-bounty', async ({ c, result, act, observe, wait, checkpoint }
   assert.ok(veridianAce.reward.includes('2500 UU'), 'Veridian ace reward is the ace bounty: ' + veridianAce.reward);
   assert.ok(!/Copper Vane/.test(veridianAce.title), 'Veridian ace row never names an ordinary pirate');
   assert.ok(!/300 UU/.test(veridianAce.reward), 'Veridian ace reward is never an ordinary 300 UU bounty');
-  assert.match(veridianAce.note, /He hunts in Freehold/, 'gate note names the ace home: ' + veridianAce.note);
+  assert.match(veridianAce.note, /Hunts in Freehold/, 'gate note names the ace home: ' + veridianAce.note);
   assert.ok(!/Redmarch/.test(veridianAce.note), 'gate note does not contradict the named ace');
   assert.equal(veridian.offer?.target, 'Carver Illyx');
   assert.equal(veridian.offer?.reward, 2500);

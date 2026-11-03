@@ -19,17 +19,22 @@
  *  E. The real aspirant cycle re-offers the row with the new name; an accepted
  *     ace contract pays the posted bounty exactly once on the player's kill.
  *  F. An old save's ACCEPTED ace row that carries an ordinary pirate's name is
- *     still payable (legacy agreement), and no board rewrites it while no
+ *     still payable (legacy agreement), and no board rewrites it even while a
  *     Named Gun flies.
  *  G. A kill the player did not make settles nothing; the player's own kill
  *     then pays once.
+ *  H. Lineage is a mantle, not an identity: a stale kill of a dead bearer never
+ *     settles the living successor (the latest word on that name must be the
+ *     player's), an accepted agreement keeps its named bearer while it flies or
+ *     while the player's kill is owed, and only a gone bearer with nothing owed
+ *     is followed by a living Named Gun.
  *
  * Real station DOM, the real Jobs board, the real desk accept path, the real
  * agent observation and the real throttled delivery tick. Fixtures are disclosed
  * record-state flips (a kill is a combat result, not a board rule), one
- * milestone push that the real milestone system would have made, and an
- * explicitly injected legacy agreement in the exact shape the pre-#269 accept
- * path stamped.
+ * milestone push that the real milestone system would have made, one elapsed
+ * lineage timer, and explicitly stamped accepted rows in the exact shape the
+ * pre-#269 accept path left them.
  *
  * Run: node --import ./scripts/with-css-stub.mjs scripts/issue-269-ace-bounty-row-test.mjs
  */
@@ -98,7 +103,10 @@ function allAceRecords() {
   return out;
 }
 const liveAces = () => allAceRecords().filter(({ rec }) => rec.state !== 'dead' && rec.state !== 'captured');
-const aceRecordNamed = (name) => allAceRecords().find(({ rec }) => rec.name === name)?.rec ?? null;
+const liveAceNamed = (name) => allAceRecords().find(({ rec }) => rec.name === name
+  && rec.state !== 'dead' && rec.state !== 'captured')?.rec ?? null;
+const aceRecordNamed = (name) => liveAceNamed(name)
+  ?? allAceRecords().find(({ rec }) => rec.name === name)?.rec ?? null;
 const pirateNames = () => {
   const names = new Set();
   for (const bank of Object.values(ctx.world.recordBanks ?? {})) {
@@ -166,7 +174,7 @@ check('A2 Veridian board names the faction ace — never an ordinary pirate at 3
   assert.ok(aceTitles().includes(titleFor(ACES.illyx.name)), 'the player reads the ace card');
   assert.ok(rewardLines().includes(`Reward: ${ACES.illyx.bounty} UU`), 'the card shows the ace bounty');
   const home = SYSTEMS[ACES.illyx.system];
-  assert.equal(gateNote(), `He hunts in ${home.name} — take the gate.`,
+  assert.equal(gateNote(), `Hunts in ${home.name} — take the gate.`,
     'the note names where the named ace actually hunts');
 });
 
@@ -176,7 +184,7 @@ check('A3 Redmarch board names the faction ace before Sister Vane rises', () => 
   openBoard();
   assertAceBoard(aceOffer(), ACES.illyx.name, ACES.illyx.bounty);
   const home = SYSTEMS[ACES.illyx.system];
-  assert.equal(gateNote(), `He hunts in ${home.name} — take the gate.`);
+  assert.equal(gateNote(), `Hunts in ${home.name} — take the gate.`);
 });
 
 // ---------------------------------------------------------------------------
@@ -224,7 +232,7 @@ check('C2 an ace-less board still names the faction ace, not the local hunter', 
   openBoard();
   assertAceBoard(aceOffer(), ACES.illyx.name, ACES.illyx.bounty);
   const home = SYSTEMS[ACES.illyx.system];
-  assert.equal(gateNote(), `He hunts in ${home.name} — take the gate.`);
+  assert.equal(gateNote(), `Hunts in ${home.name} — take the gate.`);
 });
 
 check('C3 a dead ace never stays on the board; the living Named Gun takes the row', () => {
@@ -236,7 +244,7 @@ check('C3 a dead ace never stays on the board; the living Named Gun takes the ro
   assert.ok(aceTitles().includes(titleFor(ACES.hunter.name)), 'the player reads her card');
   assert.equal(aceTitles().includes(titleFor(ACES.illyx.name)), false, 'dead Illyx is not drawn');
   const home = SYSTEMS[ACES.hunter.system];
-  assert.equal(gateNote(), `He hunts in ${home.name} — take the gate.`);
+  assert.equal(gateNote(), `Hunts in ${home.name} — take the gate.`);
 });
 
 // ---------------------------------------------------------------------------
@@ -370,6 +378,156 @@ check('G1 a world kill pays nothing; your own kill then pays once', () => {
   step(31);
   assert.equal(aceRow().state, 'done');
   assert.equal(ctx.world.credits - credits, NAMED_GUNS.aspirants.bounty, 'your kill pays');
+  const settled = ctx.world.credits;
+  step(120);
+  assert.equal(ctx.world.credits, settled, 'paid exactly once');
+});
+
+// ---------------------------------------------------------------------------
+// H. Lineage is a mantle, not an identity: a stale kill of a dead bearer cannot
+// settle the living successor; an accepted agreement keeps its named bearer
+// while it flies or while the player's kill on that name is owed; a legacy
+// pirate-named agreement is never rewritten; and only a gone bearer with
+// nothing owed is followed by a living Named Gun.
+// ---------------------------------------------------------------------------
+check('H1 a stale player kill of a dead bearer never pays the living successor', () => {
+  ctx.world.incidents.length = 0;
+  // Fixture: the player's earlier kill of gen-0 Carver (the record itself is
+  // dead from C3); the successor comes from the real lineage timer.
+  ctx.world.incidents.push({ name: ACES.illyx.name, causer: 'player' });
+  ctx.world.currentSystem = 'freehold';
+  ctx.world.aceRivalry.illyxDownAt = ctx.world.time - ACES.illyx.lineage.respawnDelay;
+  world.update(0);
+  const successor = liveAceNamed(ACES.illyx.name);
+  assert.ok(successor, 'the kin bearer rose from the lineage timer');
+  const successorBounty = Math.round(ACES.illyx.bounty * ACES.illyx.lineage.bountyGrowth);
+  assert.equal(successor.bounty, successorBounty);
+  // Fixture: G1 settled the row; production would already have it offered (a
+  // completed unique ace posting is one-shot and hidden).
+  const row = aceRow();
+  row.state = 'offered';
+  row.target = ACES.illyx.name;
+  row.reward = ACES.illyx.bounty;
+  row.title = titleFor(ACES.illyx.name);
+  row.progress = 0;
+  delete row.payQuoted;
+  dock('freehold');
+  openBoard();
+  assertAceBoard(aceOffer(), ACES.illyx.name, successorBounty);
+  const res = ctx.stationDesk.acceptJob('bounty-ace');
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(aceRow().target, ACES.illyx.name);
+  assert.equal(aceRow().reward, successorBounty);
+  const credits = ctx.world.credits;
+  step(31);
+  assert.equal(aceRow().state, 'accepted', 'the living successor blocks the stale kill');
+  assert.equal(ctx.world.credits, credits, 'nothing was paid for the dead predecessor');
+  // Fixture: the successor falls to the world; the older player kill cannot
+  // pay it because the latest word on that name is not the player's.
+  successor.state = 'dead';
+  ctx.world.incidents.push({ name: ACES.illyx.name, causer: 'world' });
+  step(31);
+  assert.equal(aceRow().state, 'accepted', 'a world kill does not settle it');
+  assert.equal(ctx.world.credits, credits, 'nothing was paid');
+  ctx.world.incidents.push({ name: ACES.illyx.name, causer: 'player' });
+  step(31);
+  assert.equal(aceRow().state, 'done', 'the player kill settles it');
+  assert.equal(ctx.world.credits - credits, successorBounty, 'paid the posted bounty');
+  const settled = ctx.world.credits;
+  step(120);
+  assert.equal(ctx.world.credits, settled, 'paid exactly once');
+});
+
+check('H2 an accepted agreement keeps its named bearer while that bearer flies', () => {
+  ctx.world.incidents.length = 0;
+  // Fixtures: the kin bearer and Sister Vane fly again; the row is stamped as
+  // the accept path stamps an agreement.
+  const successor = aceRecordNamed(ACES.illyx.name);
+  assert.ok(successor, 'the kin bearer exists');
+  successor.state = 'enroute';
+  const vane = aceRecordNamed(ACES.hunter.name);
+  vane.state = 'enroute';
+  const row = aceRow();
+  row.state = 'accepted';
+  row.target = ACES.illyx.name;
+  row.reward = successor.bounty;
+  row.title = titleFor(ACES.illyx.name);
+  row.progress = 0;
+  delete row.payQuoted;
+  dock('redmarch'); // Vane's own berth: the tempting retarget
+  openBoard();
+  assert.equal(aceRow().target, ACES.illyx.name, 'the named bearer still flies: no switch');
+  assert.equal(aceRow().reward, successor.bounty);
+  assert.ok(aceTitles().includes(titleFor(ACES.illyx.name)), 'the card still names the agreement');
+  assert.equal(aceTitles().includes(titleFor(ACES.hunter.name)), false, 'Vane did not take it over');
+  const home = SYSTEMS[ACES.illyx.system];
+  assert.equal(gateNote(), `Hunts in ${home.name} — take the gate.`);
+  const credits = ctx.world.credits;
+  successor.state = 'dead';
+  ctx.world.incidents.push({ name: ACES.illyx.name, causer: 'player' });
+  step(31);
+  assert.equal(aceRow().state, 'done', 'the owed player kill settles it');
+  assert.equal(ctx.world.credits - credits, successor.bounty, 'paid once');
+  const settled = ctx.world.credits;
+  step(120);
+  assert.equal(ctx.world.credits, settled, 'paid exactly once');
+});
+
+check('H3 a legacy pirate-named agreement is never rewritten while a Named Gun flies', () => {
+  ctx.world.incidents.length = 0;
+  const bank = ctx.world.recordBanks?.veridian ?? [];
+  const pirate = bank.find((r) => r && r.role === 'pirate' && r.bounty > 0
+    && r.state !== 'dead' && r.state !== 'captured');
+  assert.ok(pirate, 'a live bounty pirate exists in the Veridian bank');
+  assert.ok(liveAceNamed(ACES.hunter.name), 'Sister Vane still flies');
+  // Fixture: the exact row the pre-#269 accept path stamped.
+  const row = aceRow();
+  row.state = 'accepted';
+  row.target = pirate.name;
+  row.reward = pirate.bounty;
+  row.title = titleFor(pirate.name);
+  row.progress = 0;
+  delete row.payQuoted;
+  dock('veridian');
+  openBoard();
+  assert.equal(aceRow().target, pirate.name, 'the legacy agreement is not rewritten');
+  assert.equal(aceRow().reward, pirate.bounty);
+  assert.ok(aceTitles().includes(titleFor(pirate.name)), 'the card still names the pirate');
+  assert.equal(gateNote(), null, 'a pirate agreement gets no ace gate note');
+  const credits = ctx.world.credits;
+  pirate.state = 'dead';
+  ctx.world.incidents.push({ name: pirate.name, causer: 'player', kind: 'destroyed' });
+  step(31);
+  assert.equal(aceRow().state, 'done', 'the legacy agreement settles');
+  assert.equal(ctx.world.credits - credits, pirate.bounty, 'paid its posted bounty');
+  const settled = ctx.world.credits;
+  step(120);
+  assert.equal(ctx.world.credits, settled, 'paid exactly once');
+});
+
+check('H4 a gone bearer with nothing owed is followed by the living Named Gun', () => {
+  ctx.world.incidents.length = 0;
+  const vane = aceRecordNamed(ACES.hunter.name);
+  assert.ok(vane && vane.state !== 'dead' && vane.state !== 'captured', 'Sister Vane flies');
+  const row = aceRow();
+  row.state = 'accepted';
+  row.target = ACES.illyx.name; // the kin bearer is dead and owed nothing
+  row.reward = Math.round(ACES.illyx.bounty * ACES.illyx.lineage.bountyGrowth);
+  row.title = titleFor(ACES.illyx.name);
+  row.progress = 0;
+  delete row.payQuoted;
+  dock('redmarch');
+  openBoard();
+  assert.equal(aceRow().target, ACES.hunter.name, 'the agreement follows the living Named Gun');
+  assert.equal(aceRow().reward, ACES.hunter.bounty);
+  assert.ok(aceTitles().includes(titleFor(ACES.hunter.name)), 'the card names the followed ace');
+  assert.equal(gateNote(), null, 'both fly the same system');
+  const credits = ctx.world.credits;
+  vane.state = 'dead';
+  ctx.world.incidents.push({ name: ACES.hunter.name, causer: 'player' });
+  step(31);
+  assert.equal(aceRow().state, 'done', 'the followed claim settles');
+  assert.equal(ctx.world.credits - credits, ACES.hunter.bounty, 'paid the followed bounty');
   const settled = ctx.world.credits;
   step(120);
   assert.equal(ctx.world.credits, settled, 'paid exactly once');

@@ -4,20 +4,26 @@
 Implemented on `dsh/issue-269-ace-bounty-row`, pending independent QA: an offered
 `bounty-ace` row now names only a living Named Gun record and carries that
 record's own bounty, on every board. A system with no authored ace cast borrows
-the faction-level ace from his home system and says where he hunts; an ordinary
-local pirate can no longer appear at its 300 UU bounty under the ace title. When
-every ace is dead the offered row is withdrawn from the Jobs board and the agent
-offer list instead of being spliced, so a successor ace can re-offer it. An
-accepted agreement is never withdrawn: while a living ace flies the row follows
-him, and once he dies the agreement keeps his name until it settles. A save whose
-accepted ace agreement named an ordinary pirate stays payable by that name.
+a living Named Gun from another system (the authored ace home first) and says
+where that ace hunts; an ordinary local pirate can no longer appear at its 300 UU
+bounty under the ace title. When every ace is dead the offered row is withdrawn
+from the Jobs board and the agent offer list instead of being spliced, so a
+successor ace can re-offer it. An accepted agreement keeps its named bearer while
+that bearer flies or while the player's kill on that name is still owed, so a
+board read cannot retarget a pending claim; only a named bearer that is gone with
+nothing owed is followed by a living Named Gun, and a legacy save whose agreement
+named an ordinary pirate is never rewritten and stays payable by that name.
+Settlement resolves the current bearer of a reused lineage name (a living bearer
+blocks the claim, so a dead predecessor's stale kill cannot pay the successor)
+and requires the latest incident on that name to be the player's kill.
 
-Focused regression is `npm run test:ace-bounty` (12 checks: a sweep of all 101
-boards, a dead ace, the aspirant cycle, a legacy save and kill attribution); it
-fails on the pre-fix source. The live Chromium probe `npm run
-test:ace-bounty-live` passes the Freehold and Veridian boards, the accept receipt
-and a clean console, and `npm run build` and the unchanged `npm run test:boot`
-pass. No new persisted field, key or save-schema change. See the
+Focused regression is `npm run test:ace-bounty` (16 checks: a sweep of all 101
+boards, a dead ace, the aspirant cycle, lineage succession, accepted-agreement
+freeze and follow, a legacy save and kill attribution); it fails on the pre-fix
+source. The live Chromium probe `npm run test:ace-bounty-live` passes the
+Freehold and Veridian boards, the accept receipt and a clean console, and
+`npm run build` and the extended `npm run test:boot` (which now includes the new
+focused test) pass. No new persisted field, key or save-schema change. See the
 [hunt design](Msn02HuntDesign.md) for the board contract.
 
 ## Explicit double-agent dossier choice — #240

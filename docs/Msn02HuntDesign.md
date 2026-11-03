@@ -154,12 +154,18 @@ See inventory §§1–6. The load-bearing loop is:
 5. Unique `completeJob` marks `done` and banks dockmaster trust. Overlay bounty also banks fence favor (`kind === 'bounty'`).
 
 An offered `bounty-ace` row names a living Named Gun record at that record's own
-bounty — the current system's own ace when it has one, otherwise the
-faction-level ace at his home system with a gate note. With every ace dead the
-offered row is withdrawn rather than spliced, so a successor can re-offer it; an
-accepted agreement is never withdrawn, follows a living ace while one flies and
-keeps his name until it settles, and a legacy save whose agreement named an
-ordinary pirate stays payable by that name (#269).
+bounty — the current system's own ace when it has one, otherwise a living Named
+Gun from another generated system (the authored ace home first), with a gate
+note naming where that ace hunts. With every ace dead the offered row is
+withdrawn rather than spliced, so a successor can re-offer it. An accepted
+agreement keeps its named bearer while that bearer flies or while the player's
+kill on that name is still owed, so a board read cannot retarget a pending
+claim; only a named bearer that is gone with nothing owed is followed by a
+living Named Gun, and a legacy save whose agreement named an ordinary pirate is
+never rewritten and stays payable by that name (#269). Settlement resolves the
+current bearer of a reused lineage name — a living bearer blocks the claim, so a
+dead predecessor's stale kill cannot pay the successor — and requires the latest
+incident on that name to be the player's kill.
 
 **This serial must not change step 1’s four ids, unique haul/ferry quote stamps, Wave 35 haul dest bind, overlay cap/ids, or Named Gun records.** Hunt is additive: extra sync on render, extra branch in delivery tick, extra cards in `boardJobs`, extra kind in `sanitizeJobs`, plus a **skip** on overlay pay when an accepted hunt already claims that quarry.
 

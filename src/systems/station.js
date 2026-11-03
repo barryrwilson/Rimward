@@ -2256,29 +2256,53 @@ function liveAceRecord(ctx) {
   return null;
 }
 /**
- * The claimable record for an ace contract. Ace records win, but a legacy save
- * (pre-#269) could carry an ordinary pirate's name on the ace row; matching the
- * record name as-is keeps that agreement payable. Current bank first, then any
- * generated bank (a defeated ace can have migrated with the escape rules).
+ * Issue #269 follow-up: resolve the record an ace claim names. The name is a
+ * mantle (lineage reuses it), so the CURRENT bearer wins — a living same-name
+ * ace is returned even while it flies, so a stale kill of a dead predecessor
+ * cannot settle the living successor's contract. Only when no same-name ace is
+ * live does the newest dead/captured one resolve the claim. A legacy save
+ * (pre-#269) could carry an ordinary pirate's name on the ace row; ace records
+ * win by name, then the ordinary-pirate record keeps that agreement payable.
+ * Current bank first, then any generated bank (a defeated ace can have migrated
+ * with the escape rules).
  */
 function findClaimableRecord(ctx, target) {
   const targetName = typeof target === 'string' ? target : '';
   if (!targetName) return null;
-  const match = (bank, aceOnly) => {
-    if (!Array.isArray(bank)) return null;
-    for (const r of bank) {
-      if (!r || r.name !== targetName) continue;
-      if (!aceOnly || isAceRecord(r)) return r;
+  const banks = [];
+  if (Array.isArray(ctx.world.records)) banks.push(ctx.world.records);
+  const recordBanks = ctx.world.recordBanks ?? {};
+  for (const sysId of Object.keys(recordBanks).sort()) {
+    if (sysId === ctx.world.currentSystem) continue;
+    if (Array.isArray(recordBanks[sysId])) banks.push(recordBanks[sysId]);
+  }
+  // Records are appended when they spawn, so a backwards scan finds the newest
+  // bearer of a reused name.
+  const newest = (aceOnly, wantLive) => {
+    for (const bank of banks) {
+      for (let i = bank.length - 1; i >= 0; i--) {
+        const r = bank[i];
+        if (!r || r.name !== targetName) continue;
+        if (isAceRecord(r) !== aceOnly) continue;
+        if (isLiveRecord(r) === wantLive) return r;
+      }
     }
     return null;
   };
-  const current = match(ctx.world.records, true) ?? match(ctx.world.records, false);
-  if (current) return current;
-  const banks = ctx.world.recordBanks ?? {};
-  for (const sysId of Object.keys(banks).sort()) {
-    if (sysId === ctx.world.currentSystem) continue;
-    const rec = match(banks[sysId], true) ?? match(banks[sysId], false);
-    if (rec) return rec;
+  // Ace records win: a live bearer blocks settlement (it has not died yet),
+  // a dead bearer settles it. A legacy pirate name resolves only when no ace
+  // record carries that name.
+  return newest(true, true)
+    ?? newest(true, false)
+    ?? newest(false, false)
+    ?? newest(false, true);
+}
+/** The most recent recorded incident naming `name`, or null. */
+function latestIncidentFor(ctx, name) {
+  const incidents = ctx.world.incidents || [];
+  for (let i = incidents.length - 1; i >= 0; i--) {
+    const inc = incidents[i];
+    if (inc && inc.name === name) return inc;
   }
   return null;
 }
@@ -2360,9 +2384,16 @@ function ensureJobs(ctx) {
 }
 
 /**
- * Issue #269: keep the ace contract pointed at the living ace record. Returns
- * that record (or null when no Named Gun flies) so the board can also decide
+ * Issue #269: keep the OFFERED ace contract pointed at the living Named Gun.
+ * Returns that record (or null when none flies) so the board can also decide
  * whether the offered posting exists at all.
+ *
+ * An ACCEPTED agreement is not silently rewritten while its named bearer still
+ * flies, or while the player's kill on that name is still owed: it keeps its
+ * name until it settles, so a board read between the kill and the delivery tick
+ * cannot retarget the claim. Only when the named bearer is gone and nothing is
+ * owed does it follow a living Named Gun, so a successor can still be claimed.
+ * A legacy save's ordinary-pirate agreement is never rewritten.
  */
 function refreshBountyJob(ctx) {
   const live = liveAceRecord(ctx);
@@ -2370,12 +2401,24 @@ function refreshBountyJob(ctx) {
   const fields = aceContractFields(ctx, live);
   for (const j of ctx.world.jobs) {
     if (j.id !== 'bounty-ace' || j.state === 'done') continue;
+    if (j.state === 'accepted' && !acceptedAceFollows(ctx, j)) continue;
     j.target = fields.name;
     j.reward = fields.reward;
     j.title = fields.title;
     j.detail = fields.detail;
   }
   return live;
+}
+
+/** Whether an ACCEPTED ace agreement should follow the living Named Gun now. */
+function acceptedAceFollows(ctx, job) {
+  const rec = findClaimableRecord(ctx, job.target);
+  if (!rec) return true; // nothing named resolves: follow the living ace
+  if (!isAceRecord(rec)) return false; // legacy ordinary-pirate agreement: keep it payable
+  if (isLiveRecord(rec)) return false; // the named bearer still flies
+  // The named bearer is gone: keep the agreement while the player's kill on
+  // that name is still owed, otherwise let it follow a living successor.
+  return latestIncidentFor(ctx, job.target)?.causer !== 'player';
 }
 
 function pirateBountyId(name) {
@@ -5572,18 +5615,17 @@ function tickDeliveryJobs(ctx, ui, render) {
     if (job.kind !== 'haul' && job.kind !== 'ferry' && destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
     if (job.kind === 'bounty') {
       if (job.id === 'bounty-ace') {
-        // Issue #269: settle against the record the board named, not whichever
-        // ace record happens to sit first in the bank (a dead line-bearer used
-        // to mask a living aspirant, and the old pirate fallback paid a
-        // bystander). Legacy saves whose ace row carried an ordinary pirate's
-        // name still match that record by name.
+        // Issue #269: settle against the record the board named, resolving the
+        // CURRENT bearer of a reused lineage name — a living bearer blocks the
+        // claim, so a stale kill of a dead predecessor cannot pay the living
+        // successor's contract. Legacy saves whose ace row carried an ordinary
+        // pirate's name still match that record by name.
         const ace = findClaimableRecord(ctx, job.target);
         if (!ace || (ace.state !== 'dead' && ace.state !== 'captured')) continue;
-        // The claim is only yours if the record says your guns did it (§8.7).
-        const claimed = (ctx.world.incidents || []).some(
-          (i) => i.name === job.target && i.causer === 'player',
-        );
-        if (!claimed) continue;
+        // The claim is only yours if the LATEST word on that name says your guns
+        // did it (§8.7): an older player kill cannot pay a successor that fell
+        // to the world.
+        if (latestIncidentFor(ctx, job.target)?.causer !== 'player') continue;
         const acePay = jobPay(ctx, job.reward);
         ctx.world.credits += acePay;
         completeJob(ctx, job, `Bounty confirmed: ${job.target} — ${acePay} UU posted.`);
@@ -7063,10 +7105,6 @@ export function initStation(ctx) {
     syncChainJobs(ctx, currentId);
     // Issue 176: one — and only one — two-gate run across trade/passenger/ferry.
     syncLongRunPostings(ctx, currentId);
-    // Issue #269: the note names where the NAMED ace actually hunts, so a
-    // Redmarch board showing Sister Vane no longer says "take the gate" to
-    // Freehold. `boardJobs` refreshes the row itself, so this read matches it.
-    const aceHomeId = liveAceRecord(ctx)?.system ?? aceHomeSystem(ctx);
     const liveFerry = (ctx.world.jobs ?? []).find((j) => j && j.id === 'ferry-consignment');
     if (liveFerry && liveFerry.state === 'offered') reofferFerryHandles(liveFerry);
     // Issue #240: the competing buyer is drawn FIRST. It is the one
@@ -7296,9 +7334,22 @@ export function initStation(ctx) {
       }
       if (haulBuyInLine) h('div', 'job-reward job-buy-in', card, haulBuyInLine);
       if (chainSkuHint) h('div', 'job-reward', card, chainSkuHint);
-      if (job.id === 'bounty-ace' && job.state !== 'done' && currentId !== aceHomeId) {
-        h('div', 'job-state', card,
-          `He hunts in ${ctx.systems?.[aceHomeId]?.name ?? 'Freehold Drift'} — take the gate.`);
+      if (job.id === 'bounty-ace' && job.state !== 'done') {
+        // Issue #269: the note names where the NAMED ace actually hunts — the
+        // posted ace for an offered row, the agreement's own bearer for an
+        // accepted one. A frozen legacy agreement gets no gate note because it
+        // never named an ace.
+        let noteHomeId = null;
+        if (job.state === 'accepted') {
+          const rec = findClaimableRecord(ctx, job.target);
+          if (rec && isAceRecord(rec) && isLiveRecord(rec)) noteHomeId = rec.system ?? null;
+        } else {
+          noteHomeId = liveAceRecord(ctx)?.system ?? null;
+        }
+        if (noteHomeId && currentId !== noteHomeId) {
+          h('div', 'job-state', card,
+            `Hunts in ${ctx.systems?.[noteHomeId]?.name ?? 'Freehold Drift'} — take the gate.`);
+        }
       }
       // Issue 206: only the consignment ferry re-offers after it is paid. The
       // retired haul never draws an Accept button again (the board does not
