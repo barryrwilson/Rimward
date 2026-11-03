@@ -1,4 +1,25 @@
 # RIMWARD remaining work
+## Ace bounty row names only a living ace — #269
+
+Implemented on `dsh/issue-269-ace-bounty-row`, pending independent QA: an offered
+`bounty-ace` row now names only a living Named Gun record and carries that
+record's own bounty, on every board. A system with no authored ace cast borrows
+the faction-level ace from his home system and says where he hunts; an ordinary
+local pirate can no longer appear at its 300 UU bounty under the ace title. When
+every ace is dead the offered row is withdrawn from the Jobs board and the agent
+offer list instead of being spliced, so a successor ace can re-offer it. An
+accepted agreement is never withdrawn: while a living ace flies the row follows
+him, and once he dies the agreement keeps his name until it settles. A save whose
+accepted ace agreement named an ordinary pirate stays payable by that name.
+
+Focused regression is `npm run test:ace-bounty` (12 checks: a sweep of all 101
+boards, a dead ace, the aspirant cycle, a legacy save and kill attribution); it
+fails on the pre-fix source. The live Chromium probe `npm run
+test:ace-bounty-live` passes the Freehold and Veridian boards, the accept receipt
+and a clean console, and `npm run build` and the unchanged `npm run test:boot`
+pass. No new persisted field, key or save-schema change. See the
+[hunt design](Msn02HuntDesign.md) for the board contract.
+
 ## Explicit double-agent dossier choice — #240
 
 Implemented and acceptance verified at runtime `c0a20d329f2ac759b1d6bb775d5b49f00fb8741a`.

@@ -2215,11 +2215,86 @@ export function priceOf(ctx, key) {
   if (!isMarketCommodity(key)) return ctx.world?.prices?.[key] ?? 0;
   return ctx.world.prices[key] ?? COMMODITIES[key].base;
 }
-function findAceRecord(ctx) {
-  const recs = ctx.world.records || [];
-  for (const r of recs) if (r.role === 'ace' || r.classKey === 'ace') return r;
-  for (const r of recs) if (r.name === DEFAULT_ACE_NAME || r.bounty > 0) return r;
+/** True for a record that can carry the faction-level ace contract. */
+function isAceRecord(rec) {
+  return !!rec && (rec.role === 'ace' || rec.classKey === 'ace');
+}
+function isLiveRecord(rec) {
+  return !!rec && rec.state !== 'dead' && rec.state !== 'captured';
+}
+/**
+ * Issue #269: the living Named Gun the ace posting should name, or null when
+ * none flies. Only real ace records qualify. Order: the current system's bank
+ * (a local Named Gun such as Sister Vane), then the authored ace home, then
+ * any other generated bank, and finally the authored default while the home
+ * bank has never been generated. A dead or captured bearer is skipped, so a
+ * defeated ace can never keep the posting.
+ */
+function liveAceRecord(ctx) {
+  const banks = ctx.world.recordBanks ?? {};
+  const currentId = ctx.world.currentSystem;
+  const homeId = aceHomeSystem(ctx);
+  const firstLive = (bank) => {
+    if (!Array.isArray(bank)) return null;
+    for (const r of bank) if (isAceRecord(r) && isLiveRecord(r)) return r;
+    return null;
+  };
+  const current = firstLive(ctx.world.records);
+  if (current) return current;
+  const home = firstLive(banks[homeId]);
+  if (home) return home;
+  for (const sysId of Object.keys(banks).sort()) {
+    if (sysId === currentId || sysId === homeId) continue;
+    const rec = firstLive(banks[sysId]);
+    if (rec) return rec;
+  }
+  // The authored ace home has never been generated: its default ace still
+  // flies there, so the contract can name him before the player visits.
+  if (!Array.isArray(banks[homeId])) {
+    return { name: DEFAULT_ACE_NAME, bounty: DEFAULT_ACE_BOUNTY, system: homeId };
+  }
   return null;
+}
+/**
+ * The claimable record for an ace contract. Ace records win, but a legacy save
+ * (pre-#269) could carry an ordinary pirate's name on the ace row; matching the
+ * record name as-is keeps that agreement payable. Current bank first, then any
+ * generated bank (a defeated ace can have migrated with the escape rules).
+ */
+function findClaimableRecord(ctx, target) {
+  const targetName = typeof target === 'string' ? target : '';
+  if (!targetName) return null;
+  const match = (bank, aceOnly) => {
+    if (!Array.isArray(bank)) return null;
+    for (const r of bank) {
+      if (!r || r.name !== targetName) continue;
+      if (!aceOnly || isAceRecord(r)) return r;
+    }
+    return null;
+  };
+  const current = match(ctx.world.records, true) ?? match(ctx.world.records, false);
+  if (current) return current;
+  const banks = ctx.world.recordBanks ?? {};
+  for (const sysId of Object.keys(banks).sort()) {
+    if (sysId === ctx.world.currentSystem) continue;
+    const rec = match(banks[sysId], true) ?? match(banks[sysId], false);
+    if (rec) return rec;
+  }
+  return null;
+}
+/** The board copy for one ace: title, detail, target and posted reward. */
+function aceContractFields(ctx, ace) {
+  const name = ace?.name ?? DEFAULT_ACE_NAME;
+  const homeId = ace?.system ?? aceHomeSystem(ctx);
+  const homeName = ctx.systems?.[homeId]?.name ?? 'Freehold Drift';
+  const reward = Number.isFinite(ace?.bounty) ? ace.bounty : DEFAULT_ACE_BOUNTY;
+  return {
+    name,
+    reward,
+    homeId,
+    title: `Bounty: ${name}`,
+    detail: `${name} flies an ace frame and bleeds the lanes of ${homeName} dry. The Compact pays on confirmation of the kill or capture — your guns, your name on the claim.`,
+  };
 }
 /** A system whose def flies tradesRestricted sells patent stock openly (§16). */
 function stationAlwaysTradesRestricted(ctx) {
@@ -2245,16 +2320,16 @@ function aceHomeSystem(ctx) {
 // ---------------------------------------------------------------- jobs ----
 
 function makeJobs(ctx) {
-  const ace = findAceRecord(ctx);
-  const aceName = ace?.name ?? DEFAULT_ACE_NAME;
-  const aceBounty = ace?.bounty ?? DEFAULT_ACE_BOUNTY;
-  const aceHome = ctx.systems?.[aceHomeSystem(ctx)]?.name ?? 'Freehold Drift';
+  // Issue #269: seed the contract from a living ace record (or the authored
+  // default while its home bank has never been generated), never from any
+  // bounty-bearing record — an ordinary pirate is not the faction's ace.
+  const ace = aceContractFields(ctx, liveAceRecord(ctx));
   return [
     {
-      id: 'bounty-ace', kind: 'bounty', target: aceName,
-      title: `Bounty: ${aceName}`,
-      detail: `${aceName} flies an ace frame and bleeds the lanes of ${aceHome} dry. The Compact pays on confirmation of the kill or capture — your guns, your name on the claim.`,
-      reward: aceBounty, state: 'offered', progress: 0, need: 1,
+      id: 'bounty-ace', kind: 'bounty', target: ace.name,
+      title: ace.title,
+      detail: ace.detail,
+      reward: ace.reward, state: 'offered', progress: 0, need: 1,
     },
     {
       id: 'patrol-lane', kind: 'patrol',
@@ -2284,17 +2359,23 @@ function ensureJobs(ctx) {
   if (ctx.world.jobs.length === 0) ctx.world.jobs = makeJobs(ctx);
 }
 
-/** Keep the ace contract pointed at the living ace record (name/reward drift). */
+/**
+ * Issue #269: keep the ace contract pointed at the living ace record. Returns
+ * that record (or null when no Named Gun flies) so the board can also decide
+ * whether the offered posting exists at all.
+ */
 function refreshBountyJob(ctx) {
+  const live = liveAceRecord(ctx);
+  if (!live) return null; // no living Named Gun: the offered posting is withdrawn
+  const fields = aceContractFields(ctx, live);
   for (const j of ctx.world.jobs) {
     if (j.id !== 'bounty-ace' || j.state === 'done') continue;
-    const ace = findAceRecord(ctx);
-    if (ace) {
-      j.target = ace.name;
-      j.reward = ace.bounty ?? j.reward;
-      j.title = `Bounty: ${ace.name}`;
-    }
+    j.target = fields.name;
+    j.reward = fields.reward;
+    j.title = fields.title;
+    j.detail = fields.detail;
   }
+  return live;
 }
 
 function pirateBountyId(name) {
@@ -4679,8 +4760,14 @@ function huntPayComplete(ctx, job, rec, huntPaidNames) {
 
 /** Board-visible jobs: offered pirate bounties post only at their home system. */
 function boardJobs(ctx, sysId) {
+  // Issue #269: every board read names the LIVING ace first, so the DOM card
+  // and the agent observation agree even when the Jobs pane was never opened.
+  const liveAce = refreshBountyJob(ctx);
   const out = [];
   for (const j of ctx.world.jobs) {
+    // Issue #269: no living Named Gun means there is no ace posting to take.
+    // Hide the offered row (never splice it) so a successor can re-offer it.
+    if (j.id === 'bounty-ace' && j.state === 'offered' && !liveAce) continue;
     // Issue 206: the retired consignment never posts again. An old save's
     // ACCEPTED agreement still shows its card, so the player can read the run
     // he is already committed to and fly it to the dock that pays.
@@ -5485,11 +5572,16 @@ function tickDeliveryJobs(ctx, ui, render) {
     if (job.kind !== 'haul' && job.kind !== 'ferry' && destPayHeldForUniqueHaul(ctx, ui, jobs)) continue;
     if (job.kind === 'bounty') {
       if (job.id === 'bounty-ace') {
-        const ace = findAceRecord(ctx);
+        // Issue #269: settle against the record the board named, not whichever
+        // ace record happens to sit first in the bank (a dead line-bearer used
+        // to mask a living aspirant, and the old pirate fallback paid a
+        // bystander). Legacy saves whose ace row carried an ordinary pirate's
+        // name still match that record by name.
+        const ace = findClaimableRecord(ctx, job.target);
         if (!ace || (ace.state !== 'dead' && ace.state !== 'captured')) continue;
         // The claim is only yours if the record says your guns did it (§8.7).
         const claimed = (ctx.world.incidents || []).some(
-          (i) => i.name === ace.name && i.causer === 'player',
+          (i) => i.name === job.target && i.causer === 'player',
         );
         if (!claimed) continue;
         const acePay = jobPay(ctx, job.reward);
@@ -6960,7 +7052,6 @@ export function initStation(ctx) {
     if (currentService?.jobPayMult) h('div', 'screen-note', panel, currentService.line);
     h('div', 'screen-note', panel,
       `Mining, hunt, passenger, explore, spy, and war credit the dock flag (+${MINING_REP}). Patrol credits ${factionDisplayName('freehold') || 'Freehold'} (+${PATROL_REP}).`);
-    refreshBountyJob(ctx);
     syncPirateBounties(ctx, currentId);
     syncMiningJobs(ctx, currentId);
     syncTradeJobs(ctx, currentId);
@@ -6972,7 +7063,10 @@ export function initStation(ctx) {
     syncChainJobs(ctx, currentId);
     // Issue 176: one — and only one — two-gate run across trade/passenger/ferry.
     syncLongRunPostings(ctx, currentId);
-    const aceHomeId = aceHomeSystem(ctx);
+    // Issue #269: the note names where the NAMED ace actually hunts, so a
+    // Redmarch board showing Sister Vane no longer says "take the gate" to
+    // Freehold. `boardJobs` refreshes the row itself, so this read matches it.
+    const aceHomeId = liveAceRecord(ctx)?.system ?? aceHomeSystem(ctx);
     const liveFerry = (ctx.world.jobs ?? []).find((j) => j && j.id === 'ferry-consignment');
     if (liveFerry && liveFerry.state === 'offered') reofferFerryHandles(liveFerry);
     // Issue #240: the competing buyer is drawn FIRST. It is the one

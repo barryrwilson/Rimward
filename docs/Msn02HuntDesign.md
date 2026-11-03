@@ -153,6 +153,14 @@ See inventory §§1–6. The load-bearing loop is:
 4. Ticks complete patrol (frame), delivery (0.5 s). Mining/trade expire/replace live in that tick. Overlay/ace pay in that tick via `completeJob`.
 5. Unique `completeJob` marks `done` and banks dockmaster trust. Overlay bounty also banks fence favor (`kind === 'bounty'`).
 
+An offered `bounty-ace` row names a living Named Gun record at that record's own
+bounty — the current system's own ace when it has one, otherwise the
+faction-level ace at his home system with a gate note. With every ace dead the
+offered row is withdrawn rather than spliced, so a successor can re-offer it; an
+accepted agreement is never withdrawn, follows a living ace while one flies and
+keeps his name until it settles, and a legacy save whose agreement named an
+ordinary pirate stays payable by that name (#269).
+
 **This serial must not change step 1’s four ids, unique haul/ferry quote stamps, Wave 35 haul dest bind, overlay cap/ids, or Named Gun records.** Hunt is additive: extra sync on render, extra branch in delivery tick, extra cards in `boardJobs`, extra kind in `sanitizeJobs`, plus a **skip** on overlay pay when an accepted hunt already claims that quarry.
 
 Digit 2 and `DOCK_KEY_SERVICES` stay. Digit 0 stays shipyard.
