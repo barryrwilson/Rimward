@@ -1,7 +1,7 @@
 /** #269 live verification: the ace bounty row as the player reads it on a real
- * station Jobs board. Disposable Chromium; dock and system swap are explicit
- * fixtures, so no natural-flight claim is made. Console errors are enforced by
- * the shared harness.
+ * station Jobs board. Disposable Chromium; dock, system swap and the dead-ace
+ * withdrawal checkpoint are explicit fixtures, so no natural-flight claim is
+ * made. Console errors are enforced by the shared harness.
  * node scripts/issue-269-live-probe.mjs
  */
 import assert from 'node:assert/strict';
@@ -14,6 +14,8 @@ const { runLive, sleep } = await import('./issue-74-live-harness.mjs');
 const strip = (s) => s.replace(/^\d+\.\s*/, '');
 
 await runLive('ace-bounty', async ({ c, result, act, observe, wait, checkpoint }) => {
+  result.fixture = true;
+  result.fixtureNote = 'Dock and system swap are explicit fixtures; the dead-ace withdrawal checkpoint flips the ace record state to dead and back (a kill result, not a board rule).';
   const placeAtBerth = (sysId) => c.eval(`(()=>{const x=window.__ctx;
     if(x.world.currentSystem!==${JSON.stringify(sysId)}){ if(x.flags.docked) x.stationDesk.undock(); x.world.currentSystem=${JSON.stringify(sysId)}; x.emit('systemLoaded',{to:${JSON.stringify(sysId)}}); }
     const p=x.systems[x.world.currentSystem].station.position;
@@ -21,6 +23,20 @@ await runLive('ace-bounty', async ({ c, result, act, observe, wait, checkpoint }
     x.flags.combat=false;x.ship.object.position.set(p[0]+36,p[1],p[2]);x.ship.velocity.set(0,0,0);x.ship.speed=0;
     return x.world.currentSystem;})()`);
   const readBoard = () => c.eval(`(()=>{const cards=Array.from(document.querySelectorAll('.job-card')).map(card=>({title:card.querySelector('.job-title')?.textContent??'',reward:card.querySelector('.job-reward')?.textContent??'',note:card.querySelector('.job-state')?.textContent??''}));const o=window.rimward.observe();const offer=o.jobs.offers.find(j=>j.id==='bounty-ace')??null;return {cards,offer,system:o.world.currentSystem};})()`);
+  const aceTitle = 'Bounty: Carver Illyx';
+  const hasAceCard = (board) => board.cards.some((card) => strip(card.title) === aceTitle);
+  const setIllyxState = (state) => c.eval(`(()=>{const x=window.__ctx;let n=0;
+    for(const bank of Object.values(x.world.recordBanks??{})){for(const r of bank){
+      if(r&&r.role==='ace'&&r.name==='Carver Illyx'){r.state=${JSON.stringify(state)};n++;}}}
+    return n;})()`);
+  const waitBoard = async (pred, label) => {
+    for (let i = 0; i < 24; i++) {
+      const board = await readBoard();
+      if (pred(board)) return board;
+      await sleep(250);
+    }
+    throw Error('timeout ' + label);
+  };
   const dockAndOpenJobs = async (sysId) => {
     await placeAtBerth(sysId);
     await sleep(250);
@@ -60,7 +76,24 @@ await runLive('ace-bounty', async ({ c, result, act, observe, wait, checkpoint }
   result.veridian = { card: veridianAce, offer: veridian.offer };
   await checkpoint('veridian-jobs');
 
-  // C. The card the player accepts quotes the same reward the row posted.
+  // C. Criterion 2: a dead ace leaves the offered row instead of staying on it.
+  // Fixture: the record's state is flipped to dead and back — a kill result, not
+  // a board rule; the dock/system swaps above are explicit fixtures too.
+  assert.equal(await setIllyxState('dead'), 1, 'exactly one Carver Illyx record');
+  const withdrawn = await waitBoard((board) => !board.offer && !hasAceCard(board),
+    'dead ace withdrawal');
+  result.withdrawn = { offer: withdrawn.offer, aceCardPresent: hasAceCard(withdrawn) };
+  assert.equal(withdrawn.offer, null, 'dead ace leaves the agent offer list');
+  assert.equal(hasAceCard(withdrawn), false, 'dead ace card is withdrawn from the DOM');
+  await checkpoint('veridian-dead-withdrawn');
+  assert.equal(await setIllyxState('enroute'), 1, 'the living bearer returns for the accept step');
+  const revived = await waitBoard((board) => board.offer?.target === 'Carver Illyx' && hasAceCard(board),
+    'living ace re-offer');
+  result.revived = { offer: revived.offer, aceCardPresent: hasAceCard(revived) };
+  assert.equal(revived.offer?.target, 'Carver Illyx');
+  assert.equal(hasAceCard(revived), true, 'living ace card returns');
+
+  // D. The card the player accepts quotes the same reward the row posted.
   const accept = await act('acceptJob', { id: 'bounty-ace' });
   assert.ok(accept.ok, 'ace posting is acceptable');
   assert.ok(accept.notice.includes('Carver Illyx'), 'accept receipt names the ace: ' + accept.notice);
@@ -72,5 +105,5 @@ await runLive('ace-bounty', async ({ c, result, act, observe, wait, checkpoint }
   result.accepted = { receipt: accept.notice, job: acceptedJob };
   await checkpoint('veridian-accepted');
 
-  result.method = 'Disposable Chromium; dock and system swap are explicit fixtures; the DOM card, the agent offer, and the accept receipt are read from the running game.';
+  result.method = 'Disposable Chromium; dock, system swap and the dead-ace state flip are explicit fixtures; the DOM card, the agent offer, the withdrawal, and the accept receipt are read from the running game.';
 });

@@ -2220,15 +2220,18 @@ function isAceRecord(rec) {
   return !!rec && (rec.role === 'ace' || rec.classKey === 'ace');
 }
 function isLiveRecord(rec) {
-  return !!rec && rec.state !== 'dead' && rec.state !== 'captured';
+  // Issue #269: a crew-gone derelict is a wreck in the lane, not a flying Gun.
+  // Dead, captured and derelict all fail the "living" test; the derelict record
+  // still resolves to its terminal state later.
+  return !!rec && rec.state !== 'dead' && rec.state !== 'captured' && rec.state !== 'derelict';
 }
 /**
  * Issue #269: the living Named Gun the ace posting should name, or null when
  * none flies. Only real ace records qualify. Order: the current system's bank
  * (a local Named Gun such as Sister Vane), then the authored ace home, then
  * any other generated bank, and finally the authored default while the home
- * bank has never been generated. A dead or captured bearer is skipped, so a
- * defeated ace can never keep the posting.
+ * bank has never been generated. A dead, captured or derelict bearer is
+ * skipped, so a defeated ace can never keep the posting.
  */
 function liveAceRecord(ctx) {
   const banks = ctx.world.recordBanks ?? {};
@@ -2260,7 +2263,8 @@ function liveAceRecord(ctx) {
  * mantle (lineage reuses it), so the CURRENT bearer wins — a living same-name
  * ace is returned even while it flies, so a stale kill of a dead predecessor
  * cannot settle the living successor's contract. Only when no same-name ace is
- * live does the newest dead/captured one resolve the claim. A legacy save
+ * live does the newest dead/captured/derelict one resolve the claim (a derelict
+ * is a crew-gone wreck, not a flying bearer). A legacy save
  * (pre-#269) could carry an ordinary pirate's name on the ace row; ace records
  * win by name, then the ordinary-pirate record keeps that agreement payable.
  * Current bank first, then any generated bank (a defeated ace can have migrated
@@ -2416,8 +2420,9 @@ function acceptedAceFollows(ctx, job) {
   if (!rec) return true; // nothing named resolves: follow the living ace
   if (!isAceRecord(rec)) return false; // legacy ordinary-pirate agreement: keep it payable
   if (isLiveRecord(rec)) return false; // the named bearer still flies
-  // The named bearer is gone: keep the agreement while the player's kill on
-  // that name is still owed, otherwise let it follow a living successor.
+  // The named bearer is gone (dead, captured or a crew-gone derelict): keep
+  // the agreement while the player's kill on that name is still owed, otherwise
+  // let it follow a living successor.
   return latestIncidentFor(ctx, job.target)?.causer !== 'player';
 }
 
@@ -5621,7 +5626,10 @@ function tickDeliveryJobs(ctx, ui, render) {
         // successor's contract. Legacy saves whose ace row carried an ordinary
         // pirate's name still match that record by name.
         const ace = findClaimableRecord(ctx, job.target);
-        if (!ace || (ace.state !== 'dead' && ace.state !== 'captured')) continue;
+        // Issue #269: a crew-gone derelict is a defeat too — the player broke
+        // the hull and the crew left. Dead, captured and derelict all settle;
+        // a living bearer (a reused lineage name) blocks the claim.
+        if (!ace || isLiveRecord(ace)) continue;
         // The claim is only yours if the LATEST word on that name says your guns
         // did it (§8.7): an older player kill cannot pay a successor that fell
         // to the world.

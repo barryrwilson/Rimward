@@ -28,10 +28,14 @@
  *     player's), an accepted agreement keeps its named bearer while it flies or
  *     while the player's kill is owed, and only a gone bearer with nothing owed
  *     is followed by a living Named Gun.
+ *  I. A crew-gone derelict is not a flying Gun: the offered row skips it and
+ *     names the living successor, and an accepted claim settles on the
+ *     player-caused crewPods yield instead of waiting for the wreck to fold.
  *
  * Real station DOM, the real Jobs board, the real desk accept path, the real
  * agent observation and the real throttled delivery tick. Fixtures are disclosed
- * record-state flips (a kill is a combat result, not a board rule), one
+ * record-state flips (a kill or crewPods yield is a combat result, not a board
+ * rule), one
  * milestone push that the real milestone system would have made, one elapsed
  * lineage timer, and explicitly stamped accepted rows in the exact shape the
  * pre-#269 accept path left them.
@@ -102,9 +106,13 @@ function allAceRecords() {
   }
   return out;
 }
-const liveAces = () => allAceRecords().filter(({ rec }) => rec.state !== 'dead' && rec.state !== 'captured');
+// Same predicate as the production isLiveRecord: a crew-gone derelict is a
+// wreck in the lane, not a flying Gun.
+const isLiveAceRecord = (rec) => !!rec && rec.state !== 'dead' && rec.state !== 'captured'
+  && rec.state !== 'derelict';
+const liveAces = () => allAceRecords().filter(({ rec }) => isLiveAceRecord(rec));
 const liveAceNamed = (name) => allAceRecords().find(({ rec }) => rec.name === name
-  && rec.state !== 'dead' && rec.state !== 'captured')?.rec ?? null;
+  && isLiveAceRecord(rec))?.rec ?? null;
 const aceRecordNamed = (name) => liveAceNamed(name)
   ?? allAceRecords().find(({ rec }) => rec.name === name)?.rec ?? null;
 const pirateNames = () => {
@@ -136,7 +144,7 @@ function assertAceBoard(offer, name, bounty) {
   const rec = aceRecordNamed(name);
   assert.ok(rec, `${name} is a real ace record`);
   assert.equal(rec.role, 'ace');
-  assert.ok(rec.state !== 'dead' && rec.state !== 'captured', `${name} is alive`);
+  assert.ok(isLiveAceRecord(rec), `${name} is alive`);
   assert.equal(rec.bounty, bounty);
   assert.equal(pirateNames().has(name), false, `${name} is not an ordinary pirate`);
   const row = aceRow();
@@ -528,6 +536,64 @@ check('H4 a gone bearer with nothing owed is followed by the living Named Gun', 
   step(31);
   assert.equal(aceRow().state, 'done', 'the followed claim settles');
   assert.equal(ctx.world.credits - credits, ACES.hunter.bounty, 'paid the followed bounty');
+  const settled = ctx.world.credits;
+  step(120);
+  assert.equal(ctx.world.credits, settled, 'paid exactly once');
+});
+
+check('H5 a derelict ace is not a living Gun: the row withdraws, then names the successor', () => {
+  ctx.world.incidents.length = 0;
+  const vane = aceRecordNamed(ACES.hunter.name);
+  assert.ok(vane, 'Sister Vane record exists');
+  // Fixture: the crewPods yield leaves a wreck in the lane, not a flying Gun.
+  vane.state = 'derelict';
+  const row = aceRow();
+  row.state = 'offered';
+  row.target = ACES.hunter.name;
+  row.reward = ACES.hunter.bounty;
+  row.title = titleFor(ACES.hunter.name);
+  row.progress = 0;
+  delete row.payQuoted;
+  dock('redmarch');
+  openBoard();
+  assert.equal(aceOffer(), undefined, 'a derelict ace posts no offer');
+  assert.equal(ctx.stationDesk.peekOffers().some((j) => j.id === 'bounty-ace'), false,
+    'the desk does not post the wreck');
+  assert.equal(aceTitles().includes(titleFor(ACES.hunter.name)), false, 'the wreck is not drawn');
+  assert.equal(aceRow().state, 'offered', 'the persisted row is kept, hidden');
+  // Fixture: the lineage timer the real defeat handler would have set.
+  ctx.world.aceRivalry.hunterDownAt = ctx.world.time - ACES.hunter.lineage.respawnDelay;
+  world.update(0);
+  const successor = liveAceNamed(ACES.hunter.name);
+  assert.ok(successor, 'the kin bearer rose from the lineage timer');
+  const successorBounty = Math.round(ACES.hunter.bounty * ACES.hunter.lineage.bountyGrowth);
+  assert.equal(successor.bounty, successorBounty);
+  openBoard();
+  assertAceBoard(aceOffer(), ACES.hunter.name, successorBounty);
+  assert.ok(aceTitles().includes(titleFor(ACES.hunter.name)), 'the living successor is drawn');
+  assert.equal(gateNote(), null, 'her own berth needs no gate note');
+});
+
+check('H6 an accepted claim on a derelict ace pays on the player\'s crewPods yield', () => {
+  ctx.world.incidents.length = 0;
+  const successor = liveAceNamed(ACES.hunter.name);
+  assert.ok(successor, 'the living successor is offered');
+  const row = aceRow();
+  dock('redmarch');
+  openBoard();
+  assertAceBoard(aceOffer(), ACES.hunter.name, successor.bounty);
+  const res = ctx.stationDesk.acceptJob('bounty-ace');
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(row.target, ACES.hunter.name);
+  assert.equal(row.reward, successor.bounty);
+  const credits = ctx.world.credits;
+  // Fixture: the player breaks the hull and the crew leaves; the wreck is not
+  // folded yet, so the record is derelict rather than dead.
+  successor.state = 'derelict';
+  ctx.world.incidents.push({ name: ACES.hunter.name, causer: 'player', kind: 'surrendered', outcome: 'crewPods' });
+  step(31);
+  assert.equal(row.state, 'done', 'the player-caused yield settles the claim');
+  assert.equal(ctx.world.credits - credits, successor.bounty, 'paid the posted bounty');
   const settled = ctx.world.credits;
   step(120);
   assert.equal(ctx.world.credits, settled, 'paid exactly once');

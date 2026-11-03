@@ -167,6 +167,12 @@ current bearer of a reused lineage name — a living bearer blocks the claim, so
 dead predecessor's stale kill cannot pay the successor — and requires the latest
 incident on that name to be the player's kill.
 
+A crew-gone derelict is not a flying Gun: the offered row skips it (naming a
+living successor when one flies, otherwise withdrawn), and an accepted claim
+settles on the player-caused crewPods yield rather than waiting for the wreck to
+fold. The derelict record still resolves to its terminal state later; the claim
+is already done (#269).
+
 **This serial must not change step 1’s four ids, unique haul/ferry quote stamps, Wave 35 haul dest bind, overlay cap/ids, or Named Gun records.** Hunt is additive: extra sync on render, extra branch in delivery tick, extra cards in `boardJobs`, extra kind in `sanitizeJobs`, plus a **skip** on overlay pay when an accepted hunt already claims that quarry.
 
 Digit 2 and `DOCK_KEY_SERVICES` stay. Digit 0 stays shipyard.
