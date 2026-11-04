@@ -1,4 +1,56 @@
 # RIMWARD remaining work
+## Hunt survivors: the employer dock takes prisoners — #273
+
+Design decision (2026-11-04): hunt survivors get a contract-linked outlet on the
+hunter's route. The dock that posted the hunt takes the quarry's crew as
+prisoners for a small fee and employer standing, so scooping is part of the hunt
+instead of dead weight in the hold. The tie is the quarry's own dead or captured
+ordinary-pirate record in the origin system's persistent record bank
+(`world.recordBanks`, JSON-plain, retained after a kill); it is deliberately not
+the accepted hunt job, because `huntPayComplete` sets the job `failed` and
+`replaceHuntJob` splices that row out of `world.jobs` at the 0.5 s payout tick,
+before the player can dock. This choice needs no new persisted field, save key,
+frozen event, digit, equipment SKU or `state.js` edit.
+
+Implemented on `dsh/issue-273-survivor-prisoner-outlet` (base master
+`c69c82c`). New headless module `src/game/prisoners.js` (the trafficking.js
+pattern: no DOM, own frozen tuning) exposes `PRISONER_HANDOVER`
+(60 UU and +1 employer standing per head), `prisonerFactions`,
+`prisonerUnits` and `applyPrisonerHandover`. Only player-killed crew
+(`source === 'playerKill'`) of a faction that owns a dead or captured
+non-ace pirate record in that system's bank is eligible; unknowables, Named
+Guns, corrupt over-cap rows and other-faction or rescued rows are left alone.
+The handover removes the rows in place, pays once, banks standing for the dock
+faction, emits only a `commLine` receipt and fails closed on a missing world,
+bank, cargo or non-finite credit balance. `renderRescue` in `station.js` adds a
+click-only `Hand over prisoners` row (no new digit; the existing `Return
+survivors` button shares the same placement, including the level-1 dock menu),
+and the other-faction line now tells the player where those people can go: their
+own docks will take them home, or a Gilded fence will buy them.
+
+Focused regression is `npm run test:survivor-prisoners` (8 groups: the record
+tie and exclusions, player-kill only, merged and corrupt rows, one fee/standing
+receipt, idempotence, fail-closed cases, invalid dock faction, the live
+current-system bank fallback, and JSON-safe cargo). It is appended to
+`npm run test:boot`, which passes with it, and `npm run build` passes with the
+production bundle policy. Live browser evidence is
+`npm run test:survivor-prisoners-live`: PASS in disposable Chromium (the
+People-pane line, the click-only action, its receipt, credits 350 → 470,
+employer standing +2, the hold emptied, a second refusal, and the other-faction
+outlet wording at a non-employer dock; zero console errors or exceptions;
+screenshots under `out/issue-273-live/survivor-prisoners`).
+
+Parked follow-ups (deliberately not in this issue): the tie is faction-level,
+so an independent trader/miner/patrol crew can be taken once an independent
+pirate died locally, and an ace kill's crew can ride on an ordinary dead pirate
+of the same faction; survivor rows carry no origin, so crew can be redeemed at
+another system that happens to have a dead pirate of that faction; merged
+survivor rows keep only one quarry name; and a strict per-contract tie would
+need one JSON-safe `recordId`/`huntId` stamped on the survivor row at spawn,
+which AGENTS.md reserves for explicit scope. The People service string in
+`agent-schema.js` does not mention prisoners; agents still discover the action
+through `station.view.actions`.
+
 ## Ace bounty row names only a living ace — #269
 
 Implemented on `dsh/issue-269-ace-bounty-row`, independently reviewed; this
