@@ -1,4 +1,44 @@
 # RIMWARD remaining work
+## Ace bounty row names only a living ace — #269
+
+Implemented on `dsh/issue-269-ace-bounty-row`, independently reviewed; this
+revision closes the crew-gone derelict gap and adds a live withdrawal checkpoint:
+an offered `bounty-ace` row now names only a living Named Gun record and carries
+that record's own bounty, on every board. A system with no authored ace cast
+borrows a living Named Gun from another system (the authored ace home first) and
+says where that ace hunts; an ordinary local pirate can no longer appear at its
+300 UU bounty under the ace title. When every ace is dead or a crew-gone derelict
+the offered row is withdrawn from the Jobs board and the agent offer list instead
+of being spliced, so a successor ace can re-offer it. An accepted agreement keeps
+its named bearer while that bearer flies or while the player's kill on that name
+is still owed, so a board read cannot retarget a pending claim; only a named
+bearer that is gone with nothing owed is followed by a living Named Gun, and a
+legacy save whose agreement named an ordinary pirate is never rewritten while
+that record resolves and stays payable by that name. Settlement resolves the
+current bearer of a reused lineage name (a living bearer blocks the claim, so a
+dead predecessor's stale kill cannot pay the successor) and requires the latest
+incident on that name to be the player's kill. A crew-gone derelict is a defeat
+too: dead, captured and derelict all settle on the player-caused yield, and a
+derelict record does not keep the offered posting.
+
+Focused regression is `npm run test:ace-bounty` (18 checks: a sweep of all 101
+boards, a dead ace, the aspirant cycle, lineage succession, accepted-agreement
+freeze and follow, a legacy save, kill attribution, and a crew-gone derelict
+withdrawal/successor and claim payout); it fails on the pre-fix source. The live
+Chromium probe `npm run test:ace-bounty-live` passes the Freehold and Veridian
+boards, the dead-ace withdrawal checkpoint, the accept receipt and a clean
+console, and `npm run build` and the extended `npm run test:boot` (which now
+includes the new focused test) pass. No new persisted field, key or save-schema
+change. See the [hunt design](Msn02HuntDesign.md) for the board contract.
+
+Parked follow-ups: the accepted-agreement follow still runs only on a board read,
+so a successor killed before the next read is not credited and a row can stay
+accepted while no live ace exists; a legacy pirate-named agreement whose pirate
+died to the world stays accepted forever (bounty rows are not abandonable);
+settlement attributes by name only, so a generated name that collides with an
+ace name can pay or block the wrong claim; and the authored-default fallback
+(a drifter/redmarch start before Freehold is generated) has no focused test.
+
 ## Explicit double-agent dossier choice — #240
 
 Implemented and acceptance verified at runtime `c0a20d329f2ac759b1d6bb775d5b49f00fb8741a`.

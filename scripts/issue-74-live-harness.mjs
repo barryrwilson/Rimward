@@ -31,7 +31,13 @@ export async function runLive(name,fn,{seed,origin}={}){
   if(resumed&&!resumed.toLowerCase().startsWith((out+sep).toLowerCase()))throw Error('Resume profile must be inside the named issue evidence output');
   const profile=resumed||await mkdtemp(join(folder,'profile-')),cache=join(folder,'vite-cache');
   const config=join(repo,`out/issue74-vite-${name}-${process.pid}.mjs`);await mkdir(dirname(config),{recursive:true});
-  await writeFile(config,`export default {root:${JSON.stringify(repo)},cacheDir:${JSON.stringify(cache)}};`);
+  // This run's Chromium profile lives under the evidence directory; Vite must
+  // not watch it or Windows fails the whole run with EBUSY when Chrome locks its
+  // own cache files. Ignore the ABSOLUTE evidence directory (both separators)
+  // rather than '**/out/**': a worktree under `out/` would otherwise match and
+  // Vite would watch nothing.
+  const ignoreRoot=out, ignoreRootFwd=out.replace(/\\/g,'/');
+  await writeFile(config,`export default {root:${JSON.stringify(repo)},cacheDir:${JSON.stringify(cache)},server:{watch:{ignored:[(p)=>{const s=String(p);return s.startsWith(${JSON.stringify(ignoreRoot)})||s.startsWith(${JSON.stringify(ignoreRootFwd)});}]}}};`);
   const p=process.env.ISSUE74_PORT?Number(process.env.ISSUE74_PORT):await port();if(!Number.isInteger(p)||p<1024||p>65535)throw Error('Invalid loopback port');let vite,chrome,c;
   const result={name,profile,started:new Date().toISOString(),fixture:false,actions:[],checkpoints:[],samples:[],consoleErrors:[],exceptions:[]};
   result.rendererConfig=process.env.ISSUE74_RENDERER||'platform';
