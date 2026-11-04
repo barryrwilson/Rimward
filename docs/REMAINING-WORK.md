@@ -38,7 +38,15 @@ production bundle policy. Live browser evidence is
 People-pane line, the click-only action, its receipt, credits 350 → 470,
 employer standing +2, the hold emptied, a second refusal, and the other-faction
 outlet wording at a non-employer dock; zero console errors or exceptions;
-screenshots under `out/issue-273-live/survivor-prisoners`).
+screenshots under `out/issue-273-live/survivor-prisoners`). The probe fixtures
+the berth, the dead quarry record and the scooped survivor row; the focused test
+pins the record tie at module level, so a natural hunt → kill → scoop →
+employer-dock playthrough is still owed.
+
+Build note: `vite.config.js` keeps esbuild's transform temp files under the
+ignored `out/build-tmp` when the platform temp directory cannot delete them
+(Windows file sandbox); this is an environment-only build fix with no runtime
+bundle or gameplay change.
 
 Parked follow-ups (deliberately not in this issue): the tie is faction-level,
 so an independent trader/miner/patrol crew can be taken once an independent
