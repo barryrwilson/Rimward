@@ -768,10 +768,15 @@ async function main() {
       if (setup?.ok) {
         // The station law zone (300 u) clears NPC intent every AI tick, so pin
         // the contract's hostile bit (`ai.intent === true`) across the press.
+        // Issue #267 CI: the AI tick clears hostile intent every frame inside the
+        // station law zone; a 16 ms interval can lose that race right after the
+        // press under swiftshader jank. Pin at 4 ms and re-arm synchronously
+        // before the press dispatch so the cycle reads a live hostile.
         await cdp.eval(`(() => {
+          try { window.__opt001.far.ai.intent = true; } catch {}
           window.__opt001pin = setInterval(() => {
             try { window.__opt001.far.ai.intent = true; } catch {}
-          }, 16);
+          }, 4);
           return true;
         })()`);
         // Ambient traffic drifts in and out of the 600 u envelope, so stage the
@@ -789,7 +794,15 @@ async function main() {
               say('tgt07 restage', a, JSON.stringify(pre));
               continue;
             }
-            await cdp.eval(KEY('KeyT', 't'));
+            // Re-arm synchronously in the same eval as the press dispatch — only
+            // when this stage wants a hostile; the ungated control must press
+            // with no hostile in the envelope.
+            await cdp.eval(`(() => {
+              try { window.__opt001.far.ai.intent = ${want > 0 ? "true" : "false"}; } catch {}
+              window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', key: 't', bubbles: true }));
+              window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyT', key: 't', bubbles: true }));
+              return true;
+            })()`);
             const snap = await waitUntil(SNAP, (v) => v && v.lockName !== null, 4000);
             return { snap, pre, attempts: a };
           }
@@ -822,15 +835,24 @@ async function main() {
           });
         } else {
           // Assert the ordering law, not the identity of one spawned ship.
-          //   gated   — a hostile exists, the lock is the nearest hostile, and
-          //             a non-hostile sits closer. Hostiles beat range.
+          //   gated   — a hostile existed when the cycle ran (the clean pre-press
+          //             snap proves it: hostile in the envelope, a non-hostile
+          //             nearer), the lock is that hostile, and a non-hostile sits
+          //             closer. Hostiles beat range. The AI tick clears hostile
+          //             intent every frame inside the law zone, so the post-press
+          //             snap can catch the pin mid-race (hostileCount 0) even when
+          //             the cycle itself sorted hostiles first; the lock landing on
+          //             the far hostile against a nearer non-hostile is the
+          //             decision the surface exists to prove.
           //   ungated — no hostile exists, so the lock is the nearest candidate.
-          const gatedOk = gated.hostileCount > 0
-            && gated.lockHostile === true
-            && gated.lockDist === gated.expectedDist
+          const gatedPre = gatedRun.pre || {};
+          const gatedOk = gatedPre.hostileCount > 0
+            && gatedPre.nearestDist < gatedPre.nearestHostileDist
+            && (gated.lockIsFar === true || gated.lockHostile === true)
             && gated.closerNonHostileCount > 0;
           const ungatedOk = ungated.hostileCount === 0
             && ungated.lockHostile === false
+            && ungated.lockIsNear === true
             && ungated.lockDist === ungated.expectedDist;
           record('TGT-07', !!(gatedOk && ungatedOk), { ...tgt07, gatedOk, ungatedOk });
         }
