@@ -174,9 +174,12 @@ export const HEAT = { max: 100, coolPerSec: 12, overheatUnlockAt: 40 }; // §6.3
 export const POWER = { max: 100, regenPerSec: 8, afterburnerPerSec: 16, afterburnerMin: 15 };
 
 // Session-only agent tuning; never persisted on ship records.
+// Issue #267: reengage 2s — the ~1.5-2s nose realignment after an evade excursion
+// must fit inside the fire window, or a shooter that lands a hit per episode starves
+// the lease of fire time even after the hit-triggered re-entry bypass was removed.
 export const REACTIVE_DEFENSE = Object.freeze({ hull: 0.4, engine: 0.3, defenses: 0.1,
   heatHigh: 0.9, heatLow: 0.75, cueAge: 0.25, minEpisode: 1, maxEpisode: 3,
-  quiet: 0.75, reengage: 1, driftTime: 0.35, burnTime: 0.5 });
+  quiet: 0.75, reengage: 2, driftTime: 0.35, burnTime: 0.5 });
 
 // ---------- Defense model (§6.4/§6.5) ----------
 export const DEFENSE = {
