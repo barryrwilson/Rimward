@@ -5,6 +5,8 @@
  * this system owns hunger drift, wound accrual/regen, mood, and bond growth.
  */
 
+import { isHuntQuarry } from './prize.js'; // issue #265: a contract kill is not an atrocity
+
 // --- Sustain (§14.5) ---
 const HUNGER_SECONDS = 90 * 60; // +1.0 hunger per ~90 min active (unpaused, undocked) play
 const WOUND_PER_DAMAGE = 1 / 300; // hull-reaching hit → wounds
@@ -84,8 +86,14 @@ export function initBio(ctx) {
           case 'npcDestroyed': {
             // §7.7: destroying a surrendered/disabled ship is an atrocity —
             // plain, not celebrated (§7.9); world/hud react to 'atrocity'.
+            // Issue #265: the witnessed kill of a live hunt's bound quarry is
+            // lawful work, not an atrocity — standing already exempts pirate
+            // victims (kill-standing.js skipHuntVictim), so the companion does
+            // not rage at a completed contract. The record-id-precise bind is
+            // the same read the CONTRACT bracket mark uses (prize.js).
             const st = e.ship && e.ship.state;
-            if (st && (st.surrendered || st.disabled)) {
+            const rec = e.ship && e.ship.record;
+            if (st && (st.surrendered || st.disabled) && !isHuntQuarry(ctx, rec)) {
               feralUntil = now + FERAL_SECONDS;
               ctx.emit('atrocity');
             }

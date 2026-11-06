@@ -509,3 +509,50 @@ bound hull and not on a bystander; a Q-ship cover hides the mark until the
 record is eligible; observe() agrees with the bracket; records stay JSON-plain
 and the save round-trips). Appended to `npm run test:boot`.
 
+
+## A lawful kill is not an atrocity — decision (issue #265, 2026-11-06)
+
+The #249 playtest turned every paid hunt into an atrocity: quarries were
+disabled or surrendered long before they died, a hunt pays only on a witnessed
+kill, and the follow-through kill then read as an atrocity — the living ship
+went feral for 60 s after each kill and fear climbed +8 per surrendered kill
+(and +2 per witnessed capitulation on the way), walking 0 → 40 in one
+30-minute run toward lawfulClosesAt 50. Standing already treats the same kill
+as legitimate (`skipHuntVictim` exempts pirate/ace victims), so the world was
+saying two opposite things about one act.
+
+**Decision (option 1 of the issue, with option 3's readable cost): a
+witnessed contract kill is lawful work, not an atrocity.** The exemption is
+the record-id-precise contract bind the board already maintains — a destroyed
+or surrendered hull whose record is the bound quarry of one of THIS pilot's
+live hunt jobs is completing a contract, not murdering a helpless crew:
+
+- **Bio (the feral rage).** The `npcDestroyed` atrocity gate now skips the
+  bound quarry of a live hunt: no feral window, no `atrocity` event. A
+  bystander's disabled or surrendered hull still triggers both, unchanged.
+- **Fear (the reputation).** Killing a surrendered hull still costs
+  `killedSurrendered` fear — except when that hull is a live hunt's bound
+  quarry; the witnessed capitulation (+2) on the way in still counts, because
+  the lanes did watch them break. Non-quarry kills keep every bump unchanged.
+- **The board states the cost (option 3's copy).** The hunt card's pay line
+  gains one bounded row so the price of mercy is readable before accept:
+  "A finished hunt pays the full bounty; the kill is lawful work." — the card
+  never promises a fear-free capture, and the lapsed/dead-end rules are
+  unchanged.
+
+**What this is not:** no non-lethal completion (option 2 stays parked — the
+capture record state already settles a hunt if the world ever produces one),
+no change to `applyPlayerKillStanding` (it already exempts these victims),
+no change to pay, deadlines, tiers, the prisoner path (#273) or the overlay
+skip, and no new persisted field, event or `state.js` edit. The kill itself
+still requires the witnessed player incident; the exemption only stops the
+world from double-charging the same lawful act.
+
+Focused regression: `npm run test:hunt-lawful-kill` (a bound quarry's kill
+neither ferals nor emits 'atrocity' nor pays killedSurrendered fear while a
+bystander's kill does both; the witnessed capitulation still bumps +2 on the
+way in through the real #98/#99 hail resolver; the card names the lawful-kill
+line; records stay JSON-plain and the save round-trips), appended to
+`npm run test:boot`. The live flow is `npm run test:hunt-lawful-kill-live`
+(disposable Chromium: accept a Freehold hunt, break and finish the bound
+quarry, no feral rage, no fear spike, the contract settles).

@@ -1,3 +1,38 @@
+## A lawful hunt kill is not an atrocity — #265
+
+Implemented on `dsh/issue-265-playtest-hunter-every-paid-hunt-is-an-at` (base
+master `bc55503`). The #249 frame was real: every paid hunt left the quarry
+disabled or surrendered before it died, a hunt pays only on a witnessed kill,
+and the finishing kill then read as an atrocity — the living ship went feral
+for 60 s after each kill and fear climbed +8 per surrendered kill (+2 per
+witnessed capitulation on the way in), 0 → 40 in 22 sim-minutes toward
+`lawfulClosesAt` 50, while `applyPlayerKillStanding` already exempted the
+same victim as legitimate. The decision (2026-11-06, recorded in
+[Msn02HuntDesign.md](Msn02HuntDesign.md)): the witnessed kill of a live hunt's
+bound quarry is lawful work, not an atrocity. The exemption is the
+record-id-precise contract bind the #271 CONTRACT mark already uses
+(`prize.js isHuntQuarry`): bio.js's `npcDestroyed` atrocity gate skips the
+bound quarry (no feral window, no `atrocity` event), npc.js's
+`killedSurrendered` fear bump skips it (the +2 witnessed capitulation on the
+way in still counts), and the hunt card says "A finished hunt pays the full
+bounty; the kill is lawful work." A bystander's disabled or surrendered hull
+keeps every consequence; no non-lethal completion (option 2 stays parked), no
+change to `applyPlayerKillStanding`, pay, deadlines, tiers, the prisoner
+path (#273) or the overlay skip; no new persisted field, event or
+`state.js` edit.
+
+Focused regression is `npm run test:hunt-lawful-kill` (6 checks: the card
+names the lawful-kill line; the surrendered contract kill neither ferals nor
+emits `atrocity` nor pays `killedSurrendered`; the witnessed capitulation
+still pays +2 through the real #98/#99 hail resolver and a non-quarry
+surrendered kill keeps the +8 and the feral rage; a disabled bystander still
+fires `atrocity`; jobs and records stay JSON-plain), appended to
+`npm run test:boot`; it fails on the pre-fix source. The live flow is
+`npm run test:hunt-lawful-kill-live`: PASS in disposable Chromium (accept a
+Freehold hunt, the lawful-kill line on the card, the bound quarry
+spawned/locked/broken/finished, mood `keen` not `feral`, fear 0 after the
+kill, the record settled `dead`, the contract settled inside the delivery
+tick, and a clean console; evidence under `out/issue-265-live/`).
 # RIMWARD remaining work
 ## Playtest Agent API: engage stalls and unnamed overlay refusals — #267
 

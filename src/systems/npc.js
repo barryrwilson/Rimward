@@ -47,7 +47,7 @@ import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } f
 import { epicEffects } from '../game/epics.js';
 import { spawnPod, spawnSurvivorPod, mergePodContents, podUnits, podCommodityKey } from '../game/pods.js';
 import { holdFree, holdHeavy } from '../game/pirate-haul.js';
-import { rollPrizeChoice, prizeEligible, captivesRowFor, takePrizeHull, owesPrizeFence, fencePrize, tasteOf } from '../game/prize.js';
+import { rollPrizeChoice, prizeEligible, captivesRowFor, takePrizeHull, owesPrizeFence, fencePrize, tasteOf, isHuntQuarry } from '../game/prize.js'; // issue #265: a contract kill is lawful work
 import { cargoValueSafe, isDataCommodity, maybeSpawnDataFromWreck } from '../game/data-trade.js';
 import { applyPlayerKillStanding } from '../game/kill-standing.js';
 import { maybeGrantPirateSeed } from '../game/bio-seed.js';
@@ -4021,9 +4021,14 @@ function handleDestroyed(ctx, live, burst, reducedMotion) {
 
   applyPlayerKillStanding(ctx, live);
 
-  // §7.7 fear consequences of the kill.
-  if (live.state.surrendered) bumpFear(ctx, ECON.fear.killedSurrendered);
-  else if (live.role === 'ace') bumpFear(ctx, ECON.fear.aceDefeated);
+  // §7.7 fear consequences of the kill. Issue #265: a live hunt's bound
+  // quarry is the contract the dock posted — finishing it is lawful work, so
+  // the surrendered kill does not also pay killedSurrendered fear (the +2
+  // witnessed capitulation on the way in still counted). Any other surrendered
+  // hull keeps the full bump; the ace reward is untouched.
+  if (live.state.surrendered) {
+    if (!isHuntQuarry(ctx, live.record)) bumpFear(ctx, ECON.fear.killedSurrendered);
+  } else if (live.role === 'ace') bumpFear(ctx, ECON.fear.aceDefeated);
 
   // Remaining manifest becomes scoopable pods. Salvage already emptied
   // the hold, so this is a no-op after a dump (no double loot). Empty

@@ -7310,7 +7310,10 @@ export function initStation(ctx) {
         const base = huntTierOf(rec) === 'hard'
           ? `${name} is a hardened reaver — one of the names the lanes whisper. The dock at ${stationName} pays a premium on a witnessed kill; bring a worked hull.`
           : `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`;
-        detail = haunt ? `${base} Last seen: ${haunt}.` : base;
+        // Issue #265: the board states the cost of mercy up front — the
+        // contracted kill is lawful work, not an atrocity.
+        const lawfulLine = 'A finished hunt pays the full bounty; the kill is lawful work.';
+        detail = (haunt ? `${base} Last seen: ${haunt}.` : base) + ` ${lawfulLine}`;
       } else if (job.kind === 'passenger') {
         title = 'Escort passengers';
         detail = passengerTermsFor(passengerCardHops(ctx, job, currentId));
