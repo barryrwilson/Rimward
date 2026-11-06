@@ -1,4 +1,35 @@
 # RIMWARD remaining work
+## A tracking phase: last-seen lanes and a marked quarry — #271
+
+Implemented on `dsh/issue-271-playtest-hunter-hunts-have-no-tracking-p` (base
+master `0400bae`, the #272 supply work). The #249 frame was real: the only
+location a hunt gave was "haunts the lanes of this system", quarries read like
+bystanders, and two bystanders hit by stray fire became the next posted
+quarries. Three decisions in `docs/Msn02HuntDesign.md` (the tracking-phase
+section of 2026-11-05), all inside the existing hunt family — no new job kind,
+no new persist key, no new event, no `state.js` edit:
+
+- **Last seen on the card.** `huntHauntPhrase` derives a STATIC lane phrase
+  (station–gate lane, ore field, or a named gate) from the record's own route
+  waypoints against the authored geography — the #239 "route geometry off a
+  sheet, not a sighting" law; no coordinate, no live position, no handle.
+  Cards render "Last seen: <phrase>."
+- **Ask around answers fresher.** The People desk's free Ask around answers a
+  live local hunt before the ordinary rumor: the same lane phrase plus a
+  coarse freshness bucket (recently / a while back / some days ago). Keepers
+  still read their ledger first; off-home docks are unchanged.
+- **CONTRACT on the bracket.** `isHuntQuarry` (hunt recordId binds only — the
+  overlay bounty purse never marks a hull) appends a CONTRACT word to the
+  locked bracket meta, the target rail name, and the matching
+  `targets.current`/`targets.nearby` observe rows. A word, not a gauge; no
+  colour-only cue; a masked Q-ship's cover shows it too (the mark never
+  unmasks).
+
+Focused regression is `npm run test:hunt-tracking` (8 checks, appended to
+`npm run test:boot`). Parked: quarries holding away from the station and
+gate-running under approach are the existing #68 escape behaviour, exercised
+but not re-tuned here; a live-browser playtest pass of the full loop is the
+next natural evidence after merge.
 ## Hunt supply and danger tiers: the cast is a population — #272
 
 Implemented on `dsh/issue-272-playtest-hunter-hunt-supply-runs-dry-aft` (base

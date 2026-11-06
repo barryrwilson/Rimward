@@ -107,6 +107,24 @@ export function prizeEligible(ctx, rec) {
   return true;
 }
 
+/**
+ * Issue #271: is this record the bound quarry of one of the pilot's LIVE hunt
+ * contracts (offered or accepted)? Record-id precise; a lapsed/failed row
+ * stops marking. The CONTRACT bracket word and the observe() row read THIS —
+ * the overlay bounty rows are a different purse and never mark the hull.
+ */
+export function isHuntQuarry(ctx, rec) {
+  const jobs = ctx && ctx.world && ctx.world.jobs;
+  if (!Array.isArray(jobs) || !rec || typeof rec.id !== 'string') return false;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (!j || j.kind !== 'hunt') continue;
+    if (j.state !== 'offered' && j.state !== 'accepted') continue;
+    if (j.recordId === rec.id) return true;
+  }
+  return false;
+}
+
 /** True when any posted or accepted job names this record as its target. */
 export function isJobQuarry(ctx, rec) {
   const jobs = ctx && ctx.world && ctx.world.jobs;
@@ -114,7 +132,11 @@ export function isJobQuarry(ctx, rec) {
   for (let i = 0; i < jobs.length; i++) {
     const j = jobs[i];
     if (!j || j.state === 'completed' || j.state === 'failed' || j.state === 'expired') continue;
-    if (typeof rec.id === 'string' && (j.targetId === rec.id || j.quarryId === rec.id)) return true;
+    // Issue #271: hunt contracts bind a recordId, not a name — the record-id
+    // match is the precise read; the name match stays for the families that
+    // key on names. Live states only; a lapsed row stops marking.
+    if (j.kind === 'hunt' && j.state !== 'offered' && j.state !== 'accepted') continue;
+    if (typeof rec.id === 'string' && (j.targetId === rec.id || j.quarryId === rec.id || j.recordId === rec.id)) return true;
     if (typeof rec.name === 'string' && rec.name.length > 0 && j.target === rec.name) return true;
   }
   return false;

@@ -19,6 +19,7 @@ import { queuedDockDest } from './dock-queue.js';
 import { originChoices } from './origins.js';
 import { recoveryObjective } from './recovery.js';
 import { escapeStatus } from './npc-escape.js';
+import { isHuntQuarry } from './prize.js'; // issue #271: a bound quarry publishes the CONTRACT word
 import { podUnits } from './pods.js';
 import { cargoSplit } from './consignment.js'; // issue #177: fronted units are not the player's stock
 import { PHY } from './physics.js';
@@ -246,6 +247,11 @@ function shipPublicCondition(ctx, t, row) {
   }
   row.surrendered = st.surrendered === true;
   row.hailState = str(hailEncounterState(ctx, t));
+  // Issue #271: the bracket prints CONTRACT for one of the pilot's live hunt
+  // binds; the observation publishes the same word on the same rows. A masked
+  // Q-ship's cover shows it too — the mark never unmasks what the scanner
+  // has not.
+  if (rec && isHuntQuarry(ctx, rec)) row.contract = true;
 }
 
 /**

@@ -3097,6 +3097,103 @@ function huntTierOf(rec) {
   return 'standard';
 }
 
+/**
+ * Issue #271: the People desk's fresher sighting for a live local hunt: the
+ * same static lane phrase as the card, plus a coarse freshness bucket read off
+ * the record's own lane progress. No timestamp, no coordinate, no live handle.
+ * Null when no offered/accepted hunt here binds a living quarry — the caller
+ * falls through to the ordinary rumor.
+ */
+function huntSightingLine(ctx, sysId) {
+  try {
+    const jobs = ctx.world.jobs;
+    if (!Array.isArray(jobs)) return null;
+    let picked = null;
+    let pickedRec = null;
+    for (const j of jobs) {
+      if (!j || j.kind !== 'hunt' || j.originSystem !== sysId) continue;
+      if (j.state !== 'offered' && j.state !== 'accepted') continue;
+      const rec = resolveHuntRecord(ctx, j);
+      if (!rec || rec.state === 'dead' || rec.state === 'captured' || rec.state === 'derelict') continue;
+      picked = j;
+      pickedRec = rec;
+      if (j.state === 'accepted') break; // the contract you are flying answers first
+    }
+    if (!picked || !pickedRec) return null;
+    const haunt = huntHauntPhrase(ctx, sysId, pickedRec);
+    if (!haunt) return null;
+    const name = huntDisplayName(pickedRec.name) || HUNT_FALLBACK_NAME;
+    const leg = Number.isFinite(pickedRec.legT) ? pickedRec.legT : 0;
+    const freshness = leg < 0.34 ? 'recently' : leg < 0.8 ? 'a while back' : 'some days ago';
+    return `${name}? ${haunt} — someone traded that way ${freshness}.`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Issue #271: the STATIC lane phrase a hunt card and the People desk quote as
+ * the quarry's haunt — derived from the record's own route waypoints against
+ * the system's authored geography, the same "route geometry off a sheet, not a
+ * sighting" law the #239 flight-plan brief runs under. No live position, no
+ * handle, no arrival time, no coordinate: the phrase names one of the three
+ * places a cast pirate's authored lane actually touches (the station–gate
+ * lane, the ore field, or a gate), and every name it prints comes from
+ * SYSTEMS/AUTHORED copy, stripped and bounded like every other job string.
+ * Unknown geometry fails open to the old "haunts the lanes" wording.
+ */
+function huntHauntPhrase(ctx, sysId, rec) {
+  try {
+    const def = SYSTEMS[sysId];
+    if (!def || !rec || !Array.isArray(rec.route) || rec.route.length === 0) return null;
+    const vec = (p) => {
+      if (!p || (typeof p !== 'object' && !Array.isArray(p))) return null;
+      const x = Number.isFinite(p.x) ? p.x : (Array.isArray(p) ? p[0] : NaN);
+      const y = Number.isFinite(p.y) ? p.y : (Array.isArray(p) ? p[1] : NaN);
+      const z = Number.isFinite(p.z) ? p.z : (Array.isArray(p) ? p[2] : NaN);
+      return Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z) ? { x, y, z } : null;
+    };
+    const wps = rec.route.map(vec).filter(Boolean);
+    if (wps.length === 0) return null;
+    const sp = Array.isArray(def.station?.position) ? vec(def.station.position) : null;
+    if (!sp) return null;
+    const dist2 = (a, b) => {
+      const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+      return dx * dx + dy * dy + dz * dz;
+    };
+    const stationName = def.station?.name ?? def.name;
+    // A gate waypoint: any authored gate ring the route touches.
+    const gates = Array.isArray(def.gates) ? def.gates : [];
+    const field = def.field && Array.isArray(def.field.center) ? def.field : null;
+    const fieldPos = field ? vec(field.center) : null;
+    const nearField = fieldPos && field && Number.isFinite(field.radius)
+      ? wps.some((w) => dist2(w, fieldPos) <= field.radius * field.radius)
+      : false;
+    if (nearField) {
+      const fieldName = def.field?.name;
+      if (typeof fieldName === 'string' && fieldName) return `holding near the ${fieldName}`;
+      return 'holding near the ore field';
+    }
+    const nearGate = gates.some((g) => {
+      const gp = vec(g?.position);
+      return gp && wps.some((w) => dist2(w, gp) <= 150 * 150);
+    });
+    if (nearGate) {
+      const tos = gates.map((g) => g?.to).filter((t) => typeof t === 'string' && Object.hasOwn(SYSTEMS, t));
+      const destName = tos.length === 1 ? (SYSTEMS[tos[0]].name ?? '') : '';
+      return destName ? `seen near the gate to ${destName}` : 'seen near the system gate';
+    }
+    // Default cast shape: gate -> lane-mid -> gate. The lane mid is between
+    // the station and the primary gate, so "working the <Station>–gate lane"
+    // is true without ever naming a coordinate.
+    const laneMid = wps.find((w) => dist2(w, sp) > 200 * 200);
+    if (laneMid) return `working the ${stationName}–gate lane`;
+    return `loitering just off ${stationName}`;
+  } catch {
+    return null;
+  }
+}
+
 function makeHuntJob(ctx, sysId, slot, rec) {
   if (!Object.hasOwn(SYSTEMS, sysId) || !rec) return null;
   const id = nextHuntId(ctx.world.jobs, sysId);
@@ -3105,6 +3202,11 @@ function makeHuntJob(ctx, sysId, slot, rec) {
   const stationName = SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
   const bounty = Math.round(rec.bounty);
   const tier = huntTierOf(rec);
+  // Issue #271: the card names the quarry's static haunt — a place, not a
+  // coordinate. Derived fresh from the record's route each time the board
+  // renders a card, so a replenished lane change is never stale copy.
+  const haunt = huntHauntPhrase(ctx, sysId, rec);
+  const hauntLine = haunt ? `Last seen: ${haunt}.` : '';
   return {
     id,
     kind: 'hunt',
@@ -3113,9 +3215,10 @@ function makeHuntJob(ctx, sysId, slot, rec) {
     recordId: rec.id,
     target: name,
     title: `Hunt ${name}`,
-    detail: tier === 'hard'
+    detail: (tier === 'hard'
       ? `${name} is a hardened reaver — one of the names the lanes whisper. The dock at ${stationName} pays a premium on a witnessed kill; bring a worked hull.`
-      : `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`,
+      : `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`)
+      + (hauntLine ? ` ${hauntLine}` : ''),
     reward: bounty,
     need: 1,
     progress: 0,
@@ -7200,7 +7303,14 @@ export function initStation(ctx) {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
         const stationName = miningStationName(originId) ?? 'the dock';
         title = `Hunt ${name}`;
-        detail = `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`;
+        // Issue #271: the live card re-derives the haunt phrase so an accepted
+        // card and its offered sibling always read the same lane truth.
+        const rec = resolveHuntRecord(ctx, job);
+        const haunt = huntHauntPhrase(ctx, originId, rec);
+        const base = huntTierOf(rec) === 'hard'
+          ? `${name} is a hardened reaver — one of the names the lanes whisper. The dock at ${stationName} pays a premium on a witnessed kill; bring a worked hull.`
+          : `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`;
+        detail = haunt ? `${base} Last seen: ${haunt}.` : base;
       } else if (job.kind === 'passenger') {
         title = 'Escort passengers';
         detail = passengerTermsFor(passengerCardHops(ctx, job, currentId));
@@ -8055,7 +8165,11 @@ export function initStation(ctx) {
       btn(row, 'Ask around', () => {
         // Wave 11: a keeper reads the ledger first — a recorded reading of
         // what still waits, before any rumor.
+        // Issue #271: a live local hunt buys a fresher quarry sighting before
+        // the ordinary rumor — the same static lane phrase the card carries,
+        // 0 UU, no favor spent.
         ui.notice = (isKeeper(contact) ? keeperLedgerLine(ctx, contact) : null)
+          ?? huntSightingLine(ctx, currentId)
           ?? rumorFor(ctx, contact)
           ?? 'Nothing new reaches the bar.';
         render();
