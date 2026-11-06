@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import {
   auditBrowserModules,
@@ -6,6 +8,15 @@ import {
   formatBytes,
   measureJavaScript,
 } from './scripts/bundle-policy.mjs';
+
+// esbuild writes large transform results to a temp file and then unlinks it.
+// On a Windows file sandbox the platform temp directory can be writable but
+// not deletable, which fails the build; keep the build's temp files inside the
+// repo instead. The path is under the ignored out/ tree.
+const buildTemp = fileURLToPath(new URL('./out/build-tmp', import.meta.url));
+mkdirSync(buildTemp, { recursive: true });
+process.env.TEMP = buildTemp;
+process.env.TMP = buildTemp;
 
 function productionBundlePolicy() {
   return {

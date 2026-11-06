@@ -52,6 +52,7 @@ import {
   launcherAmmoMax,
 } from '../game/weapon-fit.js';
 import { trafficLots, applySurvivorSale } from '../game/trafficking.js';
+import { PRISONER_HANDOVER, prisonerUnits, applyPrisonerHandover } from '../game/prisoners.js'; // issue #273: the employer dock takes hunt prisoners
 import {
   planLaunch,
   launchBlockedLine,
@@ -7821,8 +7822,27 @@ export function initStation(ctx) {
         render();
       });
     }
+    // Issue #273: the dock that posted the hunt takes the quarry's crew as
+    // prisoners for a small fee and standing, so scooping is part of the hunt.
+    // The tie is the quarry's own dead/captured record in this system's bank —
+    // no persisted field, no new key, no new event. Player-killed crew only:
+    // the hunt pays on a witnessed player kill.
+    const prisoners = prisonerUnits(ctx, currentId);
+    if (prisoners > 0) {
+      const fname = FACTIONS[faction]?.name ?? 'this dock';
+      h('div', 'people-note', panel,
+        `${prisoners} prisoner${prisoners === 1 ? '' : 's'} from your hunts. The ${fname} will take them at ${PRISONER_HANDOVER.uuPerHead} UU a head.`);
+      const row = h('div', 'screen-btnrow people-actions', panel);
+      btn(row, 'Hand over prisoners', () => {
+        const result = applyPrisonerHandover(ctx, currentId, faction);
+        ui.notice = result?.line ?? 'They are no longer in the hold.';
+        if (result) requestAutosave(ctx);
+        render();
+      });
+    }
     if (elseNames.length > 0) {
-      h('div', 'people-note', panel, `Some aboard belong with the ${elseNames.join(', ')}.`);
+      h('div', 'people-note', panel,
+        `Some aboard belong with the ${elseNames.join(', ')}. Their own docks will take them home; a Gilded fence will buy them.`);
     }
   }
   function cancelGiftPending() {

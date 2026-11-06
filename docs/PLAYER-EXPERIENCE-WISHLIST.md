@@ -2552,6 +2552,11 @@ reputation, legality, save data.
 
 **Status:** first pass DONE (Wave 60). Scoop + matching-faction
 Return on dock home / People. `other` +4 standing, `playerKill` +1.
+Issue #273 adds the employer-dock prisoner outlet: the dock that posted a
+local hunt takes the player-killed crew of its dead or captured pirate quarry
+at 60 UU and +1 employer standing a head through a click-only People action
+(no new digit), and the People line now names the own-dock, employer and
+Gilded-fence outlets.
 
 - Scoop escape-pod survivors.
 - Return them to a station belonging to their faction to gain reputation.
