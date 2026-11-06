@@ -1,4 +1,44 @@
 # RIMWARD remaining work
+## Playtest Agent API: engage stalls and unnamed overlay refusals — #267
+
+Implemented on `dsh/issue-267-playtest-agent-api-engage-intent-stalls` (base
+master `7036123`). Both playtest findings were real and reproduce headless:
+
+- **Engage fire starvation.** `defenseSense` re-entry let a landed
+`playerHit` bypass the `resumeAt` gate, so any quarry landing a shot every
+`≤2.5 s` pinned the combat lease in no-fire evasion (measured: fire
+`≈1.1 s` per 45 s lease against a 0.9 s-cadence shooter, evading
+`≈41.6 s`; quiet baseline fire `≈13.2 s`). Freehold quarries
+that stopped shooting recovered; Veridian reavers that kept shooting stalled
+the lease, matching the playtest asymmetry. The bypass is gone — a fresh hit
+re-enters evade through the same gate as every other cue (withdrawal keeps
+its instant latch) — and `REACTIVE_DEFENSE.reengage` moved 1 s → 2 s so
+the post-evade nose realignment fits inside the fire window (swept
+0.67/0.9/1.5/2.5 s cadences × 1/2/3 s windows; 2 s was the material
+peak: fire 6.1–10.2 s across cadences, quiet baseline unchanged).
+- **`overlay` refusals name nothing.** `leaseGateToken` folded typing
+focus, the settings panel, the title capture and the models browser into the
+same token as the hail/chart/berth cards while `observe()` published only
+the cards — the playtest saw 25 s of `overlay` refusals with no card open.
+Every `overlay` refusal now records the owning surface (`hail card open`,
+`galaxy chart open`, `berth panel open`, `typing owns the screen`,
+`settings owns the screen`, `title owns the screen`,
+`models owns the screen`) in the act() `detail`, and the
+`observe().availability` entry for `setControl`/`setCombatIntent`
+carries the same words, so the runner sees the cause from either side. The
+token stays the enum; combat grants keep their explicit authority through an
+open hail card.
+
+Focused regressions are `scripts/issue-267-defense-starvation-test.mjs`
+(3 checks) and `scripts/issue-267-overlay-detail-test.mjs` (5 checks),
+appended to `npm run test:boot`; the live flow is
+`npm run test:issue267-live` (disposable loopback Chromium: a spawned hostile
+shoots at the 0.9 s playtest cadence while the lease keeps firing, and a
+typing-focus overlay refusal reads `typing owns the screen` on both
+channels). Parked: the raw-lease tick still drops with
+the bare `overlay` token (drop paths carry no detail channel); a runner can
+read the cause from `observe().availability` instead.
+
 ## A tracking phase: last-seen lanes and a marked quarry — #271
 
 Implemented on `dsh/issue-271-playtest-hunter-hunts-have-no-tracking-p` (base

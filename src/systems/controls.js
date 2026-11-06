@@ -6,6 +6,7 @@ import { acceptedMiningOreKeys, fieldHasMatchingOre, rockMatchesOreKeys } from '
 import {
   canOpenPlayCard,
   hailDigitsAllowed,
+  overlayCause,
   playSurfaceBlocked,
   settingsOwnsScreen,
 } from './overlay-policy.js';
@@ -397,9 +398,21 @@ function leaseGateToken(ctx, combat = false) {
     if (ctx.gate && ctx.gate.jumping === true) return 'jumping';
     // Incoming hail cards leave flight live. Only the combat owner may keep
     // its explicit authorization through them; raw leases retain their gate.
-    if ((!combat && f.hailOpen === true) || f.chartOpen === true || f.berthOpen === true) return 'overlay';
-    try { if (typeof playSurfaceBlocked === 'function' && playSurfaceBlocked(ctx) === true) return 'overlay'; } catch { /* helper miss */ }
-    try { if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return 'overlay'; } catch { /* helper miss */ }
+    // Issue #267: every 'overlay' refusal also records WHICH surface owns the
+    // screen (hail/chart/berth card, title, models browser, typing focus or
+    // the settings panel) so a runner can read the cause without guessing.
+    if (f.chartOpen === true) return refuse('overlay', 'galaxy chart open');
+    if (f.berthOpen === true) return refuse('overlay', 'berth panel open');
+    if (f.hailOpen === true && !combat) return refuse('overlay', 'hail card open');
+    let cause = '';
+    try { if (typeof overlayCause === 'function') cause = overlayCause(ctx) || ''; } catch { cause = ''; }
+    if (!cause) {
+      try { if (typeof playSurfaceBlocked === 'function' && playSurfaceBlocked(ctx) === true) cause = 'play-surface'; } catch { /* helper miss */ }
+    }
+    if (!cause) {
+      try { if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) cause = 'settings'; } catch { /* helper miss */ }
+    }
+    if (cause) return refuse('overlay', cause + ' owns the screen');
     const death = ctx.deathApi;
     if (death && typeof death.isOpen === 'function' && death.isOpen() === true) return 'dead';
     if (ctx.autopilot && ctx.autopilot.engaged === true) return 'helm';
@@ -498,7 +511,8 @@ export function agentControlSet(ctx, spec) {
       throttle = t;
     }
     const gate = leaseGateToken(ctx);
-    if (gate) return gate;
+    // Issue #267: overlay refusals carry the surface name as detail.
+    if (gate) return gate === 'overlay' ? refuse('overlay', agentRefusalDetail() || 'overlay owns the screen') : gate;
     if (lease?.combat) return 'helm';
     leaseSeq = seq;
     combatNote = null;
@@ -550,7 +564,8 @@ export function agentCombatSet(ctx, spec) {
     const same = prior && prior.intent === spec.intent && prior.targetId === spec.targetId
       && prior.weaponGroup === ctx.input.weaponGroup && prior.defense.stance === stance;
     const gate = leaseGateToken(ctx, true);
-    if (gate) return gate;
+    // Issue #267: overlay refusals carry the surface name as detail.
+    if (gate) return gate === 'overlay' ? refuse('overlay', agentRefusalDetail() || 'overlay owns the screen') : gate;
     if (ctx.agent?.optIn !== true) return 'opt-in';
     if (ctx.player?.destroyed) return 'dead';
     if (physicalHeld()) return 'player-override';

@@ -23,6 +23,7 @@ import { isHuntQuarry } from './prize.js'; // issue #271: a bound quarry publish
 import { podUnits } from './pods.js';
 import { cargoSplit } from './consignment.js'; // issue #177: fronted units are not the player's stock
 import { PHY } from './physics.js';
+import { overlayCause } from '../systems/overlay-policy.js'; // issue #267: name the overlay that owns the screen
 import { sunZone } from './collision.js';
 import {
   VERSION,
@@ -967,6 +968,7 @@ function availabilityBlock(ctx, phase, control) {
   for (let i = 0; i < COMMAND_NAMES.length; i++) {
     const name = COMMAND_NAMES[i];
     let reason = '';
+    let overlayDetail = ''; // issue #267: the surface an 'overlay' refusal names
     if (name === 'clearControl') {
       // Idempotent cancellation is available through overlays and pause.
     } else if (paused && !(name === 'ping' || name === 'disable' || name === 'startGame' || name === 'chooseOrigin')) {
@@ -989,13 +991,25 @@ function availabilityBlock(ctx, phase, control) {
     } else if (name === 'selectTarget' || name === 'setWeaponGroup' || name === 'afterburner' || name === 'approachDock') {
       if (docked) reason = 'docked';
     } else if (name === 'setControl' || name === 'setCombatIntent') {
+      // Issue #267: 'overlay' always names its surface via entry.detail —
+      // the published card flags (hail/chart/berth) and the play surfaces
+      // the flags don't publish (title, models browser, typing focus,
+      // settings) so observe() agrees with the act() refusal receipt.
       if (docked) reason = 'docked';
       else if (phase !== 'playing') reason = 'phase';
-      else if (flags.chartOpen === true || flags.berthOpen === true || (name === 'setControl' && hailOpenF)) reason = 'overlay';
-      else if (helm) reason = 'helm';
-      else if (name === 'setControl' && combat) reason = 'helm';
-      else if (name === 'setCombatIntent' && control.owner === 'manual') reason = 'helm';
-      else if (name === 'setCombatIntent' && flags.matchSpeed) reason = 'match-speed';
+      else if (flags.chartOpen === true) { reason = 'overlay'; overlayDetail = 'galaxy chart open'; }
+      else if (flags.berthOpen === true) { reason = 'overlay'; overlayDetail = 'berth panel open'; }
+      else if (name === 'setControl' && hailOpenF) { reason = 'overlay'; overlayDetail = 'hail card open'; }
+      else {
+        const oc = overlayCause(ctx);
+        if (oc) { reason = 'overlay'; overlayDetail = oc + ' owns the screen'; }
+      }
+      if (!reason) {
+        if (helm) reason = 'helm';
+        else if (name === 'setControl' && combat) reason = 'helm';
+        else if (name === 'setCombatIntent' && control.owner === 'manual') reason = 'helm';
+        else if (name === 'setCombatIntent' && flags.matchSpeed) reason = 'match-speed';
+      }
     } else if (name === 'recover') {
       if (phase !== 'dead') reason = 'no-service';
     } else if (name === 'startGame') {
@@ -1009,7 +1023,10 @@ function availabilityBlock(ctx, phase, control) {
       if (docked) reason = 'docked';
       else if (!hailOpenF) reason = 'closed';
     }
-    out[name] = { ok: reason === '', reason };
+    const entry = { ok: reason === '', reason };
+    // Issue #267: the entry names the surface the same way act() detail does.
+    if (reason === 'overlay' && overlayDetail) entry.detail = overlayDetail;
+    out[name] = entry;
   }
   return out;
 }

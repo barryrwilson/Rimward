@@ -106,6 +106,28 @@ export function isTypingFocus() {
   }
 }
 
+/**
+ * Issue #267: name which play surface actually owns the screen, so an agent
+ * runner can tell why a lease was refused or dropped with the 'overlay' token
+ * while observe() shows no hail/chart/berth card. First match wins; '' means
+ * nothing owns the screen. Authored words only, never DOM markup.
+ */
+export function overlayCause(ctx) {
+  try {
+    if (typeof titleOwnsScreen === 'function' && titleOwnsScreen() === true) return 'title';
+  } catch { /* helper miss */ }
+  try {
+    if (ctx && ctx.models && typeof ctx.models.isOpen === 'function' && ctx.models.isOpen() === true) return 'models';
+  } catch { /* helper miss */ }
+  try {
+    if (typeof isTypingFocus === 'function' && isTypingFocus() === true) return 'typing';
+  } catch { /* helper miss */ }
+  try {
+    if (typeof settingsOwnsScreen === 'function' && settingsOwnsScreen() === true) return 'settings';
+  } catch { /* helper miss */ }
+  return '';
+}
+
 export function playSurfaceBlocked(ctx) {
   try {
     if (titleOwnsScreen()) return true;

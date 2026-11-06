@@ -63,7 +63,15 @@ export function defenseSense(ctx, c) {
     if (!d.withdrawal && (d.stance === 'break-off' || reason)) {
       remember(); d.withdrawal = true; d.phase = 'break-off'; d.reason = d.baseReason = reason || 'stance';
       d.triggeredAt = cue.t; d.cueWallMs = cue.wall; d.reactedAt = d.appliedWallMs = null;
-    } else if (!d.withdrawal && d.phase !== 'evading' && (now >= d.resumeAt || cue.trigger === 'hit')) {
+    // Issue #267: a fresh hit re-enters evade through the same resumeAt gate
+    // as every other cue. The old `cue.trigger === 'hit'` bypass let any
+    // shooter that lands a shot every couple of seconds pin the defender in
+    // `evading` almost continuously — each landed shot restarted a 1-3 s
+    // no-fire episode the instant `reengaging` opened its one-second window —
+    // which stalled `engage` leases against quarries that shoot straight.
+    // Withdrawal keeps its instant latch above; this only paces the ordinary
+    // evasive loop.
+    } else if (!d.withdrawal && d.phase !== 'evading' && now >= d.resumeAt) {
       remember(); d.phase = 'evading'; d.since = now; d.reason = d.baseReason = d.hot ? 'heat' : 'threat';
       d.side = c.side; d.triggeredAt = cue.t; d.cueWallMs = cue.wall;
       d.reactedAt = d.appliedWallMs = d.completedAt = null;
