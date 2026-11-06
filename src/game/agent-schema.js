@@ -819,7 +819,7 @@ export const COMMAND_SPECS = freeze({
   cancelAutopilot: cmd({}, ['pilot']),
   approachDock: freeze({
     args: freeze({}), roles: freeze(['pilot']),
-    note: 'Fly to the current station with sun/body avoidance: autopilot mode dock. Requests beyond 500 u from the +X stage begin in cruise, with predictive ship/asteroid clearance and braking, then brake to stage within 100 u (500 u from a blocking station), followed by corridor/settle/docking. Nearby requests and nearby station detours keep creep. Existing named helm/station refusals apply.',
+    note: 'Fly to the current station with sun/body avoidance: autopilot mode dock. Requests beyond 500 u from the +X stage begin in cruise, with predictive ship/asteroid clearance and braking, then brake to stage within 100 u (500 u from a blocking station), followed by corridor/settle/docking. Nearby requests and nearby station detours keep creep. Existing named helm/station refusals apply. Issue #268: after a jump, observe() can read nav.status arrived while the gate fade is still charging — the whole fade window publishes nav.settling true, and helm commands stay refused (token jumping) until observe().gate.jumping reads false; wait on gate.jumping before approachDock, dock or setControl.',
   }),
   engageAutomine: cmd({}, ['miner']),
   cancelAutomine: cmd({}, ['miner']),

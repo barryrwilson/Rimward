@@ -699,18 +699,31 @@ function activeGateSnap(ctx, origin, quat) {
   };
 }
 
-function navSnap(world) {
+function navSnap(ctx, world) {
   const n = world && own(world, 'nav');
   if (!n || typeof n !== 'object') return null;
   const path = Array.isArray(n.path) ? n.path.filter((id) => typeof id === 'string') : [];
   const remaining = Array.isArray(n.remaining) ? n.remaining.filter((id) => typeof id === 'string') : [];
-  return {
+  // Issue #268: the bag can read 'arrived' while the jump fade is still
+  // charging — recalcOnLoad writes the arrival mid-swap — and until the
+  // 'arrive' disengage runs, every helm act refuses 'jumping'. The transient
+  // is read straight off the live ctx (the fade is ctx-owned state, not bag
+  // state), so a poll can never mistake this window for a ready berth run.
+  let settling = false;
+  if (own(n, 'status') === 'arrived'
+    && ctx && ctx.gate && typeof ctx.gate === 'object'
+    && ctx.gate.jumping === true) {
+    settling = true;
+  }
+  const out = {
     dest: str(own(n, 'dest')),
     path,
     remaining,
     status: str(own(n, 'status')),
     autopilot: own(n, 'autopilot') === true,
   };
+  if (settling) out.settling = true;
+  return out;
 }
 
 function stationService(ctx) {
@@ -1140,7 +1153,7 @@ export function buildObservation(ctx) {
         wounds: num(bio.wounds, 0),
         bond: num(bio.bond, 0),
       },
-      nav: navSnap(world),
+      nav: navSnap(ctx, world),
       gate: {
         inZone: gate.inZone === true,
         nearTo: typeof gate.nearTo === 'string' ? gate.nearTo : null,
