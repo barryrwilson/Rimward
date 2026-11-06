@@ -1,4 +1,25 @@
 # RIMWARD remaining work
+## The arrival handoff: nav 'arrived' names the fade window — #268
+
+Implemented on `dsh/issue-268-playtest-agent-api-nav-reads-arrived-in` (draft PR
+#278). The #249 frame was real: the jump midpoint swap emits `systemLoaded`
+mid-fade and nav.js's `recalcOnLoad` rewrote the route bag as `arrived` with
+the helm dropped, so every public poll for the rest of the charge time read
+arrived-and-ready while `approachDock` still refused token `jumping`. The
+final-arrival recalc now holds the nav lease through the fade; the flag is
+actuation, not history (it runs flyTick's `arrive` disengage and the issue
+#183 queued-dock handoff, and `sanitizeNav` re-flags it false on restore, so
+no save resumes a helm), and the flight contract is otherwise the pre-#268
+one. `observe()` publishes a transient `nav.settling: true` on arrived reads
+while `ctx.gate.jumping`, and the `approachDock` capability note names the
+wait-on-`gate.jumping` contract. Focused regression is
+`npm run test:arrival-handoff` (every-frame audit between the swap and the
+ready state, plus the playtest refused/accepted pairing on the same reads);
+passes seeds 1-8, is appended to `npm run test:boot`, and `npm run build`
+and the full `npm run test:boot` pass. Parked follow-up: the same transient
+could also be published on intermediate-hop recalcs if a runner ever polls
+mid-fade there; not observed in any playtest.
+
 ## Hunt survivors: the employer dock takes prisoners — #273
 
 Design decision (2026-11-04): hunt survivors get a contract-linked outlet on the
