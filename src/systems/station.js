@@ -320,6 +320,12 @@ let spySeq = 0;
 let warSeq = 0;
 const HUNT_RECORD_ID = /^rec-(0|[1-9][0-9]*)$/;
 const HUNT_FALLBACK_NAME = 'the marked reaver';
+// Issue #272: a quarry posting at or above this bounty is a hardened reaver —
+// the card says so, and the pay premium makes preparation worth it.
+const HUNT_HARD_BOUNTY_AT = 700;
+// Issue #272: the empty-board line. The world refills the supply (world.js
+// reaver replenish), so the copy promises drift, not a dead board.
+const HUNT_BOARD_EMPTY_LINE = 'HUNTS — Every local reaver is dead or gone. New names drift onto the lanes over time; this board refills as they arrive. Take other work in the meantime.';
 const WAR_FALLBACK_NAME = 'the marked patrol';
 const PAY_QUOTED_MAX = 20000;
 const TRADE_SEED = ['provisions', 'provisions', 'refinedMetals', 'rawOre'];
@@ -3078,6 +3084,19 @@ function nextHuntId(jobs, sysId) {
   return id;
 }
 
+/**
+ * Issue #272: the quarry's danger tier, read off the record the board binds.
+ * A hardened cutter (HUNT_HARD_BOUNTY_AT or above, or a stamped veteran
+ * reaver from the world's replenish) posts a higher pay line and a fair warn-
+ * ing, so danger scales with what the contract pays. Purely descriptive —
+ * the hull behind the tier is the record itself; nothing here rewrites it.
+ */
+function huntTierOf(rec) {
+  if (rec && (rec.reaverTier === 'veteran'
+    || (Number.isFinite(rec.bounty) && rec.bounty >= HUNT_HARD_BOUNTY_AT))) return 'hard';
+  return 'standard';
+}
+
 function makeHuntJob(ctx, sysId, slot, rec) {
   if (!Object.hasOwn(SYSTEMS, sysId) || !rec) return null;
   const id = nextHuntId(ctx.world.jobs, sysId);
@@ -3085,6 +3104,7 @@ function makeHuntJob(ctx, sysId, slot, rec) {
   const name = huntDisplayName(rec.name) || HUNT_FALLBACK_NAME;
   const stationName = SYSTEMS[sysId].station?.name ?? SYSTEMS[sysId].name;
   const bounty = Math.round(rec.bounty);
+  const tier = huntTierOf(rec);
   return {
     id,
     kind: 'hunt',
@@ -3093,7 +3113,9 @@ function makeHuntJob(ctx, sysId, slot, rec) {
     recordId: rec.id,
     target: name,
     title: `Hunt ${name}`,
-    detail: `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`,
+    detail: tier === 'hard'
+      ? `${name} is a hardened reaver — one of the names the lanes whisper. The dock at ${stationName} pays a premium on a witnessed kill; bring a worked hull.`
+      : `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`,
     reward: bounty,
     need: 1,
     progress: 0,
@@ -3180,6 +3202,29 @@ function syncHuntJobs(ctx, sysId) {
 
 
 
+
+/**
+ * Issue #272: does THIS system's board currently carry hunt work of any kind?
+ * Any hunt job row (offered, accepted, even the transient failed row about to
+ * be replaced) counts; with no rows at all, a living eligible quarry counts
+ * because the next render posts it. Empty means truly empty — and the empty
+ * board copy tells the player why it will not stay that way.
+ */
+function huntBoardHasWork(ctx, sysId) {
+  const jobs = ctx.world.jobs;
+  if (Array.isArray(jobs)) {
+    for (const j of jobs) {
+      if (j && j.kind === 'hunt' && j.originSystem === sysId) return true;
+    }
+  }
+  const bank = huntBank(ctx, sysId);
+  if (!Array.isArray(bank)) return false;
+  const bound = huntBoundRecordIds(Array.isArray(jobs) ? jobs : [], sysId, null);
+  for (const rec of bank) {
+    if (isEligibleHuntQuarry(rec, sysId, bound)) return true;
+  }
+  return false;
+}
 
 function replaceHuntJob(ctx, job) {
   const slot = detachJobSlot(ctx, job, 'hunt');
@@ -7112,6 +7157,11 @@ export function initStation(ctx) {
     syncEspionageJobs(ctx, currentId);
     syncWarJobs(ctx, currentId);
     syncChainJobs(ctx, currentId);
+    // Issue #272: an empty hunt board tells the player the work is cyclical —
+    // new reavers drift in over time, so the board refills where they fly.
+    if (!huntBoardHasWork(ctx, currentId)) {
+      h('div', 'screen-note', panel, HUNT_BOARD_EMPTY_LINE);
+    }
     // Issue 176: one — and only one — two-gate run across trade/passenger/ferry.
     syncLongRunPostings(ctx, currentId);
     const liveFerry = (ctx.world.jobs ?? []).find((j) => j && j.id === 'ferry-consignment');
@@ -7204,6 +7254,7 @@ export function initStation(ctx) {
       h('div', 'job-title', card, `${i + 1}. ${title}`);
       h('div', 'job-detail', card, detail);
       let rewardLine;
+      let huntTierNote = null; // issue #272: hardened-quarry warning row
       let chainSkuHint = '';
       let haulBuyInLine = '';
       if (job.kind === 'haul') {
@@ -7262,6 +7313,7 @@ export function initStation(ctx) {
           ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : 0)
           : jobPayFor(ctx, originId, base);
         rewardLine = `Hunt ${name} in this system — pays ${est} UU`;
+        huntTierNote = huntTierOf(rec) === 'hard' ? 'HARDENED QUARRY — a veteran crew. They hit back; repair before you dock.' : null;
       } else if (job.kind === 'passenger') {
         rewardLine = passengerPayLine(ctx, job);
       } else if (job.kind === 'explore') {
@@ -7335,6 +7387,8 @@ export function initStation(ctx) {
         rewardLine = `Reward: ${jobPay(ctx, job.reward)} UU${job.kind === 'patrol' ? ` · +${PATROL_REP} Freehold rep` : ''}`;
       }
       h('div', 'job-reward', card, rewardLine);
+      // Issue #272: the tier row sits under the pay line, before any terms.
+      if (huntTierNote) h('div', 'job-state', card, huntTierNote);
       // Issue #240: the whole exclusive agreement, one bounded row per line,
       // on the OFFER as well as the accepted card — so every consequence is
       // readable before acceptance and through the station view's text cap.

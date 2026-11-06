@@ -797,6 +797,30 @@ const MIGRATION_INTERVAL = 90; // ~s between departure picks
 const MIGRATION_ETA = [60, 120]; // s spent inTransit
 const GATE_HOLD = [30, 50]; // s parked at dest gate before reverse
 
+// Issue #272 — hunt supply. A system's pirate cast is finite (Freehold 4,
+// Veridian 3, the Verge 1), so the hunt/bounty boards ran dry after a few
+// kills and a career meant a gate jump every ~10 minutes. Reavers drift in
+// over time: an EXISTING bank whose living pirate count fell below its cast
+// slowly tops back up. Never generates a bank (unvisited systems stay
+// ungenerated), never exceeds the authored cast, and never reuses a name —
+// bounty-pirate-* job ids and incident ledgers key on the NAME, so a fresh
+// reaver takes a fresh generated name from the same #270 generator the cast
+// uses. The pick cadence is stretched by the system's band like event gaps,
+// so the deep rim replenishes slower than the core.
+const REAVER_REPLENISH = {
+  interval: 150, // world-seconds between top-up picks in the current system
+  firstDelay: 90, // first pick early in a session, like migration's first pick
+  bountyBase: 375, // a drifted-in reaver's posted price before the tier roll
+};
+// Tier roll for a replenished reaver (issue #272: danger should scale with
+// pay). A `veteran` posts a higher bounty and flies a harder resolve seed —
+// station.js reads rec.bounty for the hunt quote and npc.js derives resolve
+// from rec.resolve, so one field roll prices both surfaces.
+const REAVER_TIERS = [
+  { key: 'standard', weight: 0.7, bountyMult: 1, resolve: null }, // record keeps the makeRecord seed
+  { key: 'veteran', weight: 0.3, bountyMult: 2, resolve: 70 }, // studied the lanes; yields late
+];
+
 const PAD_HOME_EPS = 0.5;
 
 function holdClassFor(rec) {
@@ -1979,6 +2003,7 @@ export function initWorld(ctx) {
 
   let nextEventAt = rollEventGap(ctx);
   let nextMigrationAt = MIGRATION_INTERVAL * (0.5 + Math.random() * 0.5); // first pick ~45–90s in
+  let nextReaverAt = REAVER_REPLENISH.firstDelay; // issue #272: first hunt-supply pick
   let lastBlockadeKillAt = 0;
   let tickAccum = 0;
   // ship.id → world time of last player-caused hit (causer attribution).
@@ -2026,6 +2051,97 @@ export function initWorld(ctx) {
       if (ev.to === 'verge' && changed) callowVisitArmed = true;
       // Wave 12: the post-vouch refusal re-arms on the same real arrival.
       if (ev.to === 'verge' && changed) callowRefusalArmed = true;
+    }
+  }
+
+  // ---------- Issue #272: hunt supply — reavers drift back in ----------
+
+  /**
+   * True when `name` is free across every EXISTING bank. bounty-pirate-* job
+   * ids and the incident ledger key on the name, so a replenished reaver must
+   * never take one any bank — living or dead — has already carried.
+   */
+  function reaverNameTaken(name) {
+    for (const bank of Object.values(ctx.world.recordBanks ?? {})) {
+      if (!Array.isArray(bank)) continue;
+      for (const r of bank) if (r && r.name === name) return true;
+    }
+    return false;
+  }
+
+  /**
+   * A fresh reaver record for `sysId`: generated #270 name (unique galaxy-
+   * wide), cast cutter shape, the same gate-lane route the cast flies, and a
+   * tier roll — `veteran` posts a higher bounty and flies a harder resolve
+   * seed so higher pay plays harder (issue #272).
+   */
+  function makeReaverRecord(ctx, sysId) {
+    const def = SYSTEMS[sysId];
+    const gate = gatePoint(def);
+    const station = stationPoint(def);
+    const laneMid = new THREE.Vector3().lerpVectors(station, gate, 0.5);
+    jitter(laneMid, 90);
+    const role = 'Reaver';
+    let name = null;
+    for (let attempt = 0; attempt < 40 && !name; attempt++) {
+      const candidate = generatedName(sysId, role, (Math.random() * GEN_NAME_SPACE) | 0);
+      if (!reaverNameTaken(candidate)) name = candidate;
+    }
+    if (!name) return null; // 40 collisions in a 600-name space: give up this pick, try next tick
+    const roll = Math.random();
+    let acc = 0;
+    let tier = REAVER_TIERS[REAVER_TIERS.length - 1];
+    for (const t of REAVER_TIERS) {
+      acc += t.weight;
+      if (roll < acc) { tier = t; break; }
+    }
+    const rec = makeRecord(ctx, {
+      name,
+      classKey: 'cutter',
+      faction: 'independent',
+      role: 'pirate',
+      route: [jitter(gate.clone(), 90), laneMid, jitter(gate.clone(), 120)],
+      cargo: [],
+      bounty: Math.round(REAVER_REPLENISH.bountyBase * tier.bountyMult), // posted price — station.js hunt/bounty jobs read this
+      system: sysId,
+    });
+    if (tier.resolve != null) rec.resolve = tier.resolve;
+    rec.reaverTier = tier.key;
+    return rec;
+  }
+
+  /**
+   * Top up ONE existing bank per pick: the current system first (the player
+   * sees the board refill where they fly), else the earliest existing bank.
+   * A system that is AT its authored cast is skipped. Never generates a bank.
+   * Emits a plain commLine only in the current system — the player watches a
+   * new name drift onto the board they just emptied.
+   */
+  function tickReaverReplenish(ctx) {
+    const banks = ctx.world.recordBanks;
+    if (!banks || typeof banks !== 'object') return;
+    const cur = ctx.world.currentSystem;
+    const sysIds = Object.keys(banks).filter((id) => Array.isArray(banks[id]) && Object.hasOwn(SYSTEMS, id));
+    if (sysIds.length === 0) return;
+    const order = sysIds.includes(cur) ? [cur, ...sysIds.filter((id) => id !== cur)] : sysIds;
+    for (const sysId of order) {
+      const bank = banks[sysId];
+      const cast = SYSTEMS[sysId].cast;
+      const want = cast && Number.isFinite(cast.pirates) ? cast.pirates : 0;
+      if (want <= 0) continue;
+      let living = 0;
+      for (const r of bank) {
+        if (r && r.role === 'pirate' && r.state !== 'dead' && r.state !== 'captured' && r.state !== 'derelict') living++;
+      }
+      if (living >= want) continue;
+      const rec = makeReaverRecord(ctx, sysId);
+      if (!rec) continue;
+      bank.push(rec);
+      if (sysId === cur) {
+        const sysName = ctx.systems?.[sysId]?.name ?? sysId;
+        ctx.emit('commLine', { text: `A new reaver — ${rec.name} — is working the lanes of ${sysName}.` });
+      }
+      return; // one hull per pick: arrivals read as drift, not a wave
     }
   }
 
@@ -2422,6 +2538,14 @@ export function initWorld(ctx) {
       if (now >= nextMigrationAt) {
         nextMigrationAt = now + MIGRATION_INTERVAL * (0.75 + Math.random() * 0.5);
         pickMigrant(ctx);
+      }
+      // Issue #272 hunt supply: dead reavers are replaced over time so the
+      // hunt/bounty boards keep a small live supply in every visited system.
+      if (now >= nextReaverAt) {
+        nextReaverAt = now + REAVER_REPLENISH.interval
+          * (BANDS[ctx.systems[ctx.world.currentSystem].band ?? 0].eventGapMult || 1)
+          * (0.75 + Math.random() * 0.5);
+        tickReaverReplenish(ctx);
       }
       // Same-system save restores swap ctx.world.recordBanks wholesale but
       // emit NO 'systemLoaded' (save.js only emits when the system changes)

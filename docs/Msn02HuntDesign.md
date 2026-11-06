@@ -392,3 +392,57 @@ Non-blocking notes (not required to start PR1):
 1. Overlay skip vs hunt is a small live-tick coupling. Default: keep overlay, hunt wins if accepted.
 2. Verge (1 pirate) may show one hunt card, not two. Default: empty second slot.
 3. Collector-as-local-pirate is eligible when `bounty > 0` in the origin bank. Default: include.
+
+---
+
+## Supply rhythm and difficulty tiers — decision (issue #272, 2026-11-05)
+
+The #249 playtest ran the boards dry: Freehold posted two hunts at a time and
+replaced each resolved one until its four pirate records were all dead (~12
+minutes), Veridian dried after two, and every contract paid 300–525 UU while
+breaking in 6–15 s. Two decisions close that, both inside the existing hunt
+family (no new job kind, no new persist key, no `state.js` edit):
+
+**Supply rhythm — the cast is a population, not a fuel gauge.** A system's
+authored pirate cast is the STEADY-STATE population, not a one-time spawn
+table. `world.js` runs a reaver replenish on the same gated-cadence pattern as
+migration (first pick ~90 s in, then every ~150 world-seconds stretched by the
+system's band multiplier, one hull per pick): an EXISTING bank whose living
+pirate count sits below its authored cast gains one fresh reaver. Rules:
+
+- Never generates a bank — unvisited systems stay ungenerated (the Verge's
+  single Old Callow cast is untouched until the player goes there).
+- Never exceeds the authored cast; dead records stay in the bank as history
+  (derelict/incident/ledger integrity), so the cap counts LIVING pirates.
+- A replenished reaver takes a fresh generated #270 name, unique across every
+  existing bank — `bounty-pirate-*` job ids and the incident ledger key on the
+  name, so a reuse would misfile claims. No authored-pool name is consumed.
+- Replenished reavers fly classic cutters (never Q-ships) on the same
+  station↔gate lane route the cast flies, `faction: 'independent'`.
+- A `commLine` — "A new reaver — <name> — is working the lanes of <system>."
+  — fires only in the system the player occupies, so the refill is readable
+  but never spammy.
+
+Moving on is still viable; staying is now viable too. The empty-board state
+exists only briefly, and when it does render, the Jobs pane says so: "Every
+local reaver is dead or gone. New names drift onto the lanes over time; this
+board refills as they arrive."
+
+**Difficulty tiers — pay and danger move together.** A quarry's tier is read
+from the record the hunt binds, in one place (`huntTierOf`): a bounty at or
+above 700 UU, or a stamped `reaverTier: 'veteran'` record, is a HARDENED
+quarry. Replenished reavers roll a tier on arrival — 70% standard (posted
+375 UU, makeRecord resolve seed), 30% veteran (posted 750 UU, resolve seed
+70, so the hull yields late and fights longer). The hunt card carries the
+tier in its detail line and a `HARDENED QUARRY — a veteran crew. They hit
+back; repair before you dock.` row under the pay line, so preparation and
+ship care matter before the player accepts. Cast pirates keep their authored
+bounties (300 + i·75); a Freehold board now offers a 300–450 UU standard
+card and a 750 UU veteran card once the supply turns over — danger the
+player can price before committing.
+
+Focused regression: `npm run test:hunt-supply` (10 checks: fresh board, tier
+rows, the kill-out + empty-board copy, the replenish pick, name uniqueness,
+board refill, unvisited banks stay ungenerated, cast cap, veteran stamp,
+JSON-plain records); appended to `npm run test:boot`.
+

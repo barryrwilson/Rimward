@@ -1,4 +1,25 @@
 # RIMWARD remaining work
+## Hunt supply and danger tiers: the cast is a population — #272
+
+Implemented on `dsh/issue-272-playtest-hunter-hunt-supply-runs-dry-aft` (base
+master `ff56e1e`). The #249 frame was real: the boards emptied after ~4 kills
+because the authored pirate cast was a one-time spawn table, and every card
+played at the same flat danger. Two decisions in `docs/Msn02HuntDesign.md`
+(the supply-rhythm section of 2026-11-05): the cast is a steady-state
+population — `world.js` replenishes an existing bank whose living pirates sit
+below cast on a migration-style gated cadence (one hull per pick, band-
+stretched, ~150 s), with a fresh #270 name unique across every bank, no bank
+generation, no Q-ship, and a one-line comm only in the player's system; and
+tier rides the record — `huntTierOf` marks a quarry hardened at bounty ≥ 700
+or a stamped `reaverTier: 'veteran'`, the replenish rolls 70/30
+standard/veteran (375/750 UU posted, resolve seed 70 on veterans), and the
+hunt card says so before accept. The empty board tells the player the supply
+refills as new names drift in. Focused regression is
+`npm run test:hunt-supply` (10 checks, appended to `npm run test:boot`), and
+`npm run build` passes. Live browser evidence is
+`npm run test:hunt-supply-live`: PASS in disposable Chromium (the Freehold
+board, the kill-out to the empty-board line, the replenish pick refilling the
+board, the hardened-quarry row, and a clean console).
 ## The arrival handoff: nav 'arrived' names the fade window — #268
 
 Implemented on `dsh/issue-268-playtest-agent-api-nav-reads-arrived-in` (draft PR
