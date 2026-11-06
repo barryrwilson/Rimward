@@ -345,7 +345,18 @@ export function recalcOnLoad(ctx, event) {
     // The final arrival keeps the lease for exactly one more autopilot frame:
     // flyTick owns the 'arrive' disengage, its receipt, and the issue #183
     // handoff to the dock approach.
-    writeNav(ctx.world, dest, [here], 0, 'arrived', keepLease);
+    // Issue #268: the recalc runs on the SAME frame jump.js lands the midpoint
+    // swap, while ctx.gate.jumping is still true and the fade is charging
+    // toward the 'arrive' disengage. Dropping the helm here left the bag
+    // 'arrived' with autopilot false for the whole rest of the fade, so an
+    // agent poll read "arrived and ready" while approachDock still refused
+    // 'jumping'. The flag here is actuation, not history: it is the wire that
+    // runs flyTick's arrival branch (arrive disengage, receipt, issue #183
+    // handoff) after the fade, the same wire gate.js's apJump read at the
+    // departure gate, and it is what sanitizeNav re-flags false on restore —
+    // so no save ever resumes the helm and the flight contract is otherwise
+    // exactly the pre-#268 one.
+    writeNav(ctx.world, dest, [here], 0, 'arrived', true);
     emitNavRoute(ctx, dest, 0, 'arrived');
     emitComm(ctx, `Arrived at ${systemName(dest)}.`);
     return;
