@@ -446,3 +446,66 @@ rows, the kill-out + empty-board copy, the replenish pick, name uniqueness,
 board refill, unvisited banks stay ungenerated, cast cap, veteran stamp,
 JSON-plain records); appended to `npm run test:boot`.
 
+
+---
+
+## A tracking phase: last-seen places and a marked quarry — decision (issue #271, 2026-11-05)
+
+The #249 playtest found two gaps in the same loop: a posting names its quarry but
+not WHERE ("haunts the lanes of this system" is the whole clue), and a scanner
+row for a contracted quarry reads exactly like a bystander. Five of six quarries
+launched inside ~600 u of the dock, so "hunting" was a dockside brawl; one
+quarry outside sensor range cost ~90 s of blind lane search. The fixes below
+ship as one slice, both inside the existing hunt family (no new job kind, no new
+persist key, no `state.js` edit, no new event type).
+
+**Last-seen on the card — a place, not a coordinate.** A hunt card's detail
+names the STATIC lane its quarry actually flies, derived the same way the board
+derives every other route fact: from the record's own `route` waypoints against
+the system's authored geography (`stationPoint` / `gatePoint` / `fieldPoint`).
+A pirate's cast route is gate → lane-mid → gate, so one bounded classifier maps
+those waypoints onto three plain phrases: "working the <Station>–gate lane",
+"holding near the <name> field" (waypoint inside `field.radius` of the field
+center), or "seen near the <system> gate". The card prints "Last seen: <phrase>"
+— station-to-gate distance keeps it honest without ever printing a live
+coordinate, a live position, a handle, or an arrival estimate (the #239 law:
+route geometry off a sheet, not a sighting). The words come only from authored
+vocabulary (`SYSTEMS` names), pass through the same strip/slice as every other
+job string, and never include the `recordId`.
+
+**Ask around — a fresher sighting at the People desk.** "Ask around" now checks
+the accepted/offered hunt contracts of the dock you are standing at BEFORE the
+ordinary rumor roll. For a contract bound to a living quarry in this system it
+answers with the same static lane phrase plus the time elapsed since the record
+last turned over a leg (a coarse "recently / a while back / days ago" bucket —
+never a timestamp, never a position). The answer costs nothing and spends no
+favor; it rides the existing notice line. A keeper still reads the ledger
+first. Off-home docks and unrelated faces answer as before.
+
+**The quarry is marked — a word, not a gauge.** The locked bracket meta line
+and the target rail name gain a CONTRACT suffix for a ship whose record is the
+bound target of one of THIS pilot's live hunt jobs (`isJobQuarry` extended with
+a live-job check; no new aim-glass gauge, no colour-only cue — the word rides
+the existing text lines). A Q-ship quarry keeps its cover word until the mask
+is pierced, exactly as today; the mark reads the cover identity, never the
+record under it. The agent observation publishes the same word on the same rows
+(`shipCondition` / `shipPublicCondition`), so a controller reads the bracket
+and the API agree. Nearby rows stay unchanged — marking the whole scanner list
+would hand the player a free kill list and break the bystander texture the
+playtest relied on.
+
+**What this is not:** no live tracking arrow, no galaxy-map ping, no
+last-seen-position persisted field on the job (the phrase is derived at render
+from live route data), no new HUD element, no change to escape/leg movement,
+no quarry spawns away from its authored lane, and no change to pay, deadlines,
+tiers or the prisoner path (#273 untouched). Some quarries still run for the
+gate when pressed — that is the existing #68 escape behaviour, exercised
+naturally by the marked bracket's escape word.
+
+Focused regression: `npm run test:hunt-tracking` (a bound card carries a
+"Last seen" lane phrase from authored names only; the people-desk answer names
+the quarry and the lane; the locked bracket and the rail show CONTRACT on the
+bound hull and not on a bystander; a Q-ship cover hides the mark until the
+record is eligible; observe() agrees with the bracket; records stay JSON-plain
+and the save round-trips). Appended to `npm run test:boot`.
+

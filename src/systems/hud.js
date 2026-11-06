@@ -24,6 +24,7 @@ import {
 import { codeOf, shortLabel, helpLines } from './bindings.js';
 import { agentOwnsShip } from './controls.js';
 import { hasSurveyMarker } from '../game/survey-nav.js';
+import { isHuntQuarry } from '../game/prize.js'; // issue #271: a bound quarry reads CONTRACT on the bracket
 import { recoveryPod } from '../game/recovery.js';
 
 /**
@@ -2704,6 +2705,12 @@ export function initHud(ctx) {
           }
           meta = (FACTIONS[key]?.name ?? key) + ' · ' + dist + 'u';
           if (pierced) meta += ' · CONCEALED MOUNTS';
+          // Issue #271: one of MY live hunt contracts binds this hull — the
+          // bracket says CONTRACT on the existing meta line. A word, not a
+          // gauge, and never a colour-only cue; it reads the hull the player
+          // contracted against, so a masked quarry's cover shows it too (the
+          // mark never unmasks what the scanner has not).
+          if (rec && isHuntQuarry(ctx, rec)) meta += ' · CONTRACT';
           // Issue #67: the existing resolve line states the OUTCOME, not just
           // the morale band. A completed surrender reads YIELDED, a hull that
           // is merely willing reads WILLING TO YIELD, and a dead hull reads
@@ -2811,6 +2818,9 @@ export function initHud(ctx) {
         if (masked && !pierced) railName = rec.coverName ?? railName;
         railName = stripHudText(typeof railName === 'string' ? railName : '');
         if (!railName) railName = 'CONTACT';
+        // Issue #271: the rail carries the same CONTRACT word the bracket
+        // prints — one name law across both surfaces.
+        if (rec && isHuntQuarry(ctx, rec)) railName += ' · CONTRACT';
         if (railName !== last.railName) {
           last.railName = railName;
           tgtNameEl.textContent = railName;

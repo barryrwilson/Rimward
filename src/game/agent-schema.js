@@ -770,7 +770,7 @@ export const ROLE_STATUS = freeze({
   ),
   combat: role(
     ['selectTarget', 'pulse', 'setWeaponGroup', 'setControl', 'setCombatIntent', 'clearControl', 'afterburner', 'hail', 'hailResolve'],
-    'HUD-derived aim/lead + lease fireHeld; bounded target-specific combat intent, explicit renewal/cancel; hit/shield/destruction ring outcomes',
+    'HUD-derived aim/lead + lease fireHeld; bounded target-specific combat intent, explicit renewal/cancel; hit/shield/destruction ring outcomes; targets.current and targets.nearby ship rows carry contract: true when a live hunt bind names the hull — the CONTRACT word the bracket prints (issue #271)',
   ),
   hail: role(
     ['hail', 'hailResolve'],
@@ -778,7 +778,7 @@ export const ROLE_STATUS = freeze({
   ),
   missions: role(
     ['openService', 'acceptJob', 'abandonJob', 'chooseShadowDossier', 'stationAction'],
-    'board offers docked; abandon accepted mining/trade/hunt/passenger/explore/espionage/war at Jobs for -1 posting-faction standing; active jobs observed in flight; jobState ring terminals. '
+    'board offers docked; abandon accepted mining/trade/hunt/passenger/explore/espionage/war at Jobs for -1 posting-faction standing; active jobs observed in flight; jobState ring terminals. Hunt cards carry a static "Last seen:" lane phrase and the People desk Ask around answers the live local hunt with the same phrase plus a freshness bucket (issue #271).'
     + 'Issue #240: a courier-shadow row may carry shadow.conflict (scenario, evidenceRef, state, buyerFaction/buyerStation, buyerPayQuoted, originalPay, canChoose, blockedReason, terms, termLines) — '
     + 'a rival buyer for the COMPLETED dossier at the destination dock. Returning to the employer dock still files automatically and pays the earned tier; there is no new command for the rival. '
     + 'Selling or declining uses the ordinary stationAction buttons in the destination Jobs service ("Sell dossier to ... / Decline ..."), which carry the dossier reference in their label; '
