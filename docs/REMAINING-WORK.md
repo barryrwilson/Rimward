@@ -207,7 +207,10 @@ a clearly labeled filesystem-only identity (HEAD from the gitdir files, tree
 hash over `src/`, `dirtyUnknown` instead of a guessed dirty flag) when the
 sandbox refuses child spawns. `test:boot` completes under a restricted
 sandbox; the WAVE181/182 boot-pin children relay their result line through
-`WAVE_RESULT_FILE` when piped stdio is refused.
+`WAVE_RESULT_FILE` when piped stdio is refused. Parked follow-up: piped
+`spawnSync` children that pass stdin (issue-71/73/74-recovery/176/181
+F-legs) still need an unrestricted spawn and fail loudly naming the
+refusal; a stdin relay design touches five more suites.
 
 Parked follow-ups (deliberately not in this issue): the tie is faction-level,
 so an independent trader/miner/patrol crew can be taken once an independent
