@@ -326,6 +326,13 @@ const HUNT_HARD_BOUNTY_AT = 700;
 // Issue #272: the empty-board line. The world refills the supply (world.js
 // reaver replenish), so the copy promises drift, not a dead board.
 const HUNT_BOARD_EMPTY_LINE = 'HUNTS — Every local reaver is dead or gone. New names drift onto the lanes over time; this board refills as they arrive. Take other work in the meantime.';
+// Issue #285: the lawful-kill line and the tier base copy are shared by
+// makeHuntJob (persisted job.detail) and renderJobs (live card), so the
+// persisted field and the rendered card can never drift apart again.
+const HUNT_LAWFUL_LINE = 'A finished hunt pays the full bounty; the kill is lawful work.';
+const huntTierBase = (name, stationName, tier) => (tier === 'hard'
+  ? `${name} is a hardened reaver — one of the names the lanes whisper. The dock at ${stationName} pays a premium on a witnessed kill; bring a worked hull.`
+  : `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`);
 const WAR_FALLBACK_NAME = 'the marked patrol';
 const PAY_QUOTED_MAX = 20000;
 const TRADE_SEED = ['provisions', 'provisions', 'refinedMetals', 'rawOre'];
@@ -3215,10 +3222,9 @@ function makeHuntJob(ctx, sysId, slot, rec) {
     recordId: rec.id,
     target: name,
     title: `Hunt ${name}`,
-    detail: (tier === 'hard'
-      ? `${name} is a hardened reaver — one of the names the lanes whisper. The dock at ${stationName} pays a premium on a witnessed kill; bring a worked hull.`
-      : `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`)
-      + (hauntLine ? ` ${hauntLine}` : ''),
+    detail: huntTierBase(name, stationName, tier)
+      + (hauntLine ? ` ${hauntLine}` : '')
+      + ` ${HUNT_LAWFUL_LINE}`,
     reward: bounty,
     need: 1,
     progress: 0,
@@ -7307,13 +7313,11 @@ export function initStation(ctx) {
         // card and its offered sibling always read the same lane truth.
         const rec = resolveHuntRecord(ctx, job);
         const haunt = huntHauntPhrase(ctx, originId, rec);
-        const base = huntTierOf(rec) === 'hard'
-          ? `${name} is a hardened reaver — one of the names the lanes whisper. The dock at ${stationName} pays a premium on a witnessed kill; bring a worked hull.`
-          : `${name} haunts the lanes of this system. The dock at ${stationName} pays on a witnessed kill.`;
-        // Issue #265: the board states the cost of mercy up front — the
-        // contracted kill is lawful work, not an atrocity.
-        const lawfulLine = 'A finished hunt pays the full bounty; the kill is lawful work.';
-        detail = (haunt ? `${base} Last seen: ${haunt}.` : base) + ` ${lawfulLine}`;
+        const base = huntTierBase(name, stationName, huntTierOf(rec));
+        // Issue #265/#285: the board states the cost of mercy up front — the
+        // contracted kill is lawful work, not an atrocity. Shared constant
+        // with makeHuntJob, so the card and the persisted copy stay identical.
+        detail = (haunt ? `${base} Last seen: ${haunt}.` : base) + ` ${HUNT_LAWFUL_LINE}`;
       } else if (job.kind === 'passenger') {
         title = 'Escort passengers';
         detail = passengerTermsFor(passengerCardHops(ctx, job, currentId));
