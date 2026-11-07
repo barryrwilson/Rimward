@@ -3,27 +3,21 @@
  * HOLD_CASE=blocked checks the station keep-out on the proposed forward course.
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as THREE from 'three';
+import { gitIdentity } from './lib/git-identity.mjs';
 const runtimeRoot = resolve(process.env.STAGE_RUNTIME || fileURLToPath(new URL('..', import.meta.url)));
 const { installDomStubs, bootGameSystems, makeNavHelpers } =
   await import(pathToFileURL(resolve(runtimeRoot, 'scripts/lib/boot-harness.mjs')).href);
 const { collectBodies } = await import(pathToFileURL(resolve(runtimeRoot, 'src/game/collision.js')).href);
-const git = (...args) => {
-  const run = spawnSync('git', args, { cwd: runtimeRoot, encoding: 'utf8', windowsHide: true });
-  assert.equal(run.status, 0, `git ${args.join(' ')}: ${run.stderr}`);
-  return run.stdout.trim();
-};
-const hash = createHash('sha256');
-for (const file of git('ls-files', 'src').split(/\r?\n/).sort()) {
-  hash.update(file); hash.update(readFileSync(resolve(runtimeRoot, file)));
-}
-const artifact = { head: git('rev-parse', 'HEAD'), runtimeSourceDirty: !!git('status', '--porcelain', '--', 'src'),
-  runtimeSha256: hash.digest('hex') };
+// Source identity via the EPERM-robust helper (issue #286): git when spawns
+// work, a labeled filesystem-only identity when the sandbox refuses them.
+const identity = gitIdentity(runtimeRoot);
+const artifact = { head: identity.commit, runtimeSourceDirty: identity.workingTreeDirty,
+  runtimeSha256: identity.sourceHash, identityMode: identity.mode,
+  identityDirtyUnknown: identity.dirtyUnknown };
 
 let seed = 7;
 Math.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);

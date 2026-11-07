@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/build.mjs",
     "bundle:report": "node scripts/bundle-report.mjs",
     "release:package": "pwsh -NoProfile -File scripts/package-release.ps1",
     "preview": "vite preview",

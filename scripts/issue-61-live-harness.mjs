@@ -1,31 +1,28 @@
 /** Issue #61 supplemental live verification. Never an independent QA verdict.
  * Disposable platform-GPU Chrome, dynamic loopback Vite/CDP, serialized API.
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, appendFile, mkdtemp, rm, access } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gitIdentity } from './lib/git-identity.mjs';
 
 export const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 export function assert(ok, message) { if (!ok) throw Error(message); }
 
 export async function identity() {
-  const git = args => {
-    const run = spawnSync('git', args, { cwd: repo, encoding: 'utf8', windowsHide: true });
-    assert(run.status === 0, `git failed: ${args[0]} ${run.stderr}`);
-    return run.stdout.trim();
-  };
-  const files = [...new Set(git(['ls-files', '--cached', '--others', '--exclude-standard', 'src']).split(/\r?\n/).filter(Boolean))].sort();
-  const hash = createHash('sha256');
-  for (const file of files) { hash.update(file); hash.update(await readFile(join(repo, file))); }
+  // EPERM-robust repo identity (issue #286); see scripts/lib/git-identity.mjs.
+  const id = gitIdentity(repo, { hashSubdir: 'src' });
   const toolsHash = createHash('sha256');
   for (const file of ['scripts/issue-61-live-harness.mjs', 'scripts/issue-61-live-probe.mjs', 'scripts/issue-61-live-iab.mjs']) {
     toolsHash.update(file); toolsHash.update(await readFile(join(repo, file)));
   }
-  return { commit: git(['rev-parse', 'HEAD']), sourceHash: hash.digest('hex'), harnessHash: toolsHash.digest('hex'), status: git(['status', '--porcelain']), sourceFiles: files.length };
+  return { commit: id.commit, sourceHash: id.sourceHash, harnessHash: toolsHash.digest('hex'),
+    status: id.workingTreeDirty === null ? 'unknown (sandbox-refused git; identityMode=' + id.mode + ')' : (id.workingTreeDirty ? 'dirty' : 'clean'),
+    identityMode: id.mode, dirtyUnknown: id.dirtyUnknown, sourceFiles: null };
 }
 
 async function availablePort() {

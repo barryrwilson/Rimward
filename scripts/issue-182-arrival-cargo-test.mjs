@@ -17,7 +17,7 @@
  * single WAVE182 JSON line for `scripts/boot-test.mjs` to assert against.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { seedBootRandom, installDomStubs, bootGameSystems } from './lib/boot-harness.mjs';
@@ -477,7 +477,15 @@ if (bootPin) {
     resoldCargoKept: holdOf('provisions') === HAUL_UNITS,
   };
 
-  console.log('WAVE182 ' + JSON.stringify({ ...bought, ...arrived, ...shared, ...resold }));
+  const waveLine = 'WAVE182 ' + JSON.stringify({ ...bought, ...arrived, ...shared, ...resold });
+  console.log(waveLine);
+  // Spawn-restricted sandboxes can refuse piped stdio (issue #286); when the
+  // boot harness names a relay file, mirror the line there so the parent can
+  // still read the result. The file write is best-effort and never the primary
+  // channel on an unrestricted machine.
+  if (process.env.WAVE_RESULT_FILE) {
+    try { writeFileSync(process.env.WAVE_RESULT_FILE, waveLine + '\n'); } catch {}
+  }
   process.exit(0);
 }
 

@@ -112,7 +112,7 @@
 // station object survives, gates/landmarks rebuild with the overgrowth
 // stable).
 import * as THREE from 'three';
-import { readFileSync } from 'node:fs';
+import { readFileSync, unlinkSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16758,23 +16758,34 @@ removeLiveShip(w42indyCtx, w42indy);
 // subprocess on real booted systems — a unique consignment, a same-commodity
 // trade row, a Refined metals trade row and two parties — and reports what the
 // real delivery tick actually did.
+// Spawn-restricted sandboxes refuse piped-stdio children (issue #286): the
+// child mirrors its WAVE line into WAVE_RESULT_FILE and the parent falls back
+// to reading that file when stdout never arrived. A refused spawn fails
+// loudly with its named reason; it is never silently swallowed.
 {
   const here181 = dirname(fileURLToPath(import.meta.url));
+  const relay181 = join(here181, '..', 'out', `wave181-${process.pid}.txt`);
   const run181 = spawnSync(process.execPath,
     // `--import` takes a URL, and a Windows absolute path parses as the `c:`
     // protocol (ERR_UNSUPPORTED_ESM_URL_SCHEME). The script path stays plain.
     ['--import', pathToFileURL(join(here181, 'with-css-stub.mjs')).href,
       join(here181, 'issue-181-same-berth-test.mjs'), '--boot-pin'],
-    { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
-  const line181 = (run181.stdout || '').split('\n').find((l) => l.startsWith('WAVE181 '));
+    { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true,
+      env: { ...process.env, WAVE_RESULT_FILE: relay181 } });
+  let line181 = (run181.stdout || '').split('\n').find((l) => l.startsWith('WAVE181 '));
+  if (!line181 && run181.error) {
+    try { line181 = readFileSync(relay181, 'utf8').split('\n').find((l) => l.startsWith('WAVE181 ')); } catch {}
+  }
   const w181 = line181 ? JSON.parse(line181.slice(8)) : { ran: false };
-  w181.ran = run181.status === 0 && !!line181;
+  w181.ran = (run181.status === 0 || (run181.error && !!line181)) && !!line181;
+  if (run181.error && !line181) w181.spawnRefused = run181.error.code || String(run181.error);
   console.log('wave181 same-berth settlement:', JSON.stringify(w181));
   if (!Object.values(w181).every(Boolean)) {
     console.log('WAVE181 SAME BERTH FAIL');
-    if (!w181.ran) console.log((run181.stderr || '').slice(-1200));
+    if (!w181.ran) console.log((run181.stderr || w181.spawnRefused || '').slice(-1200));
     errors++;
   }
+  try { unlinkSync(relay181); } catch {}
 }
 
 // ---- WAVE182: delivery cargo must arrive with the ship (issue 182) ----
@@ -16783,17 +16794,24 @@ removeLiveShip(w42indyCtx, w42indy);
 // market's own stock through the public desk action, and reports what the real
 // delivery tick did, including issue 219's same-system launch/redock refusal —
 // then repeats the run with the goods actually carried into another system.
+// Same WAVE_RESULT_FILE relay as WAVE181 for spawn-restricted sandboxes (#286).
 {
   const here182 = dirname(fileURLToPath(import.meta.url));
+  const relay182 = join(here182, '..', 'out', `wave182-${process.pid}.txt`);
   const run182 = spawnSync(process.execPath,
     // `--import` takes a URL, and a Windows absolute path parses as the `c:`
     // protocol (ERR_UNSUPPORTED_ESM_URL_SCHEME). The script path stays plain.
     ['--import', pathToFileURL(join(here182, 'with-css-stub.mjs')).href,
       join(here182, 'issue-182-arrival-cargo-test.mjs'), '--boot-pin'],
-    { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true });
-  const line182 = (run182.stdout || '').split('\n').find((l) => l.startsWith('WAVE182 '));
+    { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, windowsHide: true,
+      env: { ...process.env, WAVE_RESULT_FILE: relay182 } });
+  let line182 = (run182.stdout || '').split('\n').find((l) => l.startsWith('WAVE182 '));
+  if (!line182 && run182.error) {
+    try { line182 = readFileSync(relay182, 'utf8').split('\n').find((l) => l.startsWith('WAVE182 ')); } catch {}
+  }
   const w182 = line182 ? JSON.parse(line182.slice(8)) : { ran: false };
-  w182.ran = run182.status === 0 && !!line182;
+  w182.ran = (run182.status === 0 || (run182.error && !!line182)) && !!line182;
+  if (run182.error && !line182) w182.spawnRefused = run182.error.code || String(run182.error);
   w182.redockGuard = w182.sameSystemRedockUnpaid === true;
   // The manifest is system-visit session state: no save field, no world field.
   const src182 = readFileSync(join(here182, '..', 'src/game/save.js'), 'utf8');
@@ -16801,9 +16819,10 @@ removeLiveShip(w42indyCtx, w42indy);
   console.log('wave182 arrival cargo:', JSON.stringify(w182));
   if (!Object.values(w182).every(Boolean)) {
     console.log('WAVE182 ARRIVAL CARGO FAIL');
-    if (!w182.ran) console.log((run182.stderr || '').slice(-1200));
+    if (!w182.ran) console.log((run182.stderr || w182.spawnRefused || '').slice(-1200));
     errors++;
   }
+  try { unlinkSync(relay182); } catch {}
 }
 
 // ---- WAVE78: MSN-02 renewable explore / information recovery pins ----

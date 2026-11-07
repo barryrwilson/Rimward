@@ -6,10 +6,10 @@
 import * as THREE from 'three';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { gitIdentity } from './lib/git-identity.mjs';
 
 const testRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeRoot = resolve(process.env.DOCK_RUNTIME || testRoot);
@@ -31,15 +31,10 @@ if (!caseName) {
 assert.ok(cases.includes(caseName), 'known corridor scenario');
 const { installDomStubs, bootGameSystems } = await import(pathToFileURL(resolve(runtimeRoot,'scripts/lib/boot-harness.mjs')).href);
 const runtimeImport = file => import(pathToFileURL(resolve(runtimeRoot,file)).href);
-const git = (...args) => {
-  const r=spawnSync('git',args,{cwd:runtimeRoot,encoding:'utf8',windowsHide:true});
-  assert.equal(r.status,0,r.stderr);return r.stdout.trim();
-};
-const hash=createHash('sha256');
-for(const file of git('ls-files','src').split(/\r?\n/).sort()){
-  hash.update(file);hash.update(readFileSync(resolve(runtimeRoot,file)));
-}
-const artifact={head:git('rev-parse','HEAD'),runtimeSourceDirty:!!git('status','--porcelain','--','src'),runtimeSha256:hash.digest('hex')};
+// Source identity via the EPERM-robust helper (issue #286); see scripts/lib/git-identity.mjs.
+const identity=gitIdentity(runtimeRoot);
+const artifact={head:identity.commit,runtimeSourceDirty:identity.workingTreeDirty,
+  runtimeSha256:identity.sourceHash,identityMode:identity.mode,identityDirtyUnknown:identity.dirtyUnknown};
 const journeys=[];
 let activeJourney=null;
 let watchedLoiterer=null;
