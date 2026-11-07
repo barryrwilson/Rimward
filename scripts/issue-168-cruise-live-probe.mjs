@@ -1,16 +1,15 @@
 // Real rendered public-API journey; owns its loopback Vite and Chrome profile.
-import {spawn,spawnSync} from 'node:child_process';
-import {createHash} from 'node:crypto';
+import {spawn} from 'node:child_process';
 import {mkdir,readFile,writeFile,mkdtemp} from 'node:fs/promises';
 import {createServer} from 'node:net';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {gitIdentity} from './lib/git-identity.mjs';
 export const repo=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 export const out=resolve(process.env.CRUISE_OUT||join(repo,'out','issue-168-cruise-live',String(Date.now())));
 export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-function git(args){const r=spawnSync('git',args,{cwd:repo,encoding:'utf8',windowsHide:true});if(r.error||r.status!==0)throw Error('Git capture failed: '+args.join(' '));return r.stdout.trim();}
-async function sourceHash(){const files=git(['ls-files','--cached','--others','--exclude-standard','src']).split(/\r?\n/).filter(Boolean).sort();if(!files.length)throw Error('Empty runtime file list');const hash=createHash('sha256');for(const f of [...new Set(files)]){hash.update(f);hash.update(await readFile(join(repo,f)));}return hash.digest('hex');}
+async function sourceHash(){/* EPERM-robust identity (issue #286). */return gitIdentity(repo,{hashSubdir:'src'}).sourceHash;}
 async function port(){const s=createServer();await new Promise((r,j)=>{s.once('error',j);s.listen(0,'127.0.0.1',r);});const p=s.address().port;await new Promise(r=>s.close(r));return p;}
 async function stop(p){if(!p?.pid)return {started:false};if(p.exitCode!==null)return {pid:p.pid,exitCode:p.exitCode,exited:true};let error=null;try{p.kill('SIGTERM');}catch(e){error=String(e);}for(let i=0;i<50&&p.exitCode===null&&p.signalCode===null;i++)await sleep(100);return {pid:p.pid,exitCode:p.exitCode,signal:p.signalCode,exited:p.exitCode!==null||p.signalCode!==null,error};}
 class CDP{
@@ -46,7 +45,11 @@ async function runLive(name,origin,seed,fn){
   const p=process.env.CRUISE_PORT?Number(process.env.CRUISE_PORT):await port();if(!Number.isInteger(p)||p<1024||p>65535)throw Error('Invalid loopback port');let vite,chrome,c;
   const result={probeSha256:createHash('sha256').update(await readFile(fileURLToPath(import.meta.url))).digest('hex'),name,origin,seed,profile,started:new Date().toISOString(),fixture:false,actions:[],checkpoints:[],samples:[],consoleErrors:[],exceptions:[]};
   result.rendererConfig=process.env.CRUISE_RENDERER||'platform';
-  result.sourceHashStart=await sourceHash();result.headCommit=git(['rev-parse','HEAD']);result.workingTreeDirty=!!git(['status','--porcelain']);result.runtimeSourceDirty=!!git(['status','--porcelain','--','src']);
+  // EPERM-robust repo identity (issue #286); dirty becomes null (dirtyUnknown)
+  // when the sandbox refuses git spawns and the fs fallback cannot read the index.
+  const identity=gitIdentity(repo,{hashSubdir:'src'});
+  result.sourceHashStart=identity.sourceHash;result.identityMode=identity.mode;
+  result.headCommit=identity.commit;result.workingTreeDirty=identity.workingTreeDirty;result.runtimeSourceDirty=identity.workingTreeDirty;
   const save=()=>writeFile(join(folder,'result.json'),JSON.stringify(result,null,2));
   try{
     vite=spawn(process.execPath,[fileURLToPath(new URL('../../bin/vite.js',import.meta.resolve('vite'))),'--config',config,'--host','127.0.0.1','--port',String(p),'--strictPort'],{cwd:repo,windowsHide:true,stdio:['ignore','pipe','pipe']});

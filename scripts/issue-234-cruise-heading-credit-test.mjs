@@ -31,6 +31,7 @@ import { registerHooks } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as THREE from 'three';
+import { gitIdentity } from './lib/git-identity.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const runtimeRoot = resolve(process.env.STAGE_RUNTIME || repoRoot);
@@ -44,35 +45,34 @@ const mod = (rel) => pathToFileURL(resolve(runtimeRoot, rel)).href;
 const PRE_FIX_SHA = '5cc51d589df282e77b23880b074d13c40eee28fa';
 const AP_REL = 'src/game/autopilot.js';
 
-const git = (...args) => {
-  const run = spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8',
-    windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
-  assert.equal(run.status, 0, `git ${args.join(' ')}: ${run.stderr}`);
-  return run.stdout;
-};
-const srcHash = createHash('sha256');
-for (const file of git('ls-files', 'src').trim().split(/\r?\n/).sort()) {
-  srcHash.update(file); srcHash.update(readFileSync(resolve(repoRoot, file)));
-}
+// Source identity via the EPERM-robust helper (issue #286); see scripts/lib/git-identity.mjs.
+const identity = gitIdentity(repoRoot);
+const srcHash = identity.sourceHash;
 // The historical side is OPTIONAL. A fresh checkout that has the pre-fix
 // commit gets the extra confirmation; one that does not (a shallow clone, a
 // squashed import) still runs every assertion, because the durable negative is
 // the current module driven WITHOUT the cruise turn argument, which reproduces
-// the pre-fix accounting exactly and needs no history at all.
+// the pre-fix accounting exactly and needs no history at all. A spawn-restricted
+// sandbox likewise degrades the optional history, never the assertions.
 let preFixSource = null;
 try {
   const probe = spawnSync('git', ['cat-file', '-e', `${PRE_FIX_SHA}:${AP_REL}`],
     { cwd: repoRoot, windowsHide: true });
-  if (probe.status === 0) preFixSource = git('show', `${PRE_FIX_SHA}:${AP_REL}`);
+  if (probe.status === 0) {
+    const show = spawnSync('git', ['show', `${PRE_FIX_SHA}:${AP_REL}`],
+      { cwd: repoRoot, encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+    if (show.status === 0) preFixSource = show.stdout;
+  }
 } catch { preFixSource = null; }
 
 console.log('ARTIFACT', JSON.stringify({
-  head: git('rev-parse', 'HEAD').trim(), runtimeRoot, case: CASE,
+  head: identity.commit, runtimeRoot, case: CASE,
   preFixSha: PRE_FIX_SHA,
   historicalBaselineAvailable: preFixSource !== null,
   preFixAutopilotSha256: preFixSource
     ? createHash('sha256').update(preFixSource).digest('hex').slice(0, 16) : null,
-  repoSrcSha256: srcHash.digest('hex').slice(0, 16),
+  repoSrcSha256: srcHash.slice(0, 16),
+  identityMode: identity.mode,
 }));
 
 // ---------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 /** Issue #10 live pacing observation. Run: ISSUE10_OUT=<evidence> node scripts/issue-10-live-probe.mjs. ISSUE10_ORIGIN=greenhand|beautiful selects one natural run; ISSUE10_PURSUIT=1 selects the synthetic pursuit flow. Uses a fresh disposable loopback Chrome profile per origin and normal rendered animation time. Seeded Math.random is the only natural-scenario fixture; no game state or clock injection. */
-import {spawn,spawnSync} from 'node:child_process';
-import {createHash} from 'node:crypto';
+import {spawn} from 'node:child_process';
 import {mkdir,readFile,writeFile,mkdtemp} from 'node:fs/promises';
 import {createServer} from 'node:net';
 import {dirname,join,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {gitIdentity} from './lib/git-identity.mjs';
 export const repo=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 export const out=resolve(process.env.ISSUE10_OUT||join(repo,'out','issue-10-live'));
 export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -37,7 +37,7 @@ export function requirePacingComplete(result) {
   if(!Number.isFinite(outside)||outside<=300)throw Error('Natural pacing never crossed outside the 300u law zone');
   for(const [i,time] of [[1,60],[5,190],[8,240]])if(!(checkpoints[i].observation.t>=time))throw Error('Pacing time window not reached at '+checkpoints[i].name);
 }
-async function sourceHash(){const files=spawnSync('git',['ls-files','--cached','--others','--exclude-standard','src'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim().split(/\r?\n/).filter(Boolean).sort();const hash=createHash('sha256');for(const f of [...new Set(files)]){hash.update(f);hash.update(await readFile(join(repo,f)));}return hash.digest('hex');}
+async function sourceHash(){/* EPERM-robust identity (issue #286). */return gitIdentity(repo,{hashSubdir:'src'}).sourceHash;}
 async function port(){const s=createServer();await new Promise((r,j)=>{s.once('error',j);s.listen(0,'127.0.0.1',r);});const p=s.address().port;await new Promise(r=>s.close(r));return p;}
 async function stop(p){if(!p?.pid)return {started:false};if(p.exitCode!==null)return {pid:p.pid,exitCode:p.exitCode,exited:true};let error=null;try{p.kill('SIGTERM');}catch(e){error=String(e);}for(let i=0;i<50&&p.exitCode===null&&p.signalCode===null;i++)await sleep(100);return {pid:p.pid,exitCode:p.exitCode,signal:p.signalCode,exited:p.exitCode!==null||p.signalCode!==null,error};}
 class CDP{
@@ -57,7 +57,11 @@ async function runLive(name,origin,seed,fn){
   const result={probeSha256:createHash('sha256').update(await readFile(fileURLToPath(import.meta.url))).digest('hex'),name,origin,seed,profile,started:new Date().toISOString(),fixture:false,actions:[],checkpoints:[],samples:[],consoleErrors:[],exceptions:[]};
   result.rendererConfig=process.env.ISSUE10_RENDERER||'platform';
   result.resumedProfile=!!resumed;
-  result.sourceHashStart=await sourceHash();result.headCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim();result.workingTreeDirty=!!spawnSync('git',['status','--porcelain'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim();result.runtimeSourceDirty=!!spawnSync('git',['status','--porcelain','--','src'],{cwd:repo,encoding:'utf8',windowsHide:true}).stdout.trim();
+  // EPERM-robust repo identity (issue #286); dirty flag becomes null when the
+  // sandbox refuses git and the filesystem fallback cannot see the index.
+  const identity=gitIdentity(repo,{hashSubdir:'src'});
+  result.sourceHashStart=identity.sourceHash;result.identityMode=identity.mode;
+  result.headCommit=identity.commit;result.workingTreeDirty=identity.workingTreeDirty;result.runtimeSourceDirty=identity.workingTreeDirty;
   const save=()=>writeFile(join(folder,'result.json'),JSON.stringify(result,null,2));
   try{
     vite=spawn(process.execPath,[fileURLToPath(new URL('../../bin/vite.js',import.meta.resolve('vite'))),'--config',config,'--host','127.0.0.1','--port',String(p),'--strictPort'],{cwd:repo,windowsHide:true,stdio:['ignore','pipe','pipe']});

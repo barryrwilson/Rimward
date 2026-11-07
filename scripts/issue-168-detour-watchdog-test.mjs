@@ -2,12 +2,11 @@
  * physics, collision safety or natural gameplay claim is made by this test.
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as THREE from 'three';
+import { gitIdentity } from './lib/git-identity.mjs';
 
 const runtimeRoot = resolve(process.env.STAGE_RUNTIME || fileURLToPath(new URL('..', import.meta.url)));
 const { initAutopilot, tryApproachDock } = await import(pathToFileURL(resolve(runtimeRoot, 'src/game/autopilot.js')).href);
@@ -15,13 +14,11 @@ const { dockApproachPoints } = await import(pathToFileURL(resolve(runtimeRoot, '
 const { collectBodies } = await import(pathToFileURL(resolve(runtimeRoot, 'src/game/collision.js')).href);
 const { keepRadius, sphereChordHit } = await import(pathToFileURL(resolve(runtimeRoot, 'src/game/ap-path.js')).href);
 const { PHY } = await import(pathToFileURL(resolve(runtimeRoot, 'src/game/physics.js')).href);
-const git = (...args) => {
-  const r = spawnSync('git', ['-c', `safe.directory=${runtimeRoot}`, ...args], { cwd: runtimeRoot, encoding: 'utf8', windowsHide: true });
-  assert.equal(r.status, 0, r.stderr); return r.stdout.trim();
-};
-const hash = createHash('sha256');
-for (const path of git('ls-files', 'src').split(/\r?\n/).sort()) { hash.update(path); hash.update(readFileSync(resolve(runtimeRoot, path))); }
-const artifact = { head: git('rev-parse', 'HEAD'), runtimeSourceDirty: !!git('status', '--porcelain', '--', 'src'), runtimeSha256: hash.digest('hex') };
+// Source identity via the EPERM-robust helper (issue #286); see scripts/lib/git-identity.mjs.
+const identity = gitIdentity(runtimeRoot);
+const artifact = { head: identity.commit, runtimeSourceDirty: identity.workingTreeDirty,
+  runtimeSha256: identity.sourceHash, identityMode: identity.mode,
+  identityDirtyUnknown: identity.dirtyUnknown };
 const DT = 1 / 60;
 const results = [];
 let verdict='FAIL';

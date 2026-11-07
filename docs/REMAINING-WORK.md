@@ -194,7 +194,23 @@ employer-dock playthrough is still owed.
 Build note: `vite.config.js` keeps esbuild's transform temp files under the
 ignored `out/build-tmp` when the platform temp directory cannot delete them
 (Windows file sandbox); this is an environment-only build fix with no runtime
-bundle or gameplay change.
+bundle or gameplay change. `npm run build` now routes through
+`scripts/build.mjs` (#286): the native config loader removes the
+config-bundling esbuild child, and when the sandbox refuses even the
+transpile/minify service spawn the wrapper fails with a named, actionable
+error instead of raw EPERM noise — never a silent partial `dist/`.
+
+Tooling note (#286): `scripts/lib/git-identity.mjs` is the shared
+spawn-refusal-robust source-identity capture used by the boot-harness
+suites and the live probes — piped `spawnSync('git', …)` on normal machines,
+a clearly labeled filesystem-only identity (HEAD from the gitdir files, tree
+hash over `src/`, `dirtyUnknown` instead of a guessed dirty flag) when the
+sandbox refuses child spawns. `test:boot` completes under a restricted
+sandbox; the WAVE181/182 boot-pin children relay their result line through
+`WAVE_RESULT_FILE` when piped stdio is refused. Parked follow-up: piped
+`spawnSync` children that pass stdin (issue-71/73/74-recovery/176/181
+F-legs) still need an unrestricted spawn and fail loudly naming the
+refusal; a stdin relay design touches five more suites.
 
 Parked follow-ups (deliberately not in this issue): the tie is faction-level,
 so an independent trader/miner/patrol crew can be taken once an independent

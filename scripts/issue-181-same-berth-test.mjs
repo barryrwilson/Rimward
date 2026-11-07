@@ -15,7 +15,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { seedBootRandom, installDomStubs, bootGameSystems } from './lib/boot-harness.mjs';
 import { requestAutosave } from '../src/game/save.js';
@@ -470,7 +470,15 @@ if (bootPin) {
     holdReasonRendered: stateLines().some((c) => (c.state || '').includes('unique consignment')),
   };
 
-  console.log('WAVE181 ' + JSON.stringify({ ...mixed, ...short, ...reserved }));
+  const waveLine = 'WAVE181 ' + JSON.stringify({ ...mixed, ...short, ...reserved });
+  console.log(waveLine);
+  // Spawn-restricted sandboxes can refuse piped stdio (issue #286); when the
+  // boot harness names a relay file, mirror the line there so the parent can
+  // still read the result. The file write is best-effort and never the primary
+  // channel on an unrestricted machine.
+  if (process.env.WAVE_RESULT_FILE) {
+    try { writeFileSync(process.env.WAVE_RESULT_FILE, waveLine + '\n'); } catch {}
+  }
   process.exit(0);
 }
 
