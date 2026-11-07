@@ -112,7 +112,7 @@
 // station object survives, gates/landmarks rebuild with the overgrowth
 // stable).
 import * as THREE from 'three';
-import { readFileSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16764,6 +16764,8 @@ removeLiveShip(w42indyCtx, w42indy);
 // loudly with its named reason; it is never silently swallowed.
 {
   const here181 = dirname(fileURLToPath(import.meta.url));
+  // The relay lives under the ignored out/ tree; a pristine clone may not have it yet.
+  mkdirSync(join(here181, '..', 'out'), { recursive: true });
   const relay181 = join(here181, '..', 'out', `wave181-${process.pid}.txt`);
   const run181 = spawnSync(process.execPath,
     // `--import` takes a URL, and a Windows absolute path parses as the `c:`

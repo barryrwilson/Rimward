@@ -104,19 +104,25 @@ export function hashTree(repoRoot, sub, hash) {
 /**
  * Capture repo identity. Never throws for a refused git binary; throws only
  * when neither git nor the filesystem can establish any identity.
- * @returns {{ mode:'git'|'filesystem', commit:string|null, sourceHash:string,
- *   workingTreeDirty:boolean|null, dirtyUnknown:boolean, refusalError:string|null }}
+ * @returns {{ mode:'git'|'filesystem', commit:string|null, sourceHash:string|null,
+ *   hashUnknown:boolean, workingTreeDirty:boolean|null, dirtyUnknown:boolean,
+ *   refusalError:string|null }}
  */
 export function gitIdentity(repoRoot, { hashSubdir = 'src' } = {}) {
   const piped = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8', windowsHide: true });
   if (!piped.error && piped.status === 0) {
     const status = spawnSync('git', ['status', '--porcelain'], { cwd: repoRoot, encoding: 'utf8', windowsHide: true });
     const hash = createHash('sha256');
-    try { hashTree(repoRoot, hashSubdir, hash); } catch { /* keep git-only data */ }
+    let hashUnknown = false;
+    try { hashTree(repoRoot, hashSubdir, hash); } catch { hashUnknown = true; }
     return {
       mode: 'git',
       commit: piped.stdout.trim(),
-      sourceHash: hash.digest('hex'),
+      // null (not an empty-string hash) when src/ is unreadable: every caller
+      // compares the hash only for self-stability, and null !== null keeps an
+      // unreadable tree LOUD instead of falsely stable.
+      sourceHash: hashUnknown ? null : hash.digest('hex'),
+      hashUnknown,
       workingTreeDirty: status.status === 0 ? !!status.stdout.trim() : null,
       dirtyUnknown: status.status !== 0,
       refusalError: null,
