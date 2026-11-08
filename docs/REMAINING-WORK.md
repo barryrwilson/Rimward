@@ -1,3 +1,24 @@
+## Pirate bounties quote the same last-seen read hunts got — #292
+
+Implemented on `dsh/issue-292-playtest-mercenary-pirate-bounties-give` (base
+master `508d3bf`). The mercenary playtest finding was real: an accepted
+pirate-bounty row exposed only progress/need/target, so when Red Marlow fled
+off scanner (~600 u) the only re-find was two full station round-trips of
+re-docking. The fix keeps the #271 honesty boundary and reuses its vocabulary:
+the accepted bounty row's state line now derives a "Last seen:" phrase at
+render from the record's OWN durable evidence — the #68 tagged wakeSite first
+("sheltering in the holding lane off <Station>" / "seen at the gate to
+<system>" / open-space evade), and with no wake trail the quarry's authored
+lane answers through the same `huntHauntPhrase` hunts quote. No new event
+types, no new persisted fields, no `state.js` edit, no change to hunt
+tracking or to the un-accepted board rows.
+
+Focused regression is `scripts/issue-292-bounty-tracking-test.mjs` (7
+checks: station-shelter wake, gate-crossing wake, authored-lane fallback, the
+no-coordinate/no-record-id honesty line, hunt rows untouched, JSON-plain),
+appended to `npm run test:boot`; it fails on the pre-fix source.
+`npm run build` passes.
+
 ## A lawful hunt kill is not an atrocity — #265
 
 Implemented on `dsh/issue-265-playtest-hunter-every-paid-hunt-is-an-at` (base
