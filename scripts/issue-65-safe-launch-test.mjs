@@ -399,8 +399,18 @@ ok('Veridian: a second station behaves the same at every approach orientation');
   assert.equal(ctx.flags.docked, false, 'API undock actually leaves the berth');
   assert.ok(outwardDot() > 0.9999, 'API undock uses the same outward release');
   const again = api.act({ name: 'undock' });
-  assert.equal(again.ok, false, 'undocking twice refuses');
-  assert.equal(again.token, 'no-service', 'the second call is a no-service, not a launch');
+  // Issue #293: the second call in the SAME frame repeats the departure it
+  // already caused — ok, with docked=false on the next observation — instead
+  // of a no-service the world then disobeys. No second planLaunch runs, so
+  // the hull is still released exactly once.
+  assert.equal(again.ok, true, 'a same-frame repeat undock repeats the departure honestly');
+  assert.equal(again.token, '', 'the repeat carries no refusal token');
+  assert.equal(ctx.flags.docked, false, 'the ship is still flying');
+  tick(2); // flush the queued 'undocked' event: the departure is no longer in flight
+  const stale = api.act({ name: 'undock' });
+  assert.equal(stale.ok, false, 'a stale repeat undock refuses');
+  assert.equal(stale.token, 'no-service', 'the stale call is a no-service, not a launch');
+  assert.equal(ctx.flags.docked, false, 'and the refusal leaves flight state alone');
   ok('agent API propagates both the obstruction refusal and the successful launch');
 }
 

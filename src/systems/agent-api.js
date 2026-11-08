@@ -461,6 +461,18 @@ function actLaunch(ctx, name, run) {
   return ok(ctx, name);
 }
 
+/**
+ * Issue #293: true when an undock already happened THIS frame and the event
+ * queue has not flushed yet (main.js rotates ctx.events at frame end). The
+ * departure receipt may then be repeated honestly: the hull is already in
+ * flight, so the next observation reads docked=false and agrees with an ok.
+ * A departure from any earlier frame is not matched — undock is never a no-op.
+ */
+function departureInFlight(ctx) {
+  return Array.isArray(ctx?.events)
+    && ctx.events.some((ev) => ev && ev.type === 'undocked');
+}
+
 function dispatchLive(ctx, name, args) {
   if (agentCombatActive(ctx) && ['engageAutopilot', 'approachDock', 'engageAutomine', 'afterburner'].includes(name)) {
     // Issue #120: the pulse cannot share the combat helm, but a withdrawal
@@ -522,9 +534,18 @@ function dispatchLive(ctx, name, args) {
   if (name === 'openService') {
     const desk = deskOf(ctx);
     if (!desk || typeof desk.selectService !== 'function') return fail(ctx, name, 'no-service');
-    if (!ctx.flags || ctx.flags.docked !== true) return fail(ctx, name, 'no-service');
     const id = Object.hasOwn(args, 'id') ? args.id : '';
     if (!isDockService(id)) return fail(ctx, name, 'no-service');
+    if (!ctx.flags || ctx.flags.docked !== true) {
+      // Issue #293: 'launch' IS the departure verb, so a caller that already
+      // asked the launch service to undock this frame receives the same ok
+      // receipt again — the world it next observes (docked=false) then agrees.
+      // Only the current frame counts: ctx.events flush at frame end, so an
+      // 'undocked' event still queued is exactly a departure in flight. Every
+      // other service and any older departure keeps the no-service refusal.
+      if (id === 'launch' && departureInFlight(ctx)) return ok(ctx, name);
+      return fail(ctx, name, 'no-service');
+    }
     // 'launch' opens no pane: it is the same departure the dedicated undock
     // runs, so it answers with the same launch verdict (issue #65 QA).
     if (id === 'launch') return actLaunch(ctx, name, () => desk.selectService(id));
@@ -534,7 +555,15 @@ function dispatchLive(ctx, name, args) {
   if (name === 'undock') {
     const desk = deskOf(ctx);
     if (!desk || typeof desk.undock !== 'function') return fail(ctx, name, 'no-service');
-    if (!ctx.flags || ctx.flags.docked !== true) return fail(ctx, name, 'no-service');
+    if (!ctx.flags || ctx.flags.docked !== true) {
+      // Issue #293: a redundant undock behind a same-frame openService('launch')
+      // — or behind another undock — reports the departure it already caused
+      // (ok, docked=false on the next observe) instead of a no-service that
+      // reads as a refusal the world then disobeys. A stale departure (any
+      // earlier frame) still refuses no-service: undock is not a no-op verb.
+      if (departureInFlight(ctx)) return ok(ctx, name);
+      return fail(ctx, name, 'no-service');
+    }
     return actLaunch(ctx, name, () => desk.undock());
   }
   if (name === 'acceptJob') {
