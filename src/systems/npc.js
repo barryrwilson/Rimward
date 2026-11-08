@@ -64,6 +64,7 @@ import { markDerelict, applyDerelictLive, tickDerelictLive, syncDerelictLive } f
 import { canSeat } from '../game/weapon-fit.js';
 import { berthHeld, canShowHail } from './overlay-policy.js';
 import { takeScareDamage, awardFirstScare } from '../game/first-scare.js';
+import { hailEncounterState } from '../game/hail-offer.js'; // issue #291: the yielded read the classifier already publishes
 
 /**
  * NPC system — live GLB ship assets and AI (doc §6.7, §7).
@@ -1919,6 +1920,90 @@ export function tryOpenTermsHail(ctx) {
   const ev = { ship: live, intents: intentsFor(ctx, live), line: 'Name your terms.', terms: true };
   ctx.emit('hailOpened', ev);
   return ev;
+}
+
+/**
+ * Issue #291 — take the yield of a surrendered bounty target: the capture
+ * conversion that settles a pirate bounty without the finishing shot. The
+ * combat lease refuses a surrendered hull (#265, by design) and the only
+ * other supported finish was raw fire the fled hull outruns, so a player-caused
+ * yield stranded the bounty. The verb is the HAIL key on the yielded lock —
+ * the classifier already names the state ('yielded') and the bracket prints it —
+ * and hail.js runs it only when no card opened.
+ *
+ * Gates, all read live and failing closed: a locked LIVE ship whose encounter
+ * state is exactly 'yielded' (disabled outranks yielded to the classifier, so
+ * a wreck stays salvage), the player really broke it (surrenderCauserOf, the
+ * #99/#122 attribution), in hail range, not destroyed, not mid-derelict
+ * (record must still be a live role, never dead/captured/derelict), an
+ * ordinary pirate record (a Named Gun and every civilian keep their own
+ * lanes, and a live hunt contract's bound quarry keeps #265/#282's kill), and
+ * not already captured here (ai.capturedDone latches once per instance).
+ *
+ * Effects: the hull stops where it is (drift, engines dark — they have struck
+ * colors), the record settles 'captured' (the terminal word traffic tows away,
+ * world.js never advances, and settlement already treats as an ended quarry),
+ * the escape plan is cancelled outright (a captured hull is not running
+ * anywhere and must not respawn mid-flee), the crew is left aboard (no pods,
+ * no jettison — capture is not a break), and ONE npcSurrendered receipt flies
+ * with outcome 'captured', causer 'player'. world.js's surrendered branch
+ * flips the record state, records the incident and pays the player-caused
+ * milestones; station.js settlement reads that incident. No fear change: the
+ * witnessed capitulation (+2) already paid when the hull yielded, and a
+ * capture is not a kill — no atrocity, no killedSurrendered, no npcDestroyed.
+ * Instance bookkeeping only; nothing new persisted.
+ * Returns true when the capture ran, else false (the caller falls through to
+ * the ordinary miss feedback).
+ */
+export function tryCaptureYieldedTarget(ctx) {
+  const live = ctx && ctx.targets && ctx.targets.current;
+  if (!live || live.lockKind) return false;
+  const st = live.state;
+  const ai = live.ai;
+  const rec = live.record;
+  if (!st || !ai || !live.object || st.destroyed) return false;
+  if (ai.capturedDone === true) return false;
+  if (hailEncounterState(ctx, live) !== 'yielded') return false;
+  if (surrenderCauserOf(live) !== 'player') return false;
+  if (!ctx.ships || !ctx.ships.includes(live)) return false;
+  if (!ctx.ship || !ctx.ship.object) return false;
+  if (live.object.position.distanceTo(ctx.ship.object.position) > U.TARGET_RANGE) return false;
+  if (!rec || rec.state !== 'enroute') return false; // dead/captured/derelict/inTransit: not ours to take
+  // Bounty lane only (issue #291's scope): ordinary pirate targets. A Named
+  // Gun keeps the #265/#269 lawful-kill lane — the rivalry ladder answers
+  // kills, never a capture — and civilians were never bounty quarries. A hull
+  // an ACCEPTED hunt contract binds keeps that contract's lawful-kill path
+  // too (#265/#282): the capture must not end a contracted quarry short of
+  // its kill. A merely OFFERED hunt row is a posting, not a bind, and never
+  // vetoes the bounty lane.
+  if ((live.role ?? rec.role) !== 'pirate') return false;
+  const jobs = ctx.world.jobs;
+  if (Array.isArray(jobs)) {
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      if (j && j.kind === 'hunt' && j.state === 'accepted' && j.recordId === rec.id) return false;
+    }
+  }
+  ai.capturedDone = true;
+  // They strike their colors: dead-stick drift where they sit (the crewPods
+  // shape, minus the crew — nobody leaves a captured hull). Engines dark.
+  ai.mode = 'drift';
+  ai.target = null;
+  ai.intent = false;
+  ai.phase = null;
+  ai.surrenderDone = true;
+  st.surrendered = true;
+  _fwd.copy(NEG_Z).applyQuaternion(live.object.quaternion);
+  ai.driftVel.copy(_fwd).multiplyScalar(3);
+  if (ai.velocity) ai.velocity.set(0, 0, 0);
+  const glow = live.object.userData.glow;
+  if (glow) glow.visible = false;
+  cancelEscape(rec); // a captured hull is not running anywhere
+  // The receipt carries the capture; world.js's surrendered branch flips the
+  // record, writes the incident and pays the player-caused bookkeeping.
+  say(ctx, live, 'We yield. She is yours.');
+  ctx.emit('npcSurrendered', { ship: live, outcome: 'captured', causer: 'player' });
+  return true;
 }
 
 /** Latch + read: hull or screen went below max this instantiation. */

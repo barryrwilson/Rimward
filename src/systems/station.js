@@ -5857,10 +5857,20 @@ function tickDeliveryJobs(ctx, ui, render) {
         settled = true;
       } else {
         // Pirate bounty: a witnessed, player-caused kill of the named reaver.
+        // Issue #291: "confirmation of the kill or capture" — the card's own
+        // terms. The capture conversion (hail.js on a yielded hull the player
+        // broke) records a surrendered incident with outcome 'captured' and
+        // causer 'player'; world.js flips the record. That ends the quarry
+        // exactly as a kill does, so the claim accepts it. A plain yield
+        // (any other outcome, or a world-caused capture) still pays nothing.
         const claimed = (ctx.world.incidents || []).some(
           (i) => i.kind === 'destroyed' && i.name === job.target && i.causer === 'player',
         );
-        if (!claimed) continue;
+        const captured = (ctx.world.incidents || []).some((i) => {
+          if (!i || i.kind !== 'surrendered' || i.name !== job.target || i.causer !== 'player') return false;
+          return i.outcome === 'captured' || i.outcome === 'capture';
+        });
+        if (!claimed && !captured) continue;
         if (acceptedHuntClaimsName(ctx, job.target) || huntPaidNames.has(job.target)) continue;
         const bountyPay = jobPay(ctx, job.reward);
         ctx.world.credits += bountyPay;

@@ -1,3 +1,56 @@
+## A surrendered bounty target can be finished: the capture — #291
+
+Implemented on `dsh/issue-291-playtest-mercenary-a-surrendered-bounty`
+(base master `bd88d47`). The mercenary playtest finding was real: the
+#61/#62 combat lease drove Red Marlow to surrender inside one 45 s lease,
+then refused the same hull with `target-surrendered` (#265, by design — a
+lease will not fire on a yielded hull), the only supported finish left was
+raw `setControl` fire the fleeing hull outruns (range 199 → 800+ u across
+four pursuits), and the bounty card pays on "confirmation of the kill or
+capture" while settlement read only a player-caused `destroyed` incident —
+so the combat system's own surrender stranded the bounty.
+
+The fix keeps the #265 refusal semantics intact and publishes the capture
+that was already half-built: the HAIL key on a yielded, player-broken pirate
+target (the state the bracket already prints as YIELDED, in hail range) runs
+`npc.js tryCaptureYieldedTarget` from hail.js's H-press chain, only when no
+card opened. The hull strikes its colors where it sits (dead-stick drift,
+engines dark), the record settles `captured` — the terminal word traffic
+already tows away and settlement already treats as an ended quarry — the
+escape plan is cancelled, and ONE `npcSurrendered` receipt flies with
+outcome `captured`, causer `player`; world.js's surrendered branch flips
+the record, writes the incident and pays the player-caused bookkeeping.
+Bounty settlement (`station.js` tickDeliveryJobs) now accepts that incident
+beside the witnessed kill, so the card's own terms are true. Gates fail
+closed: the classifier state must be exactly `yielded` (a disabled wreck
+stays salvage, a willing hull keeps its terms card), the #99 attribution
+must read the player, the record must be a live ordinary pirate (a Named Gun
+keeps the #265/#269 rivalry ladder, civilians were never bounty quarries), a
+hull an ACCEPTED hunt contract binds keeps #265/#282's lawful kill (a merely
+offered hunt row never vetoes the bounty lane), range is `U.TARGET_RANGE`,
+and `ai.capturedDone` latches one capture per instance. No fear change (the
+witnessed capitulation already paid at the yield; a capture is not a kill —
+no `npcDestroyed`, no atrocity, no killedSurrendered), no fence marker, no
+new persistent fields, keys, SKUs or `state.js` edit. The `yielded`
+classifier copy now names the finish: "They have yielded. Hail to take
+their surrender."
+
+Focused regression is `scripts/issue-291-surrender-capture-test.mjs` (7
+checks: the real KeyH capture on the resolver-yielded target, the captured
+incident and record with no killedSurrendered fear and no destroyed
+incident, the bounty paying `done` on the next delivery tick, a
+world-caused yield refused through the real capitulate path, a disabled hull
+answering with the salvage card instead, a second press doing nothing,
+JSON-plain), appended to `npm run test:boot`. `npm run build` passes. The
+live flow is `npm run test:surrender-capture-live`: disposable loopback
+Chromium runs the contracted loop — accept the bounty at the Freehold dock,
+spawn and lock the named reaver, break it with the player's own guns, take
+the yield through the real hail resolver, take the surrender with the real
+hail key, and read the aftermath: `captured` incident causer `player`,
+record `captured`, no destroyed incident, no fear spike, and the bounty
+PAID (`done`, credits rise) inside the delivery tick, with a clean console;
+evidence under `out/issue-291-live/`.
+
 ## Pirate bounties quote the same last-seen read hunts got — #292
 
 Implemented on `dsh/issue-292-playtest-mercenary-pirate-bounties-give` (base
