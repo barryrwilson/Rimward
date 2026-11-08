@@ -213,6 +213,88 @@ check('C2 the atrocity event fires for the non-quarry kill', () => {
 });
 
 // ---------------------------------------------------------------------------
+// C3. The +2 capitulation is pinned on the ACCEPTED contract's BOUND quarry.
+//
+// Issue #284: C1's comment claims "the +2 must survive for a bound quarry
+// exactly as for anyone else", but the hull it hails is deliberately UNBOUND —
+// the check splices every offered hunt first so rec2 names no live job. The
+// interaction the comment describes — resolving the demandCargo verb on the
+// contract's own bound quarry — was asserted nowhere, so a future edit to
+// isHuntQuarry or the capitulation path could silently change that case
+// without failing the suite. This check drives the real resolver (hailOpened
+// -> one frame -> ctx.hailApi.resolve('demandCargo')) against a hull the
+// accepted hunt actually binds, and then finishes it to pin the #265
+// exemptions B1 asserts for the stamped shape.
+// ---------------------------------------------------------------------------
+
+// Issue #284: B1 stamps the quarry surrendered by hand (the "already broken"
+// shape). The resolver-driven shape needs the opposite preconditions: an
+// intact, unyielded hull the player broke, so the hail card opens and the
+// yield is the card's doing. This helper resets the bound record to a live,
+// intact yield candidate and instantiates it, mirroring what a player flying
+// the approach sees. traffic.js folds any live hull whose record reads dead
+// or captured (traffic.js despawn pass, `ended`), so the record must read
+// alive for the instance to stay in ctx.ships — resetting the record state
+// is the disclosed fixture that keeps the respawn flying.
+function respawnIntactBoundQuarry(job) {
+  const quarryRec = recordById(job.recordId);
+  assert.ok(quarryRec, 'the bound record resolves');
+  quarryRec.state = 'enroute';
+  const liveQ = spawnShip(quarryRec, [-60, 0, 40]);
+  assert.ok(liveQ, 'the bound quarry instantiated');
+  // The hull is willing to talk: the player broke it, it has not yielded.
+  liveQ.ai.lastAttacker = 'player';
+  assert.ok(!liveQ.state.surrendered && !liveQ.state.disabled && !liveQ.state.destroyed,
+    'the bound hull is an intact yield candidate (surrenderPayoutOk)');
+  return { quarryRec, liveQ };
+}
+
+check('C3 the bound quarry pays the witnessed +2 through the real hail resolver', () => {
+  // The accepted hunt from A2 still stands (B1 only killed its quarry's
+  // record state; the job row is unchanged). The bind is record-id precise
+  // (prize.js isHuntQuarry reads the RECORD id, not the instance), so the
+  // re-engaged hull is still the contract's bound quarry — exactly the hull
+  // a player fights when the approach resumes.
+  const job = acceptedHunt();
+  assert.ok(job, 'the accepted hunt from A2 still stands');
+  const { quarryRec, liveQ } = respawnIntactBoundQuarry(job);
+  // The hull must be OUT of the berth for the hail card to open and resolve:
+  // the berth owns the screen (issue #100) and B1 undocked for its own kill,
+  // so C3 re-undocks first. Without this the resolver answers 'docked' and
+  // nothing moves — the exact live behavior this check exists to pin.
+  if (ctx.flags.docked) ctx.stationDesk.undock();
+  assert.equal(ctx.flags.docked, false, 'C3 is flown in space, not at the desk');
+  // The real yield resolver: open the bargaining card on the BOUND hull and
+  // resolve demandCargo. hail.js's admission boundary (surrenderPayoutOk)
+  // accepts the card, the resolution sets surrendered and bumps the witnessed
+  // capitulation (+2) — the exempt kill's own approach behavior, untouched by
+  // the #265 exemption (only the kill fear and the atrocity gate skip).
+  ctx.emit('hailOpened', { ship: liveQ, intents: ['demandCargo'] });
+  step(1 / 60);
+  const fearBefore = ctx.world.fear;
+  const res = ctx.hailApi.resolve('demandCargo');
+  assert.equal(res, '', 'the demandCargo verb resolved on the bound quarry');
+  assert.equal(ctx.world.fear, fearBefore + ECON.fear.capitulation,
+    'witnessed capitulation +2 for the bound quarry');
+  assert.ok(liveQ.state.surrendered, 'the bound hull yielded');
+  step(1 / 60);
+  // Finish the yielded bound quarry: the #265 exemptions hold for the
+  // resolver-driven shape too — no killedSurrendered fear, no feral rage,
+  // no atrocity — and the record settles dead. The feral gate is asserted
+  // through the atrocity event above: bio's mood machine holds the previous
+  // mood between bands with hysteresis, so after C2's rage the 60 s feral
+  // window can still be running and mood is not a clean read here. The
+  // event-level assertion is the exact thing the #265 exemption changes.
+  const midFear = ctx.world.fear;
+  const moodBefore = ctx.bio.mood;
+  finishHull(liveQ);
+  const sawAtrocity = [...ctx.lastEvents, ...ctx.events].some((e) => e.type === 'atrocity');
+  assert.ok(!sawAtrocity, 'no atrocity event for the resolver-driven contract kill');
+  assert.equal(ctx.world.fear, midFear, 'no killedSurrendered fear for the bound-quarry kill');
+  assert.ok(quarryRec.state === 'dead', 'the bound record settles dead');
+});
+
+// ---------------------------------------------------------------------------
 // D. Records stay JSON-plain; the save snapshot round-trips.
 // ---------------------------------------------------------------------------
 check('D1 jobs and records stay JSON-plain', () => {
