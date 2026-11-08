@@ -4,7 +4,8 @@ import { cargoValueSafe } from '../game/data-trade.js';
 import { bumpTrust, addFavor } from '../game/contacts.js';
 import { portraitFor } from '../game/portraits.js';
 import {
-  dropTermsClaim, enterEscapeFlee, shipHasCargo, spillShipCargo, surrenderCauserOf, tryOpenTermsHail,
+  dropTermsClaim, enterEscapeFlee, shipHasCargo, spillShipCargo, surrenderCauserOf,
+  tryCaptureYieldedTarget, tryOpenTermsHail,
 } from './npc.js';
 import {
   berthHeld,
@@ -1331,6 +1332,17 @@ export function initHail(ctx) {
             // The claim rides the OPEN card only: an admission refusal (the
             // issue #99 boundary, an empty verb list) leaves nothing to sell.
             if (ev.terms === true && !(open && open.ship === ev.ship)) dropTermsClaim(ev.ship);
+          } else if (
+            // Issue #291: no card opened, and the lock is a yielded hull the
+            // player broke — the press TAKES THE SURRENDER instead of missing.
+            // One bounded conversion, no card, no miss toast; npc.js owns the
+            // gates and answers false whenever the state is not exactly a
+            // capturable yield, so this never shadows the openers above or the
+            // miss feedback below.
+            !hailMissFrameHas(ctx, 'hailOpened')
+            && tryCaptureYieldedTarget(ctx)
+          ) {
+            // the receipt is the feedback; nothing else to draw
           } else if (!skipMiss) {
             emitHailMiss(ctx, classifyLockHailMiss(ctx));
           }

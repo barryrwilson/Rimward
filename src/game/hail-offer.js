@@ -103,7 +103,9 @@ const STATE_COPY = Object.freeze({
     verb: 'hail',
     reason: 'yielded',
     label: 'YIELDED',
-    next: 'They have already yielded. No further terms to negotiate.',
+    // Issue #291: the yield has one supported finish — the player who broke
+    // the hull takes the surrender (capture) with the same hail key.
+    next: 'They have yielded. Hail to take their surrender.',
   },
   // The word the resolve line already prints (BARGAINING / WILLING TO YIELD)
   // is the morale statement and stays true with or without a card. The step
