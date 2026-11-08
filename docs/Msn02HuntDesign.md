@@ -555,4 +555,7 @@ way in through the real #98/#99 hail resolver; the card names the lawful-kill
 line; records stay JSON-plain and the save round-trips), appended to
 `npm run test:boot`. The live flow is `npm run test:hunt-lawful-kill-live`
 (disposable Chromium: accept a Freehold hunt, break and finish the bound
-quarry, no feral rage, no fear spike, the contract settles).
+quarry — the finishing blow run as the combat.js witness shape, `npcHit`
+then `npcDestroyed`, so the kill is genuinely player-caused — no feral
+rage, no fear spike, the witnessed contract pays the quoted bounty
+inside the delivery tick, #283).

@@ -6,7 +6,10 @@
  * dock, find the bound quarry (the CONTRACT mark on the bracket), break it
  * with the player's own guns, finish the surrendered hull with the finishing
  * shot, and read the aftermath: no feral rage, no fear spike from the
- * surrendered kill, the hunt payout line, and a clean console.
+ * surrendered kill, and a clean console. The finishing blow runs the real
+ * combat.js witness shape (npcHit then npcDestroyed), so the kill is
+ * genuinely player-caused and the assertion proves the payout: the quoted
+ * bounty lands in credits inside the delivery tick (#283).
  *
  * Fixtures are explicit record-state flips and disclosed hull-state stamps
  * (a break is a combat result, the yield is the willingness capitulate
@@ -86,9 +89,16 @@ await runLive('hunt-lawful-kill', async ({ c, result, act, observe, wait, checkp
   await sleep(600);
 
   // C. The quarry has yielded (the headless suite pins the +2 resolver path);
-  // the player finishes the surrendered hull with the finishing shot.
+  // the player finishes the surrendered hull with the finishing shot. The
+  // finishing blow runs the combat.js witness shape: an npcHit (combat.js
+  // 1570/1756) lands before the npcDestroyed, so world.js's playerHitAt
+  // attribution (world.js consumeIncidents) marks the kill player-caused and
+  // the hunt's witnessed-kill gate is met by a real witness, not a stamp.
   const fearBefore = await c.eval('window.__ctx.world.fear');
   const moodBefore = await c.eval('window.__ctx.bio.mood');
+  const before = await c.eval(`(()=>{const x=window.__ctx;
+    const j=(x.world.jobs??[]).find(j=>j&&j.id===${JSON.stringify(bound.id)});
+    return { credits:x.world.credits, payQuoted:j?j.payQuoted:null };})()`);
   await c.eval(`(()=>{const x=window.__ctx;
     const t=x.targets.current; if(!t||!t.state)return 'no-lock';
     t.state.surrendered=true; t.state.hull=Math.max(1,t.state.hullMax*0.15);
@@ -96,6 +106,7 @@ await runLive('hunt-lawful-kill', async ({ c, result, act, observe, wait, checkp
   await sleep(400);
   const finished = await c.eval(`(()=>{const x=window.__ctx;
     const t=x.targets.current; if(!t||!t.state)return 'no-lock';
+    x.emit('npcHit',{ship:t,damage:t.state.hull});
     t.state.destroyed=true; x.emit('npcDestroyed',{ship:t});
     return 'fired';})()`);
   result.finish = { finished };
@@ -111,15 +122,25 @@ await runLive('hunt-lawful-kill', async ({ c, result, act, observe, wait, checkp
   assert.ok(after.fear <= fearBefore + 2, 'no killedSurrendered spike (capitulation +2 only): ' + fearBefore + ' -> ' + after.fear);
   assert.equal(after.record, 'dead', 'the quarry record settles dead');
 
-  // The payout line and the settled contract.
+  // The exact terminal state, named: a witnessed hunt pays through
+  // huntPayComplete, which sets job.state='failed', credits the payQuoted
+  // bounty, and replaceHuntJob splices the settled row off the board. The
+  // assertion names what the game actually does: the accepted row leaves
+  // the board PAID — credits rise by the quoted bounty within the tick.
   let paid = false;
+  let paidState = null;
   for (let i = 0; i < 30 && !paid; i++) {
     await sleep(500);
-    paid = await c.eval(`(()=>{const x=window.__ctx;
+    const now = await c.eval(`(()=>{const x=window.__ctx;
       const j=(x.world.jobs??[]).find(j=>j&&j.id===${JSON.stringify(bound.id)});
-      return j?j.state:'gone';})()`) !== 'accepted';
+      return { credits:x.world.credits, state:j?j.state:'gone' };})()`);
+    paidState = now;
+    paid = now.state !== 'accepted' && now.credits >= before.credits + (before.payQuoted ?? 0)
+      && (before.payQuoted ?? 0) > 0;
   }
-  assert.ok(paid, 'the contract settled within the delivery tick');
+  assert.ok(paid, 'the witnessed contract paid the quoted bounty within the delivery tick: '
+    + JSON.stringify({ before, after: paidState }));
+  assert.notEqual(paidState.state, 'accepted', 'the accepted row left the board');
   await checkpoint('lawful-kill-aftermath');
 });
 

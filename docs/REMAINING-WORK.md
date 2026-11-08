@@ -30,9 +30,12 @@ fires `atrocity`; jobs and records stay JSON-plain), appended to
 `npm run test:boot`; it fails on the pre-fix source. The live flow is
 `npm run test:hunt-lawful-kill-live`: PASS in disposable Chromium (accept a
 Freehold hunt, the lawful-kill line on the card, the bound quarry
-spawned/locked/broken/finished, mood `keen` not `feral`, fear 0 after the
-kill, the record settled `dead`, the contract settled inside the delivery
-tick, and a clean console; evidence under `out/issue-265-live/`).
+spawned/locked/broken/finished, the finishing blow run as the combat.js
+witness shape — `npcHit` then `npcDestroyed` — so the kill is genuinely
+player-caused, mood `keen` not `feral`, fear 0 after the kill, the record
+settled `dead`, the witnessed contract PAID the quoted bounty inside the
+delivery tick (credits rise by `payQuoted`, #283), and a clean console;
+evidence under `out/issue-265-live/`).
 # RIMWARD remaining work
 ## Playtest Agent API: engage stalls and unnamed overlay refusals — #267
 
