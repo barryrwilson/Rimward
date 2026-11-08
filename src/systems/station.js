@@ -3201,6 +3201,68 @@ function huntHauntPhrase(ctx, sysId, rec) {
   }
 }
 
+/**
+ * Issue #292: the last-seen phrase an ACCEPTED pirate-bounty row quotes while
+ * its target is off scanner — the same #271 vocabulary hunts quote, sourced
+ * from the record's OWN durable evidence in the same honesty boundary:
+ * a tagged wakeSite (the #68 escape stamp: where the runner actually went)
+ * speaks the shelter/gate it chose; otherwise the quarry's authored lane
+ * (huntHauntPhrase) answers, exactly as a hunt card would. Derived at render
+ * from record data — no coordinate, no live position, no handle, no new
+ * persisted field. Null keeps the plain row.
+ */
+function bountyLastSeenPhrase(ctx, job) {
+  try {
+    if (!job || job.kind !== 'bounty' || job.state !== 'accepted') return null;
+    if (typeof job.id !== 'string' || !job.id.startsWith('bounty-pirate-')) return null;
+    const sysId = typeof job.system === 'string' && Object.hasOwn(SYSTEMS, job.system)
+      ? job.system : ctx.world.currentSystem;
+    const def = SYSTEMS[sysId];
+    if (!def) return null;
+    // Resolve the named reaver the way settlement does: a living pirate record
+    // carrying that name (current bank first, then the other generated banks).
+    let rec = null;
+    const banks = [];
+    if (Array.isArray(ctx.world.records)) banks.push(ctx.world.records);
+    const recordBanks = ctx.world.recordBanks;
+    if (recordBanks && typeof recordBanks === 'object' && !Array.isArray(recordBanks)) {
+      for (const bId of Object.keys(recordBanks).sort()) {
+        if (bId !== sysId && Array.isArray(recordBanks[bId])) banks.push(recordBanks[bId]);
+      }
+    }
+    for (const bank of banks) {
+      for (let i = bank.length - 1; i >= 0; i--) {
+        const r = bank[i];
+        if (r && r.role === 'pirate' && r.name === job.target
+          && r.state !== 'dead' && r.state !== 'captured') { rec = r; break; }
+      }
+      if (rec) break;
+    }
+    if (!rec) return null;
+    // a) The escape stamp wins: it names where the hull actually went.
+    const site = rec.wakeSite;
+    if (site && !site.found && Array.isArray(site.position)) {
+      if (site.kind === 'station') {
+        const stationName = def.station?.name ?? def.name;
+        if (typeof stationName === 'string' && stationName) {
+          return `sheltering in the holding lane off ${stationName}`;
+        }
+        return 'sheltering in the station holding lane';
+      }
+      if (site.kind === 'gate') {
+        const to = typeof site.to === 'string' && Object.hasOwn(SYSTEMS, site.to)
+          ? SYSTEMS[site.to].name : null;
+        return to ? `seen at the gate to ${to}` : 'seen at the system gate';
+      }
+      if (site.kind === 'evade') return 'last seen running open space';
+    }
+    // b) No wake trail: the quarry's authored lane answers, as hunts quote it.
+    return huntHauntPhrase(ctx, sysId, rec);
+  } catch {
+    return null;
+  }
+}
+
 function makeHuntJob(ctx, sysId, slot, rec) {
   if (!Object.hasOwn(SYSTEMS, sysId) || !rec) return null;
   const id = nextHuntId(ctx.world.jobs, sysId);
@@ -7638,6 +7700,15 @@ export function initStation(ctx) {
             const homeName = spyStationName(job.originSystem, 'the home dock');
             stateLine = `ACCEPTED — file at ${homeName}`;
           }
+        } else if (job.kind === 'bounty') {
+          // Issue #292: an accepted pirate-bounty row carries the same
+          // last-seen read a hunt card does, so a fled target can be
+          // re-found without blind re-docking. Derived at render from the
+          // record's own evidence; null keeps the plain row (the ace row).
+          const phrase = bountyLastSeenPhrase(ctx, job);
+          stateLine = phrase
+            ? `ACCEPTED — bounty on ${job.target} · Last seen: ${phrase}.`
+            : `ACCEPTED — bounty on ${job.target}`;
         } else {
           stateLine = 'ACCEPTED';
         }
