@@ -10,6 +10,9 @@ import { marketEventAt } from '../game/market.js'; // issue #179: name the event
 import { tradeOrderLimit, tradeQty } from '../game/trade-order.js';
 import { cargoSplit, consignedHoldUnits, splitLabel, FERRY_UNITS } from '../game/consignment.js'; // issue #177: fronted ferry units are not the player's stock
 import { recoveryWreck, tickRecovery, recoveryObjective, RECOVERY_COLD } from '../game/recovery.js';
+// Issue #294: the patrol tally constants moved to game/patrol.js so the board
+// card, the tick that advances the contract and the agent row read one source.
+import { PATROL_REWARD, PATROL_REP, PATROL_NEED, patrolObjective } from '../game/patrol.js';
 import { AUTHORED_SYSTEMS } from '../game/authored-systems.js'; // wave 24: authored-six guard (contacts.js pattern)
 import { contactsForSystem, bumpTrust, addFavor, spendFavor, rumorFor, recognitionLine, keeperLedgerLine, chartedMarkNotes, KEEPER_COMP_TRUST, GENERATED_KNOWN_TRUST } from '../game/contacts.js';
 import { portraitFor, portraitVariant } from '../game/portraits.js'; // wave 41: faction character portraits
@@ -276,9 +279,6 @@ const CARGO_UPGRADE_MAX = HOLD_RACK_MAX;
 const SCANNER_COST = 400;
 const SCANNER2_COST = 900;
 
-const PATROL_REWARD = 300;
-const PATROL_REP = 5;
-const PATROL_NEED = 2;
 const HAUL_UNITS = 5;
 const HAUL_MARGIN = 1.4;
 // FERRY_UNITS is owned by consignment.js: the fronted quantity, the hold
@@ -7610,7 +7610,11 @@ export function initStation(ctx) {
       } else if (job.state === 'accepted') {
         let stateLine;
         if (job.kind === 'patrol') {
-          stateLine = `ACCEPTED — ${job.progress}/${job.need}`;
+          // Issue #294: the row restates the counting rule the board card
+          // promises, from the same constants the card prints — a player who
+          // loses a disabled hull to an NPC can see why the tally stood still.
+          const obj = patrolObjective(ctx, job);
+          stateLine = `ACCEPTED — ${obj.progress}/${obj.need} · ${obj.rule}`;
         } else if (job.kind === 'haul') {
           const destName = ctx.systems?.[otherSystemId(ctx, job.originSystem ?? currentId)]?.station?.name ?? 'the far station';
           stateLine = `ACCEPTED — deliver to ${destName}`;

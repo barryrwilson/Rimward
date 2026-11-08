@@ -23465,6 +23465,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const hud111 = src111('src/systems/hud.js');
   const hudCss111 = src111('src/ui/hud.css');
   const state111 = src111('src/game/state.js');
+  const patrol111 = src111('src/game/patrol.js');
   const helperStart111 = st111.indexOf('export function standingRemedialNotes()');
   const helperEnd111 = st111.indexOf('function authoredUu(');
   const helperSrc111 = helperStart111 >= 0 && helperEnd111 > helperStart111
@@ -23550,8 +23551,11 @@ removeLiveShip(w42indyCtx, w42indy);
       && /graft cap/.test(notesText111)
       && !/locked until restitution/i.test(notesText111)
       && !/jobs are locked/i.test(notesText111),
+    // Issue #294: the patrol knobs moved to src/game/patrol.js so the card,
+    // the tick and the agent row read one source; MINING_REP stays in station.
     knobsUntouched: st111.includes('const MINING_REP = 2')
-      && st111.includes('const PATROL_REP = 5')
+      && patrol111.includes('export const PATROL_REP = 5')
+      && patrol111.includes('export const PATROL_NEED = 2')
       && state111.includes("min: 10, name: 'Known'")
       && !/REMEDIAL_/.test(state111),
   };
