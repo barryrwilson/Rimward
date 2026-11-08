@@ -18,6 +18,7 @@ import { surveyObjective } from './survey-nav.js';
 import { queuedDockDest } from './dock-queue.js';
 import { originChoices } from './origins.js';
 import { recoveryObjective } from './recovery.js';
+import { patrolObjective } from './patrol.js'; // issue #294: the accepted patrol row self-describes
 import { escapeStatus } from './npc-escape.js';
 import { isHuntQuarry } from './prize.js'; // issue #271: a bound quarry publishes the CONTRACT word
 import { podUnits } from './pods.js';
@@ -504,6 +505,9 @@ function jobRow(ctx, j) {
   const title = own(j, 'title');
   if (row.kind === 'explore' && row.state === 'accepted') row.objective = surveyObjective(ctx, j);
   if (row.kind === 'recovery' && row.state === 'accepted') row.objective = recoveryObjective(ctx, j);
+  // Issue #294: same objective convention for the accepted patrol row — the
+  // counting rule restated from the constants the board card prints.
+  if (row.kind === 'patrol' && row.state === 'accepted') row.objective = patrolObjective(ctx, j);
   if (typeof title === 'string' && title) row.title = title;
   const commodity = own(j, 'commodity');
   if (typeof commodity === 'string' && commodity) row.commodity = commodity;
