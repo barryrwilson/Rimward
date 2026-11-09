@@ -134,6 +134,34 @@ now cover both directions on every axis. See
 [Issue169SteeringEvidence.md](Issue169SteeringEvidence.md) for the distinction
 between that measurement and the original in-app Browser report.
 
+### Flying a straight line to a bearing (issue #300)
+
+Ship-local bearings (`station.bearing`, `gate.bearing`,
+`jobs.active[].objective.bearing`, `targets.*.bearing`) and the steering axes
+use **different sign conventions on Y**: a bearing's `y` is up-positive, while
+`steerY` positive pitches the nose **down** (screen Y). The pitch command is
+therefore the negated bearing axis. The closed loop from `observe()` alone:
+
+```js
+const b = obs.station.bearing;            // [x, y, z], unit, x right y up nose -z
+if (!b) { /* no ship geometry this frame */ }
+const k = 2;                              // gain; clamp deflection to [-1, 1]
+const steerX = Math.max(-1, Math.min(1, k * b[0]));   // yaw: +bearing.x is right
+const steerY = Math.max(-1, Math.min(1, -k * b[1]));  // pitch: bearing.y is UP, steerY is DOWN
+// b[2] < 0: target ahead. |b[0]| and |b[1]| small → steer 0 holds the line.
+```
+
+Renew the lease before its `ttl` expires (`observe().control.expiresIn`) and
+keep the throttle setpoint alive the same way. While a manual lease is live,
+`observe().control` echoes the **accepted** command — `steerX`, `steerY` (the
+raw value sent, before the mouse-style screen-Y flip the shared input boundary
+applies), `strafeX`, `strafeY`, `roll` and `throttle` (`null` when that lease
+leaves the setpoint alone) — so a runner can confirm what the helm is actually
+holding without trial and error. A combat lease keeps publishing its own
+`control.combat` view and carries no echo. No new schema version, persisted
+field or event: the echo is additive inside the existing `control` block and
+derived from the in-memory lease.
+
 ### Desk refusals, offers and haul agreements
 
 Every refusal from `acceptJob`, `trade`, `repairAll`, `feed`, and `undock`

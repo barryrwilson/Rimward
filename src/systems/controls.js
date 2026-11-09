@@ -668,7 +668,15 @@ export function agentControlStatus(ctx) {
         expiresIn: Math.max(0, Math.min(lease.expiresAt - simNow(ctx), lease.combat ? lease.wallExpiresAt - wallNow() : Infinity)),
         fire: lease.fire === true,
         reason: '',
-        ...(lease.combat ? { combat: combatStatusView(ctx, lease.combat) } : {}),
+        // Issue #300: echo the commanded axes exactly as accepted, so a raw
+        // helm caller can close its steering loop against observe() alone.
+        // steerY is the raw API value (positive pitches nose down); the
+        // combat lease publishes its own view and is not echoed here.
+        ...(lease.combat ? { combat: combatStatusView(ctx, lease.combat) } : {
+          steerX: lease.steerX, steerY: lease.steerY,
+          strafeX: lease.strafeX, strafeY: lease.strafeY,
+          roll: lease.roll, throttle: lease.throttle,
+        }),
       };
     }
     return {

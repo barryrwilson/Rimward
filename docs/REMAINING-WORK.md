@@ -1,3 +1,43 @@
+## Helm-lease steering is readable from observation alone — #300
+
+Implemented on `dsh/issue-300-agent-api-helm-lease-steering-has-no-hea`
+(base master `8a6b1ab`). The mercenary playtest finding was real: raw
+`setControl` helm work — the patrol half of the mercenary loop — gave the
+runner no heading feedback at all, and the bearing convention (y up) versus
+the steer convention (steerY down, screen Y) was documented only in
+`docs/AgentApiDesign.md`, so a wrong sign assumption flew ~15 000 u the
+wrong way before an empirical test settled it. The cheapest honest shape from
+the issue's option list, both halves:
+
+- **Documented signs in the capability note.** `COMMAND_SPECS.setControl.note`
+  now carries the closed-loop rule the runtime manifest publishes to every
+  observation: bearings are x right, y up, nose -z; steerY positive pitches
+  nose DOWN; therefore `steerX = clamp(k * bearing[0])`,
+  `steerY = clamp(-k * bearing[1])`; `bearing[2] < 0` means ahead; small
+  `|bearing[0]|`/`|bearing[1]|` with steer 0 holds the line.
+- **Steer echo in the observe payload.** While a manual lease is live,
+  `observe().control` echoes the accepted command — `steerX`, `steerY` (the
+  raw value sent, before the shared input boundary's screen-Y flip),
+  `strafeX`, `strafeY`, `roll` and `throttle` (`null` when that lease leaves
+  the setpoint alone). A combat lease keeps publishing its own
+  `control.combat` view and carries no echo. Derived from the in-memory
+  lease: no persisted field, no event, no schema version, JSON-plain,
+  `VERSION` stays 2.
+
+Focused regression is
+`scripts/issue-300-helm-heading-feedback-test.mjs` (8 checks: the echo
+matches the accepted axes; omitted axes echo 0 and omitted throttle null; the
+combat view carries no echo; clearControl/expiry end the echo with the
+unchanged idle shape; the documented mapping converges through the real
+flight loop from `observe()` alone; the note documents the convention; the
+control block stays JSON-plain), appended to `npm run test:boot`; it fails on
+the pre-fix source. The live flow is
+`npm run test:issue-300-helm-heading-live`: PASS in disposable
+Chromium (the capability-note signs, the live echo, and a closed loop that
+yaws ~70° off the station bearing then flies a straight line back to it using
+only `observe` + `setControl`, no trial-and-error sign test), evidence under
+`out/issue-300-evidence/live/`.
+
 ## The Jobs board says where the lane's pirates are — #301
 
 Implemented on `dsh/issue-301-playtest-mercenary-board-rows-don-t-say` (base
