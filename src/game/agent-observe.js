@@ -508,6 +508,14 @@ function jobRow(ctx, j) {
   // Issue #294: same objective convention for the accepted patrol row — the
   // counting rule restated from the constants the board card prints.
   if (row.kind === 'patrol' && row.state === 'accepted') row.objective = patrolObjective(ctx, j);
+  // Issue #301: the agent row quotes the same last-seen read the Jobs card
+  // derives (#292 accepted, #301 offered) — one source of truth, no second
+  // rule set, and absent means the desk had no lane evidence to print.
+  if (row.kind === 'bounty' && row.state !== 'done'
+    && typeof row.id === 'string' && row.id.startsWith('bounty-pirate-')) {
+    const phrase = ctx.stationDesk?.bountyLastSeenPhrase?.(j);
+    if (typeof phrase === 'string' && phrase) row.lastSeen = phrase;
+  }
   if (typeof title === 'string' && title) row.title = title;
   const commodity = own(j, 'commodity');
   if (typeof commodity === 'string' && commodity) row.commodity = commodity;
