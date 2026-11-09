@@ -854,7 +854,8 @@ export const COMMAND_SPECS = freeze({
     }),
     roles: freeze(['pilot', 'combat', 'miner', 'explorer', 'rescue']),
     outcomes: freeze(['active', 'cleared', 'expired', 'suppressed']),
-    note: 'the throttle setpoint is ship state, not lease state: lease expiry and clearControl end steering and fire but leave observe().ship.throttle where the last applied update left it, so the ship keeps flying. To stop, request throttle 0 on a live lease, then confirm observe().ship.throttle === 0 AND observe().flags.fullStop === true before clearing; zero throttle alone can still be a lease that never applied.',
+    note: 'the throttle setpoint is ship state, not lease state: lease expiry and clearControl end steering and fire but leave observe().ship.throttle where the last applied update left it, so the ship keeps flying. To stop, request throttle 0 on a live lease, then confirm observe().ship.throttle === 0 AND observe().flags.fullStop === true before clearing; zero throttle alone can still be a lease that never applied.'
+      + ' Issue #300 steering loop: ship-local bearings (station.bearing, gate.bearing, jobs.active[].objective.bearing, targets rows) are x right, y up, nose -z; steerX positive turns nose right and steerY positive pitches nose DOWN (screen Y), so pitch is the negated bearing axis: steerX = clamp(k * bearing[0]), steerY = clamp(-k * bearing[1]) with k a small gain such as 2; bearing[2] < 0 means the target is ahead, and once |bearing[0]| and |bearing[1]| are small, steer 0 holds the line. While a manual lease is live, observe().control echoes the accepted command as steerX/steerY/strafeX/strafeY/roll (raw steerY sign, the value you sent) and throttle (null when that lease leaves the setpoint alone).',
   }),
   setCombatIntent: freeze({
     args: freeze({
