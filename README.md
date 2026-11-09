@@ -83,7 +83,9 @@ npm run agent:bridge:smoke
 
 The smoke command starts and stops its own Vite and bridge processes. For a
 manual session, start Chrome with remote debugging on port 9222, run the game,
-and then run `npm run agent:bridge` in a separate terminal.
+and then run `npm run agent:bridge` in a separate terminal. `npm run preview`
+binds `127.0.0.1` by default (issue #302), so the bridge's
+`--game-url http://127.0.0.1:4173/` reaches it without a host flag.
 
 See [AgentApiDesign.md](docs/AgentApiDesign.md) for the contract and security
 boundaries. The bridge is loopback-only; do not put an LLM runner or secret in

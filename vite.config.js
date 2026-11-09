@@ -67,5 +67,16 @@ export default defineConfig({
     // budgets, including builds that later split into multiple chunks.
     chunkSizeWarningLimit: BUNDLE_BUDGET.minifiedBytes / 1000,
   },
+  preview: {
+    // Bind the preview server to IPv4 loopback (issue #302). Vite's default
+    // host is "localhost", and Node binds the first resolved address: on
+    // machines whose resolver answers ::1 first, bare `npm run preview`
+    // serves only IPv6 and the agent bridge's Chrome --game-url
+    // http://127.0.0.1:<port>/ cannot connect, surfacing two hops away as
+    // "cdp attach failed". Every in-repo harness already forces
+    // --host 127.0.0.1; this gives the documented by-hand path the same
+    // loopback-only reachability without a flag.
+    host: '127.0.0.1',
+  },
   plugins: [productionBundlePolicy()],
 });

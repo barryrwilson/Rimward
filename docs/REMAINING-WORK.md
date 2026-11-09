@@ -1,3 +1,25 @@
+## The bare preview path reaches the agent bridge — #302
+
+Implemented on `dsh/issue-302-tooling-bare-npm-run-preview-binds-1-onl`
+(base master `f28a1c2`). The mercenary playtest's by-hand serve step was real:
+bare `vite preview` inherits Vite's `localhost` default, and Node binds the
+first address the resolver returns — on machines that answer `::1` first
+(reproduced twice on the playtest machine, 2026-11-09) the server is IPv6-only,
+`http://127.0.0.1:4173/` refuses, and the bridge's Chrome `--game-url` fails two
+hops away as `cdp attach failed`. The fix is one config pin:
+`vite.config.js` sets `preview.host: '127.0.0.1'`, so the documented bare
+`npm run preview` step serves IPv4 loopback with no flag, matching the
+`--host 127.0.0.1` every in-repo harness already forces. The bridge, its
+`--game-url` loopback rules and all harness scripts are untouched; `npm run dev`
+keeps Vite's default host. The README bridge section notes the default.
+Verified live: bare `npm run preview` now answers `http://127.0.0.1:4173/` 200,
+and the documented by-hand flow
+(`node scripts/agent-bridge.mjs --launch-chrome --game-url
+http://127.0.0.1:4173/`) reaches `cdp attached` on the first try where the same
+command failed before the change. No bundle or game-source change; the
+production bundle output is byte-identical (1984.37 KiB minified / 600.70 KiB
+gzip, `three` only). `npm run build` and `npm run test:boot` PASS.
+
 ## A surrendered bounty target can be finished: the capture — #291
 
 Implemented on `dsh/issue-291-playtest-mercenary-a-surrendered-bounty`
