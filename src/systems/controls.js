@@ -586,17 +586,23 @@ export function agentCombatSet(ctx, spec) {
     if (!target.object || !target.state || !ctx.ships.includes(target)) {
       return refuse('target-lost', 'hull ' + spec.targetId + ' is no longer in the live roster');
     }
-    if (!combatSample(ctx, target)) return refuse('no-sample', sampleGap(ctx, target));
+    // Renew only the same live maneuver. An expired grant is a fresh start.
+    const keep = prior && lease.expiresAt > simNow(ctx) && prior.target === target
+      && prior.record === target.record && prior.system === ctx.world.currentSystem
+      && same;
+    // Issue #299: a LIVE pursuit of the same hull may be renewed beyond the
+    // targeting ceiling — the lease is already authorized on this target and
+    // the HUD digest keeps publishing it. A fresh acquisition (no live lease,
+    // a changed target/intent/stance) still refuses no-sample with the same
+    // detail, exactly as before; the pursuit read never authorizes fire.
+    const renewingPursuit = keep && prior.phase === 'pursuit';
+    if (!renewingPursuit && !combatSample(ctx, target)) return refuse('no-sample', sampleGap(ctx, target));
     if (target.state.destroyed) return 'target-destroyed';
     if (spec.intent === 'engage' || spec.intent === 'disable') {
       if (target.state.surrendered) return 'target-surrendered';
       if (target.state.disabled) return 'target-disabled';
       if (!combatWeapon(ctx)) return 'weapon';
     }
-    // Renew only the same live maneuver. An expired grant is a fresh start.
-    const keep = prior && lease.expiresAt > simNow(ctx) && prior.target === target
-      && prior.record === target.record && prior.system === ctx.world.currentSystem
-      && same;
     const combat = keep ? prior : createCombat(ctx, target, spec.intent, stance, burner);
     // The permission is not maneuver identity: a renewal may grant or revoke
     // it without losing separation memory. Revoking releases an owned burn
