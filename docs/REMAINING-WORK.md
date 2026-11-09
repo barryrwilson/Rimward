@@ -1,3 +1,35 @@
+## The Jobs board says where the lane's pirates are — #301
+
+Implemented on `dsh/issue-301-playtest-mercenary-board-rows-don-t-say` (base
+master `0a983e9`). The mercenary playtest finding was real: a player holding
+at the Veridian gate ring for eight minutes surfaced ~25 ordinary hulls and
+zero flagged ones, while both flagged hulls of the run crossed in a ~20 s
+mid-lane window — and neither the patrol row nor the un-accepted bounty cards
+said where to wait. The fix is copy-only and reuses the #271/#292 vocabulary:
+`bountyLastSeenPhrase` now also answers for OFFERED `bounty-pirate-*`
+cards, so each bounty card appends "Last seen: <phrase>." derived from its
+named reaver's own durable evidence (the #68 tagged wakeSite first, else the
+authored lane through `huntHauntPhrase`); a new `pirateLanePhrase(ctx,
+sysId)` derives the same read from the oldest living local reaver so one
+sentence answers for the whole lane, printed as a "Lane read: …" row on the
+offered patrol card and appended to the #294 accepted patrol state line.
+The agent row gains `lastSeen` on offered/accepted `bounty-pirate-*`
+rows through the same desk evaluator (`stationDesk.bountyLastSeenPhrase`) —
+one source of truth, no second rule set. No new event types, no new
+persisted fields, no `state.js` edit; no spawn-rate or engagement change.
+
+Focused regression is `scripts/issue-301-bounty-board-location-test.mjs`
+(10 checks: the offered card quotes the read before acceptance and matches
+the desk read verbatim; the patrol Lane read line on offered and accepted
+rows; the no-coordinate/no-record-id honesty line; a gate wake flipping the
+reads; agent-row parity; JSON-plain; no persisted field), appended to
+`npm run test:boot`; it fails on the pre-fix source. `npm run build`
+passes. Live flow is `node scripts/issue-301-bounty-board-live-probe.mjs`:
+PASS in disposable Chromium — the offered board carries the bounty card read
+and the patrol Lane read, both accepted rows keep them, and the agent row
+quotes the same phrase, with a clean console; evidence under
+`out/issue-301-live/`.
+
 ## The bare preview path reaches the agent bridge — #302
 
 Implemented on `dsh/issue-302-tooling-bare-npm-run-preview-binds-1-onl`

@@ -3202,18 +3202,19 @@ function huntHauntPhrase(ctx, sysId, rec) {
 }
 
 /**
- * Issue #292: the last-seen phrase an ACCEPTED pirate-bounty row quotes while
- * its target is off scanner — the same #271 vocabulary hunts quote, sourced
- * from the record's OWN durable evidence in the same honesty boundary:
- * a tagged wakeSite (the #68 escape stamp: where the runner actually went)
- * speaks the shelter/gate it chose; otherwise the quarry's authored lane
- * (huntHauntPhrase) answers, exactly as a hunt card would. Derived at render
- * from record data — no coordinate, no live position, no handle, no new
- * persisted field. Null keeps the plain row.
+ * Issue #292/#301: the last-seen phrase a pirate-bounty row quotes — accepted
+ * (#292) or offered on the board (#301) — while its target is off scanner,
+ * the same #271 vocabulary hunts quote, sourced from the record's OWN durable
+ * evidence in the same honesty boundary: a tagged wakeSite (the #68 escape
+ * stamp: where the runner actually went) speaks the shelter/gate it chose;
+ * otherwise the quarry's authored lane (huntHauntPhrase) answers, exactly as
+ * a hunt card would. Derived at render from record data — no coordinate, no
+ * live position, no handle, no new persisted field. Null keeps the plain row.
  */
 function bountyLastSeenPhrase(ctx, job) {
   try {
-    if (!job || job.kind !== 'bounty' || job.state !== 'accepted') return null;
+    if (!job || job.kind !== 'bounty') return null;
+    if (job.state !== 'offered' && job.state !== 'accepted') return null;
     if (typeof job.id !== 'string' || !job.id.startsWith('bounty-pirate-')) return null;
     const sysId = typeof job.system === 'string' && Object.hasOwn(SYSTEMS, job.system)
       ? job.system : ctx.world.currentSystem;
@@ -3258,6 +3259,38 @@ function bountyLastSeenPhrase(ctx, job) {
     }
     // b) No wake trail: the quarry's authored lane answers, as hunts quote it.
     return huntHauntPhrase(ctx, sysId, rec);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Issue #301: the lane line an offered pirate-bounty card and the patrol row
+ * quote before any acceptance. ONE honest sentence per card, derived the same
+ * way the #292 accepted read is: the living record's durable evidence (the
+ * tagged #68 wakeSite) first, else its authored lane through #271's
+ * huntHauntPhrase; the oldest living local reaver answers for the whole lane
+ * so every board read names the same place. Null keeps the plain card.
+ */
+function pirateLanePhrase(ctx, sysId) {
+  try {
+    if (!Object.hasOwn(SYSTEMS, sysId)) return null;
+    const recs = ctx.world?.records;
+    const bank = Array.isArray(recs) ? recs : ctx.world?.recordBanks?.[sysId];
+    if (!Array.isArray(bank)) return null;
+    let picked = null;
+    for (let i = bank.length - 1; i >= 0; i--) {
+      const r = bank[i];
+      if (r && r.role === 'pirate' && r.system === sysId
+        && r.state !== 'dead' && r.state !== 'captured' && r.state !== 'derelict') {
+        picked = r; // keep scanning: the oldest living record is bank[0]-ward
+      }
+    }
+    if (!picked) return null;
+    const phrase = bountyLastSeenPhrase(ctx, {
+      kind: 'bounty', state: 'accepted', id: `bounty-pirate-`, target: picked.name,
+    });
+    return typeof phrase === 'string' && phrase ? phrase : null;
   } catch {
     return null;
   }
@@ -7439,9 +7472,23 @@ export function initStation(ctx) {
           title = copy.title;
           detail = copy.detail;
         }
+      } else if (job.kind === 'bounty' && job.id.startsWith('bounty-pirate-')
+        && job.state === 'offered') {
+        // Issue #301: the offered bounty card says where the quarry works —
+        // the same derived lane read the accepted row quotes (#292) — so a
+        // player can answer "where do I find this hull" before accepting.
+        const phrase = bountyLastSeenPhrase(ctx, job);
+        if (phrase) detail = `${detail} Last seen: ${phrase}.`;
       }
       h('div', 'job-title', card, `${i + 1}. ${title}`);
       h('div', 'job-detail', card, detail);
+      // Issue #301: the patrol row names the lane the same way the pirate
+      // bounties above it do — the offered card's own derived read — so one
+      // board read answers "where are the pirates" before undocking.
+      if (job.kind === 'patrol' && job.state === 'offered') {
+        const lane = pirateLanePhrase(ctx, currentId);
+        if (lane) h('div', 'job-state', card, `Lane read: ${lane}.`);
+      }
       let rewardLine;
       let huntTierNote = null; // issue #272: hardened-quarry warning row
       let chainSkuHint = '';
@@ -7625,6 +7672,10 @@ export function initStation(ctx) {
           // loses a disabled hull to an NPC can see why the tally stood still.
           const obj = patrolObjective(ctx, job);
           stateLine = `ACCEPTED — ${obj.progress}/${obj.need} · ${obj.rule}`;
+          // Issue #301: the accepted row keeps the same lane read the offered
+          // card printed, so the where-to-fly answer survives acceptance.
+          const lane = pirateLanePhrase(ctx, currentId);
+          if (lane) stateLine += ` · Lane read: ${lane}.`;
         } else if (job.kind === 'haul') {
           const destName = ctx.systems?.[otherSystemId(ctx, job.originSystem ?? currentId)]?.station?.name ?? 'the far station';
           stateLine = `ACCEPTED — deliver to ${destName}`;
@@ -9695,6 +9746,8 @@ export function initStation(ctx) {
     peekOffers,
     peekJobReward,
     peekJobReturn,
+    bountyLastSeenPhrase: (job) => bountyLastSeenPhrase(ctx, job),
+    peekPirateLanePhrase: (sysId = currentId) => pirateLanePhrase(ctx, sysId),
     peekShadow,
     peekShadowStatus,
     peekJobHold: (job) => tradeReserveHold(ctx, ctx.world.jobs, job),
