@@ -73,6 +73,52 @@ record `captured`, no destroyed incident, no fear spike, and the bounty
 PAID (`done`, credits rise) inside the delivery tick, with a clean console;
 evidence under `out/issue-291-live/`.
 
+## The combat lease can close a runner: pursuit past the ceiling — #299
+
+Implemented on `dsh/issue-299-playtest-mercenary-a-fresh-bounty-target`
+(base master `e9c3ba4`). The mercenary playtest finding was real: the #61
+engage lease required a fresh HUD sample inside the 600 u targeting ceiling
+(no-sample beyond range is honest and stays), and an ACTIVE lease died
+`target-lost` the moment its quarry crossed that ceiling — both flagged hulls
+of the run went from <400 u to beyond 600 u in under 40 s while the agent
+steered toward them, so a starter hull could never close a mover and the
+income gate moved one step ahead of the fight.
+
+The fix keeps every acquisition refusal and refusal token intact and gives
+the lease the chase the issue named: an active engage/disable lease whose
+hull crosses the ceiling PURSUES on the same public HUD digest (hud.js
+publishes the locked hull's aim digest at any range; `pursuitDigest` lifts
+only the range clause) — `combat.phase` reads `pursuit`, the chase runs at
+the ordinary throttle cap, fire stays `fireBlocked: 'range'`, and the lease
+re-arms to intercept the moment the hull is inside the envelope again. A
+same-target renewal (`seq`/`ttl`) continues an authorized pursuit past the
+ceiling in `controls.js`; a FRESH acquisition (no live lease, a changed
+target/intent, a stale digest) still answers `no-sample`/`target-lost` with
+the same tokens and details, and withdrawal intents (`retreat`/`break-off`,
+defense withdrawal) keep their exact range-exit endings. No new persistent
+fields, keys, SKUs or `state.js` edit; `phases` gains the `pursuit` word.
+
+The bounty card copy now agrees with the supported path: every pirate-bounty
+card (offered and accepted rows) appends "Run them down: a fleeing hull leads
+somewhere real, and the fight waits where it stops." — the #68 refuge law
+pursuit rides on, in the same voice the #292 last-seen line speaks.
+
+Focused regression is `scripts/issue-299-pursuit-test.mjs` (10 checks:
+unchanged no-sample acquisition detail, the range exit becoming pursuit,
+pursuit steering toward the published bearing, fire blocked by range and
+re-arm on re-entry, stale-digest and roster/lock loss semantics, withdrawal
+endings, renewal-past-the-ceiling vs fresh refusal, surrendered/destroyed
+terminals, and a real-flight close on a braking runner), appended to
+`npm run test:boot`; the amended #61 pin row is documented in place.
+`npm run build` passes. The live flow is `npm run test:pursuit-live`:
+disposable loopback Chromium runs the contracted loop — accept the bounty at
+the Freehold dock, spawn and lock the named reaver alive and un-yielded,
+engage inside the ceiling, break it into the bargaining band and resolve
+`letGo` through the real hail resolver (the real #68 flee, no surrender
+stamp), watch the lease PURSUE past the ceiling, renew the authorized
+pursuit there, and re-arm and open fire once the runner brakes at its refuge,
+with a clean console; evidence under `out/issue-299-live/`.
+
 ## Pirate bounties quote the same last-seen read hunts got — #292
 
 Implemented on `dsh/issue-292-playtest-mercenary-pirate-bounties-give` (base

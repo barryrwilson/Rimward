@@ -109,6 +109,17 @@ Raw manual leases retain their existing hail interruption behavior.
   Both intents currently share this attack policy and the existing selected
   ordinary weapon/subsystem. `disable` does not select engines automatically
   or guarantee a different outcome; target destruction remains possible.
+- `engage` and `disable` PURSUE past the ceiling (issue #299): an active
+  attack lease whose hull crosses 600 u does not end. The HUD keeps
+  publishing the locked hull's aim digest at any range, so the lease keeps
+  flying on that public read — `combat.phase` becomes `pursuit`, the chase
+  runs at the ordinary throttle cap, fire stays blocked (`fireBlocked:
+  'range'`), and the lease re-arms the moment the hull is inside the envelope
+  again. A same-target renewal (`seq`/`ttl`) continues an authorized pursuit
+  past the ceiling; a FRESH acquisition beyond it still refuses `no-sample`
+  with the same detail, and a stale, re-locked or weapon-mismatched digest
+  still ends the lease `target-lost`. A fleeing hull leads somewhere real
+  (#68 refuges): pursuit follows it there, and the fight waits where it stops.
 - `break-off`: never fire, turn away and finish `disengaged` after two seconds
   of increasing separation beyond the weapon-relative threshold.
 - `retreat`: never fire, turn away and finish `retreated` after five seconds of
@@ -214,7 +225,10 @@ target. No operative defensive stance/reaction is exposed in #61.
 
 ## Verification and release gate
 
-`test:combat-intent` covers strict refusal/no mutation, poisoned/stale sequence,
+`test:combat-intent` and `scripts/issue-299-pursuit-test.mjs` (the issue #299
+pursuit contract: acquisition refusals unchanged, range exit becomes
+`pursuit`, re-arm, renewal past the ceiling, withdrawal and loss endings)
+cover strict refusal/no mutation, poisoned/stale sequence,
 manual/helm arbitration, 5/15/30-second decision gaps, renewal/expiry, fire
 gating, target identity and terminal conditions, close passes, withdrawal,
 visible obstruction, lifecycle cancellation, focus continuity, bounded

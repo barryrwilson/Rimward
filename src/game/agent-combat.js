@@ -38,6 +38,25 @@ export function combatSample(ctx, target) {
   return a;
 }
 
+/**
+ * Issue #299: the aim digest an active attack PURSUIT steers by after the
+ * locked hull crosses the targeting ceiling. The HUD publishes the digest for
+ * the current lock at any range (hud.js is the sole writer), so pursuit reads
+ * the same public shape with only the range clause lifted. Steering only —
+ * fire still requires a fresh in-range combatSample, and the digest's loss
+ * (stale, re-locked, other weapon group) still ends the lease target-lost.
+ */
+function pursuitDigest(ctx, target) {
+  const a = ctx.targets?.aim;
+  const age = ctx.world.time - a?.t;
+  if (!a || a.targetId !== target.id || a.system !== ctx.world.currentSystem
+      || a.weaponGroup !== ctx.input.weaponGroup
+      || !(age >= 0 && age <= 0.25) || !vector(a.bearing)
+      || !(a.dist > 0)
+      || !Number.isFinite(a.closing) || !Number.isFinite(a.speed)) return null;
+  return a;
+}
+
 export function createCombat(ctx, target, intent, stance = 'evade', burner = false) {
   return {
     defense: createDefense(ctx, stance), target, record: target.record, system: ctx.world.currentSystem,
@@ -157,13 +176,23 @@ export function combatTick(ctx, lease) {
   if (!target.object?.position) return 'target-lost';
   const dist = ctx.ship.object.position.distanceTo(target.object.position);
   if (!Number.isFinite(dist)) return 'target-lost';
+  // Issue #299: an attack lease does not die the moment its quarry crosses the
+  // targeting ceiling. The HUD keeps publishing the locked hull's aim digest
+  // at any range, so the lease PURSUES on that public read — full chase,
+  // no fire — and re-arms the moment the hull is inside the envelope again.
+  // Withdrawal intents keep the old ending (their target leaving sensor range
+  // is the completion), and every acquisition/loss semantic is unchanged.
+  const pursuing = dist > U.TARGET_RANGE && attack(c.intent) && !c.defense.withdrawal;
   if (!(dist <= U.TARGET_RANGE)) {
     if (c.intent === 'retreat') return 'retreated';
     if ((c.intent === 'break-off' || c.defense.withdrawal) && c.clearSince !== null && now - c.clearSince >= 2) return 'disengaged';
-    return 'target-lost';
+    if (!pursuing) return 'target-lost';
   }
   if (ctx.targets.current !== target) return ctx.targets.current ? 'target-changed' : 'target-lost';
-  const a = combatSample(ctx, target);
+  // Freshness is still identity-bound and bounded: the sample for fire and the
+  // digest for pursuit share every clause except the range gate. A stale,
+  // re-locked or weapon-mismatched digest ends the lease exactly as before.
+  const a = combatSample(ctx, target) ?? (pursuing || c.phase === 'pursuit' ? pursuitDigest(ctx, target) : null);
   if (!a) return 'target-lost';
   defenseSense(ctx, c);
   const attacking = attack(c.intent) && !c.defense.withdrawal;
@@ -236,7 +265,13 @@ export function combatTick(ctx, lease) {
   const hardPass = dist < hullClearance || (ahead && crosses(hullClearance, responseTime));
   const closePass = ahead && crosses(minimum, 1.2);
   const phase = name => { if (c.phase !== name) { c.phase = name; c.phaseAt = now; } };
-  if (attacking) {
+  if (pursuing) {
+    // Issue #299: outside the ceiling the lease is one maneuver — chase the
+    // published bearing. No pass transitions, no reposition cooldown bookkeeping;
+    // re-entry (below) restarts the ordinary intercept machinery.
+    phase('pursuit');
+  } else if (attacking) {
+    if (c.phase === 'pursuit') { phase('intercept'); c.repositionAfter = 0; }
     if (c.phase !== 'reposition' && (hardPass || (now >= c.repositionAfter && closePass))) phase('reposition');
     else if (c.phase === 'reposition') {
       // Equal/faster pursuit may never permit the preferred separation.
@@ -270,7 +305,7 @@ export function combatTick(ctx, lease) {
     if (a.dist < minimum * 2.5) lease.strafeX = (a.bearing[0] > 0 ? -1 : 1) * 0.8;
   }
   if (c.defense.withdrawal) phase(c.intent === 'retreat' ? 'retreat' : 'break-off');
-  if (c.phase === 'reposition' || !attacking) {
+  if (c.phase === 'reposition' || (!attacking && c.phase !== 'pursuit')) {
     const away = a.bearing;
     const awayYaw = Math.atan2(-away[0], away[2]);
     lease.steerX = clamp((Math.abs(away[0]) < 0.02 && away[2] < 0 ? c.side * Math.PI : awayYaw) * 2);

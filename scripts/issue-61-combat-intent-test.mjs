@@ -177,7 +177,10 @@ test('no silent retarget, stale sensing or continued fire after target loss', ()
     [f=>{f.ctx.targets.aim.targetId='old';},'target-lost'],
     [f=>{f.ctx.targets.aim.t-=1;},'target-lost'],
     [f=>{f.ctx.targets.aim.bearing=[NaN,0,-1];},'target-lost'],
-    [f=>{f.target.object.position.z=-U.TARGET_RANGE-1;},'target-lost'],
+    // Issue #299: a range exit alone no longer ends an attack lease — it
+    // becomes combat.phase 'pursuit' (pinned in scripts/issue-299-pursuit-test.mjs).
+    // The digest LOSS below still ends the session here, unchanged.
+    [f=>{f.target.object.position.z=-U.TARGET_RANGE-1;f.ctx.targets.aim=null;},'target-lost'],
   ]) { const f=fixture(); f.start(); f.tick(); change(f); f.tick(1/60,false); assert.equal(f.status().reason,reason); assert.equal(f.ctx.input.fireHeld,false); }
 });
 

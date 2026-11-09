@@ -2477,7 +2477,7 @@ function syncPirateBounties(ctx, sysId) {
     jobs.push({
       id, kind: 'bounty', target: r.name, system: sysId, // home board (JSON-plain)
       title: `Bounty: ${r.name}`,
-      detail: `${r.name} runs with a reaver crew and bleeds the lanes of ${sysName} dry. The Compact pays on confirmation of the kill or capture — your guns, your name on the claim.`,
+      detail: `${r.name} runs with a reaver crew and bleeds the lanes of ${sysName} dry. The Compact pays on confirmation of the kill or capture — your guns, your name on the claim. Run them down: a fleeing hull leads somewhere real, and the fight waits where it stops.`,
       reward: r.bounty || PIRATE_BOUNTY_FALLBACK,
       state: 'offered', progress: 0, need: 1,
     });
