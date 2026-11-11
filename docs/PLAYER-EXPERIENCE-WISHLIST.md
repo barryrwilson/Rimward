@@ -9,13 +9,13 @@ is not punished. One evidence identity prevents double payment while unrelated
 contracts remain whole. Natural play earned the dossier, sold it for 945 UU
 once, reloaded and returned to the original employer without another payout;
 controlled tests cover the other choices and lifecycle boundaries. See
-[verification and limits](Issue240ImplementationReview.md). PR #247 is ready
-for the normal delivery gate; no merge/deployment is claimed here.
+[verification and limits](Issue240ImplementationReview.md). Merged in PR #247
+(`7862dfc`); no deployment is claimed here.
 
 
 ## Asking the right face, and buying a quieter eye — #239
 
-Implementation candidate, final evidence review pending. The playtest complaint was that
+Merged in PR #246 (`b8b2b5f`). The playtest complaint was that
 contacts only ever offered unrelated flavor and that bought scanners had no
 mission-specific use. Both now pay off, optionally.
 
@@ -50,11 +50,11 @@ retained the basic payout after exposure. It did not complete a natural dossier.
 The pilot earned and spent the additional 900 UU for Mk II, used the contact's
 route facts and cooling bursts, and completed 30/30 for a single 630 UU payout;
 1360 UU remained stable across reload with no active job. The clean
-uninterrupted Mk II claim is deterministic-only. Final evidence review remains
-pending. Draft PR #246 contains pushed `b207bbe0`, with all CI checks green there.
+uninterrupted Mk II claim is deterministic-only. Final evidence review and merge
+are complete (PR #246); no deployment occurred.
 Tuning stays provisional. Concealed mounts found no supporting
 inspection path and are explicitly parked, as is the #240 employer conflict.
-Merge is owner-authorized once the remaining gates pass; none has occurred. See
+See
 [the implemented contract and limits](Issue239SpyBenefits.md).
 
 ## Predictable freighter docking — #221
@@ -120,19 +120,22 @@ old prose. Merge status does not establish fresh release QA or deployment.
 
 ## Light-hull arrival recovery remains partial — 2026-09-16
 
-Issue #234 has a diagnosis and a narrow recovery-guidance candidate: after an
-impact or blocked approach, the persistent receipt tells the pilot to wait for
-clearance or steer clear, then retry. The desired outcome of dependable light-hull
-arrivals remains open. The cruise turn-progress defect is now fixed and
+Issue #234 had a diagnosis and a narrow recovery-guidance fix, now merged: after
+an impact or blocked approach, the persistent receipt tells the pilot to wait
+for clearance or steer clear, then retry. The desired outcome of dependable
+light-hull arrivals remains open. The cruise turn-progress defect is fixed and
 verified by a natural live run that docked 3 of 3 destinations with no blocked
 or impact cancellation. The broader #234 arrival impacts and the remaining
-blocked cases stay under investigation: no collision-avoidance or general
+blocked cases remain a separate limitation: no collision-avoidance or general
 blocked-reliability fix is claimed, and safety cancellation still relinquishes
-the helm. Final verification, merge and deployment remain separate. See [diagnosis and evidence limits](Issue234LightDocking.md).
+the helm. The merged recovery wording and related child fixes are in master;
+#234 itself was closed by the owner as not planned, and no deployment is
+claimed. See [diagnosis and evidence limits](Issue234LightDocking.md).
 
 ## Choosing whether to stay for a complete dossier — 2026-09-17
 
-Issue #238 implementation and acceptance are verified on the isolated candidate.
+Issue #238 is merged (PR #245, `b8c40a5`); implementation and acceptance were
+verified on the isolated candidate.
 After earning basic courier intelligence, the pilot can return for the quoted
 basic payment or deliberately choose one deeper attempt from the existing Galaxy
 Chart. The terms name the premium and extra observation before commitment.
@@ -147,13 +150,13 @@ paying 630 UU once (350 → 980), unchanged after payment reload. Earlier basic
 and interrupted-deep filing paid their 420 UU once. Console/network and final
 deep cleanup were clean. The final native UI fixture also verifies held-key
 release, separate job choices, action refusals, remapped binding and single-copy
-Jobs terms. Ready for PR; issue closure belongs to merge. Tuning remains
-provisional and #234 stays separate. No merge/deployment is claimed. See
+Jobs terms. Merged; issue closure completed with that merge. Tuning remains
+provisional and #234 stays separate. No deployment is claimed. See
 [evidence and limits](Issue238ImplementationReview.md).
 ## Following a courier is its own kind of work — 2026-09-17
 
-Issues #236/#237 are implemented and independently verified on isolated runtime
-candidate `da1dc8cf`. A Jobs desk now carries one extra clearly titled
+Issues #236/#237 are merged (PR #244, `a983981`); they were independently
+verified on isolated runtime candidate `da1dc8cf`. A Jobs desk now carries one extra clearly titled
 **Shadow courier** posting beside the introductory spy work. The briefing names
 the courier, the rival system, a fixed off-lane rendezvous 900 units square
 across the station-to-gate lane, the 150–400 unit observation band, thirty
@@ -183,7 +186,7 @@ warning, withdrawal, grace persistence across reload and exposure followed by
 escape. Console checks were clean. The persistent status is readable at desktop
 and narrow widths, and local danger takes priority over remote job instructions.
 Provisional tuning is not a broad balance conclusion, and #234 docking reliability
-remains separate. No merge or deployment is claimed. See the
+remains separate. No deployment is claimed. See the
 [final evidence and limits](Issue236237ImplementationReview.md),
 [contract](Issue236237CourierShadowingDesign.md),
 [design review](Issue236237DesignReview.md) and
@@ -191,14 +194,14 @@ remains separate. No merge or deployment is claimed. See the
 
 ## Collected spy intel reads as ready to file — 2026-09-16
 
-Issue #235 is implemented on an isolated candidate, pending independent QA: once
+Issue #235 is merged (PR #241, `83ec515`) after independent QA: once
 an agent collects the intel, the accepted espionage row in `observe().jobs`
 states `Intel acquired—return to <station> to file.` instead of the conditional
 briefing, naming the same station as `payAt` and the desk card. Before
 collection the destination and briefing are unchanged, and the other
 return-for-payment families are untouched. This is wording derived from existing
-state; no saved field, command, event, reward or deadline changes. Merge and
-deployment remain separate; see [scope and evidence](Issue235SpyStatus.md).
+state; no saved field, command, event, reward or deadline changes. No
+deployment occurred; see [scope and evidence](Issue235SpyStatus.md).
 
 ## Trader API clarity — 2026-09-16
 

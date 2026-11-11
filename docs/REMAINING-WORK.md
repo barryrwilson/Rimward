@@ -32,6 +32,71 @@ Chromium (fresh Greenhand, the real dock autopilot engaged, a same-frame repeat
 refused with the unchanged token/error and the new takeover detail mirrored by
 `observe().lastIntent`, clean console); evidence under `out/issue-308-live/`.
 
+## Spy career first playable slice — tracker #233 closed
+
+Closed on 2026-11-11 against merged master `e678b75`. Every selected child is
+complete or parked by owner decision; none remains open. Merged deliveries:
+#235 via PR #241 (`83ec515`), #236/#237 via PR #244 (`a983981`), #238 via PR
+#245 (`b8c40a5`), #239 via PR #246 (`b8b2b5f`) and #240 via PR #247
+(`7862dfc`). #234 was closed by the owner as not planned on 2026-09-23 and
+stays a separate light-hull arrival reliability limitation (see its entry).
+
+The tracker's first playable milestone is delivered: a separate named-courier
+**Shadow courier** posting with a safe basic report, an optional deeper complete
+dossier, readable mission-local suspicion with warning/withdrawal, employer-only
+settlement for each tier with exactly-once payment (the #240 exclusive dossier
+buyer is one explicit single-settlement exception), free contact route briefings,
+scanner tiers that lower
+dossier exposure and one explicit exclusive Red Ledger dossier buyer choice.
+Introductory dock-and-return spy jobs and ordinary multi-employer bookkeeping
+are preserved.
+
+Persisted/API additions stayed inside the approved contracts: the #236/#237
+shadow-job state and read-only projection, #238's versioned deep-dossier save
+state and the `chooseShadowDossier` action, #239's two derived projection fields
+(`deep.suspicionGain`, `deep.suspicionNote`), and #240's isolated v3
+exclusive-conflict save variant with its read-only `shadow.conflict` projection.
+#235 added no saved field. No new keys, aim-glass gauges, equipment SKUs or kit
+mutation were added.
+
+Verification on merged master `e678b75` on 2026-11-10–11: `npm run build` PASS
+(vite 6.4.3; 1987.67 KiB minified / 601.75 KiB gzip), unchanged
+`npm run test:boot` PASS, and the focused suites PASS — `test:courier-shadow`
+52 checks, `test:deep-dossier` 9 groups, `test:spy-benefits` 32 checks
+(16 groups), `test:dossier-conflict` 24 groups.
+
+A bounded natural live-browser career run on the same artifact (fresh drifter;
+built `dist/assets/index-XZipdU89.js`, SHA-256
+`C5B1BC2FE150DBF5554A94842B0C678EA0E8508E5B6157F7DD548DE06A8AA1BD`) accepted
+the separate Shadow courier posting through the public Jobs desk, used the free
+contact route briefing (0 UU, no favor spent), gathered a 30.0-second basic report
+by observation at 232–387 u with clear risk and no warning, and filed at Freehold
+Landing for 420 UU exactly once (600 → 1020). The API published `Basic report
+acquired—return to Freehold Landing to file` with progress 1/1 and one delivered
+`jobState`; a reload retained 1020 UU, no active job and no duplicate payment.
+Docking alone showed `contactReason: docked` and 0 s. Four earlier accepted
+assignments ended without a report (`lapsed`; one courier was destroyed by
+ordinary NPC traffic), three player deaths from manual-flight collisions forced
+berth/autosave restores to t≈6419 and one near-station `approachDock` failed at
+49 u before a retry docked, so a clean single-career run remains hard. The optional dossier and the #240 exclusive buyer
+were visible but not played. `npm run agent:bridge:smoke` exited 0 with
+`consoleClean: true`, `errorCount: 0` and all pins true. Wall play ran
+~2 h 43 min, beyond the requested 15–25 min budget.
+No deployment occurred.
+
+Parked by owner decision and not required for this close: concealed-mount spy
+benefits (no supporting inspection path was found; #239), broader double-agent
+conflicts beyond the single Ledger dossier (#240), a global stealth/wanted
+system, new keys/gauges/SKUs and new equipment tiers (tracker delivery rules).
+Provisional tuning — the 4 / 3.5 / 3 dossier suspicion rates, the bounded +50%
+dossier premium and the courier timing — remains a playtest hypothesis, not a
+broad balance conclusion.
+
+Next spy work remains unstarted: the tracker's sequencing required a natural
+career playtest before #239/#240 implementation, and that gate was met. Broader
+expansion (installation scans, contact missions, further mission families) waits
+for a fresh career-playtest decision.
+
 ## Helm-lease steering is readable from observation alone — #300
 
 Implemented on `dsh/issue-300-agent-api-helm-lease-steering-has-no-hea`
@@ -522,16 +587,17 @@ One fresh Red Ledger dossier names a Veridian competing buyer, higher total and
 betrayal share strict evidence identity and one terminal settlement; unrelated
 jobs and legacy contracts retain their terms. Independent code/security review,
 24 focused groups, build, unchanged boot, natural earned sale/reload/original
-return and controlled lifecycle/UI cases pass. PR #247 is the delivery artifact;
-merge/deployment remain separate. Broader conflicts and #234 stay outside scope.
+return and controlled lifecycle/UI cases pass. Merged via PR #247 (`7862dfc`);
+the tracker #233 close is recorded at the top of this file. No deployment.
+Broader conflicts and #234 stay outside scope.
 See [verification and limits](Issue240ImplementationReview.md) and
 [approved design](Issue240DossierConflict.md).
 
 
 ## Contact briefings and scanner spy benefits — #239
 
-Implementation candidate on `codex/issue-239-spy-benefits`, runtime pinned at
-`c510a7e03e79b862c070c8d61889c895aab8b0e8`; final evidence review pending. The owner selected
+Merged via PR #246 (`b8b2b5f`); the reviewed runtime was pinned at
+`c510a7e03e79b862c070c8d61889c895aab8b0e8`. The owner selected
 the recommended contact-plus-scanner slice from the approved design. A local
 face at the employer or destination dock reads a free flight-plan briefing for
 an accepted shadow assignment — static turnaround distance, the out-and-back
@@ -554,14 +620,12 @@ retained the basic payout; no natural Mk I dossier completion is claimed.
 Mk II completed 30/30 using cooling bursts, paid 630 UU once, and retained
 1360 UU across reload with no active job. An earlier unavailable courier and
 failed wrapper remain recorded separately from the same-profile recovery.
-Final evidence review remains root-owned. Draft PR #246 contains pushed
-`b207bbe0`, with all CI checks green there.
+Final evidence review and merge are complete; PR #246 carries the delivery.
 A banked-favor write on the stale-briefing
 refusal path was found and fixed narrowly, without changing global contact
 semantics. No save, version, event, API schema or SKU changed; rollback is a
 plain commit revert with no save migration. Concealed mounts and the #240
-employer conflict stay parked. Merge is owner-authorized once the remaining
-gates pass and is executed by root and Owen; none has occurred. See
+employer conflict stay parked. No deployment occurred. See
 [the implemented contract and limits](Issue239SpyBenefits.md) and the
 [implementation mission](missions/issue-239.md).
 
@@ -581,15 +645,16 @@ stable; console/network checks and dedicated cleanup were clean. Earlier scoped
 basic and exposed-deep runs each verified 420 UU once plus reload negatives.
 The final native UI fixture passes held-Space release, explicit end/repeat
 negatives, multiple-row identity, remapped binding and single-copy Jobs terms,
-with clean console/network and cleanup. Implementation and acceptance are
-verified; ready for PR, with issue closure on merge. The narrow restore ownership
-repair is recorded and independently reviewed. Tuning remains provisional;
-#234 is separate. No merge/deployment is claimed. See
+with clean console/network and cleanup. Implementation and acceptance were
+verified before merge; merged via PR #245 (`b8c40a5`), with issue closure on that
+merge. The narrow restore ownership repair is recorded and independently
+reviewed. Tuning remains provisional; #234 is separate. No deployment is
+claimed. See
 [implementation evidence and limits](Issue238ImplementationReview.md).
 ## Courier shadowing and mission-local suspicion — #236 / #237
 
-Implemented and acceptance verified on isolated branch
-`codex/issues-236-237-courier`, runtime candidate
+Merged via PR #244 (`a983981`); acceptance was verified on the isolated branch
+`codex/issues-236-237-courier` with runtime candidate
 `da1dc8cfa06e87eb0f3c16343b1e173bcd45e3c7`. The owner approved the schema and
 scope on 2026-09-17. The separate **Shadow courier** posting adds named-target
 observation, mission-local suspicion, warning/withdrawal, persisted grace,
@@ -610,13 +675,14 @@ Earlier review failures were repaired, including the HUD warning priority across
 employers. The successful career's delayed browser shutdown is recorded honestly
 with independent cleanup confirmation; the combined warning run completed with
 clean harness shutdown. Existing #234 docking failures and provisional balance
-remain separate limitations. Optional deep intelligence (#238) is now an implementation candidate; see its separate verified acceptance entry above.
+remain separate limitations. Optional deep intelligence (#238) is also merged
+(PR #245); see its separate verified acceptance entry above.
 
 See the [final implementation review](Issue236237ImplementationReview.md) for
 exact evidence and limits, the [implementation mission](missions/issue-236-237.md)
 for history, and the [approved contract](Issue236237CourierShadowingDesign.md)
-and [design review](Issue236237DesignReview.md) for scope. No merge or deployment
-is claimed; the everyday checkout remains unchanged.
+and [design review](Issue236237DesignReview.md) for scope. Merged via PR #244;
+no deployment occurred.
 
 ## Light-hull arrival diagnosis and recovery guidance — #234
 
@@ -637,7 +703,7 @@ issues if necessary. See [diagnosis and evidence limits](Issue234LightDocking.md
 
 ## Collected spy intel status — #235
 
-Implemented on `codex/issue-235-spy-status`, pending independent QA: an accepted
+Merged via PR #241 (`83ec515`) after independent QA: an accepted
 espionage row whose objective is collected reports `Intel acquired—return to
 <station> to file.` in `observe().jobs.active[]`, naming its own `payAt` and
 agreeing with the Jobs desk card. The pre-collection briefing, destination
@@ -645,7 +711,7 @@ fields, other job families, rewards, deadlines and settlement are unchanged, and
 nothing new is saved. Focused #203/#205/#209 coverage was extended with
 before/after collection, two employers, and delivered/lapsed/abandoned records
 with no duplicate payment; the live Chromium probe passes. Follow-up to closed
-#205, under tracking issue #233. Merge and deployment remain separate; see
+#205, under tracking issue #233. No deployment occurred; see
 [scope and evidence](Issue235SpyStatus.md).
 
 ## Predictable freighter docking — #221
