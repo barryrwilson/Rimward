@@ -40,9 +40,13 @@ It brakes into the slow `stage` within 100 u of the stage point, or within
 `settle`, `docking`, and `complete`. Nearby requests keep the slow approach.
 The station and gate tuning is unchanged; there is no new waypoint or gate
 travel command. Existing named refusals apply, including `autopilot` for a
-second approach request while the first owns the helm. Observe phase and
-actual position/speed across simulation frames rather than assuming an
-accepted command has already arrived.
+second approach request while the first owns the helm. Issue #308: that
+refusal's receipt `detail` names the engaged autopilot state and
+`cancelAutopilot` as the takeover path (`autopilot is already taking the ship
+in; cancelAutopilot to take over.` for a dock-mode approach); the token and
+English `error` line are unchanged. Observe phase and actual position/speed
+across simulation frames rather than assuming an accepted command has already
+arrived.
 
 ### Queueing the berth behind a route (issue #183)
 

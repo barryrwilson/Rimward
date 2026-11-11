@@ -1,3 +1,37 @@
+## approachDock names its autopilot takeover path — #308
+
+Implemented on `dsh/issue-308-agent-api-approachdock-refuses-autopilot` (base
+master `14aff26`). The salvager playtest finding was real and reproduces in the
+real boot path: while a dock-mode autopilot is already flying the approach, a
+second `approachDock` answers the unchanged `{ ok: false, token: 'autopilot',
+error: 'Dock approach refused — autopilot is already on.' }`, and a caller
+could not tell from the receipt whether to wait, cancel, or re-send.
+
+The fix is copy-only and uses the #118/#267 `detail` channel: when the refusal
+is `autopilot`, the receipt detail names the engaged autopilot state and the
+takeover command — `autopilot is already taking the ship in; cancelAutopilot to
+take over.` for an engaged dock-mode approach, and `autopilot is already on;
+cancelAutopilot to take over.` for the other engaged-autopilot paths that fail
+to queue. The token, the English `error` line, the fail-closed semantics, the
+human comm line, and the dynamic availability block are unchanged; no new
+event, persisted field, key, SKU or schema version (JSON-plain, `VERSION`
+stays 2). `observe().lastIntent.detail` mirrors the receipt through the
+existing #118 rule.
+
+Focused regression is
+`scripts/issue-308-approach-dock-autopilot-detail-test.mjs` (4 checks: the
+accepted approach engages mode dock and carries no detail; a same-frame repeat
+keeps the unchanged token and error line; the detail names the engaged dock
+approach and `cancelAutopilot`, and `lastIntent` mirrors it; the receipt stays
+JSON-plain and adds no schema fields), appended to `npm run test:boot`; it
+fails on the pre-fix source. The focused refusal-token suites
+(`test:refusal-tokens`, `test:dock-approach`, `test:route-dock`,
+`test:agent-cruise`) pass unchanged. The live flow is
+`npm run test:approach-dock-autopilot-live`: PASS in disposable loopback
+Chromium (fresh Greenhand, the real dock autopilot engaged, a same-frame repeat
+refused with the unchanged token/error and the new takeover detail mirrored by
+`observe().lastIntent`, clean console); evidence under `out/issue-308-live/`.
+
 ## Helm-lease steering is readable from observation alone — #300
 
 Implemented on `dsh/issue-300-agent-api-helm-lease-steering-has-no-hea`
