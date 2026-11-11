@@ -3,8 +3,8 @@
 A merged GitHub PR updates the remote branch. It does not update an existing
 local branch, another worktree, or an already-running game server.
 
-The designated everyday checkout is `C:/Projects/WebSim`, on
-`codex/Rimward-20260916`. Feature work belongs on separate branches/worktrees.
+The designated everyday checkout is `C:/Projects/Rimward`, on `master`.
+Feature work belongs on separate branches/worktrees.
 Keep this designation current if the owner changes the everyday branch.
 
 Graft must be installed separately (`@nanonets/graft`) and available on PATH;
