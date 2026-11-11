@@ -189,6 +189,21 @@ function ok(ctx, name, notice = '') {
   return remember(ctx, actResult({ ok: true, error: '', name, token: '', notice }));
 }
 
+/**
+ * Issue #308: an approachDock refused because an autopilot already owns the
+ * helm names the engaged autopilot and the takeover command in the receipt
+ * detail. The token and error line are unchanged (#183/#185): only the detail
+ * channel gains the useful direction, so a caller can tell whether to wait or
+ * cancel instead of re-sending into the same refusal.
+ */
+function approachDockAutopilotDetail(ctx) {
+  const ap = ctx && ctx.autopilot;
+  if (ap && ap.engaged === true && ap.mode === 'dock') {
+    return 'autopilot is already taking the ship in; cancelAutopilot to take over.';
+  }
+  return 'autopilot is already on; cancelAutopilot to take over.';
+}
+
 function commandName(command) {
   if (!command || typeof command !== 'object') return '';
   const name = Object.hasOwn(command, 'name') ? command.name : '';
@@ -515,7 +530,11 @@ function dispatchLive(ctx, name, args) {
       if (!queued) {
         return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'queued' }));
       }
-      return fail(ctx, name, queued, dockApproachLine(queued) || queued);
+      // Issue #308: the refusal still answers the unchanged 'autopilot' token
+      // and English line; the detail now names the engaged helm and the
+      // takeover command (cancelAutopilot) instead of leaving a bare state.
+      const detail = queued === 'autopilot' ? approachDockAutopilotDetail(ctx) : '';
+      return fail(ctx, name, queued, dockApproachLine(queued) || queued, detail);
     }
     return fail(ctx, name, token, dockApproachLine(token) || token);
   }
