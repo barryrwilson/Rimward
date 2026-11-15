@@ -579,8 +579,11 @@ checked against the current initiative text before capture.
   ships outward while preserving valid saved headings and Drifter's pose.
   PR #95 records final policy QA on `6f32b2e8b51d5037f5ea857c24847786361679c1`;
   exact byte and separate measured startup acceptances retain their raw failures.
-  Death-respawn heading remains a separate parked observation. No new release
-  readiness is claimed.
+  The death-respawn heading parked by PR #95 was closed by issue #307: fresh
+  starts and death rewinds face the restored hull away from the live sun, and a
+  berth parked on the sunward side releases along a sun-clear axis
+  (`scripts/issue-307-respawn-heading-test.mjs`). No new release readiness is
+  claimed.
   See [StarterSunDriftEvidence.md](StarterSunDriftEvidence.md).
   See [Issue10StarterPacingEvidence.md](Issue10StarterPacingEvidence.md).
 - [x] DONE (P1, HAIL/ENCOUNTERS): Give pirate demands a full lifecycle. The

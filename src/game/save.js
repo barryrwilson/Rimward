@@ -1734,6 +1734,27 @@ export function restore(ctx, snap) {
   }
 }
 
+/**
+ * Issue #307: a respawn must not hand the pilot a hull already pointed at the
+ * live star. #95 gave the fresh BOOT the same outward opening view, but the
+ * boot-time restore still preserves an exact saved heading — so this runs only
+ * on the two respawn placements (fresh start and death recovery), never on an
+ * ordinary load. Object3D.lookAt aims local +Z at the target and the ship's nose
+ * is local -Z, so the nose ends up pointing away from the star. A hull sitting
+ * exactly on the star keeps whatever heading it already has.
+ */
+function faceAwayFromSun(ctx) {
+  const obj = ctx && ctx.ship && ctx.ship.object;
+  const sun = ctx && ctx.config && ctx.config.world && ctx.config.world.sunPosition;
+  if (!obj || !obj.position || !sun) return false;
+  if (!Number.isFinite(sun.x) || !Number.isFinite(sun.y) || !Number.isFinite(sun.z)) return false;
+  const p = obj.position;
+  const dx = p.x - sun.x, dy = p.y - sun.y, dz = p.z - sun.z;
+  if (!(dx * dx + dy * dy + dz * dz > 1e-9)) return false;
+  obj.lookAt(sun.x, sun.y, sun.z);
+  return true;
+}
+
 /** Fresh start at the Freehold station when death finds no save (§4.4). */
 function freshStart(ctx) {
   pendingAutosaves.delete(ctx);
@@ -1760,7 +1781,9 @@ function freshStart(ctx) {
   const home = ctx.systems?.freehold?.station?.position ?? [120, 20, 620];
   if (ctx.ship.object) {
     ctx.ship.object.position.set(home[0], home[1] + 10, home[2] + 60);
-    ctx.ship.object.quaternion.identity();
+    // Issue #307: the pad offset is outward from the sun, so face that way
+    // instead of leaving the identity heading pointed back into the star.
+    faceAwayFromSun(ctx);
     ctx.ship.velocity.set(0, 0, 0);
     ctx.ship.speed = 0;
     ctx.ship.postJumpHold = false;
@@ -1842,6 +1865,10 @@ export function initSave(ctx) {
     // RW-005 option 1: never charge UU. Restore or freshStart only.
     if (snap) {
       restore(ctx, snap);
+      // Issue #307: the restored berth/autosave heading may still point at the
+      // star. The boot-time restore keeps its exact saved heading; this is the
+      // death respawn, where the first ordinary throttle flight must survive.
+      faceAwayFromSun(ctx);
       // Death-recovery aftermath: she remembers the dark (§ Bio companion).
       // Guarded to this death reload — the boot-time load path never sets it.
       ctx.bio.mood = 'anxious';
