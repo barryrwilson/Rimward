@@ -61,8 +61,19 @@ export const LAUNCH_SPEED_HEADROOM = 1.1;
 export const LAUNCH_SEARCH_LIMIT = 400;
 /** Fallback creep when config.ship is missing (light row, state.js). */
 export const LAUNCH_FALLBACK_CREEP = 30;
+/**
+ * Issue #307: extra clearance beyond the star's heat zone that a release ray
+ * must keep. A hull parked on the sunward side of a berth would otherwise
+ * release along the radial straight at the star, and the ordinary first
+ * throttle flight clips the lethal core before the pilot has made a decision.
+ * Clearing the heat zone (not just the core) keeps that first flight free of
+ * sunHeat too, so a shield already worn down by the fight cannot be finished by
+ * the departure.
+ */
+export const LAUNCH_SUN_MARGIN = 8;
 
 const _bodies = { count: 0, items: [] };
+const _sunDir = { x: 0, y: 0, z: 0 };
 const _ov = { hit: false, nx: 0, ny: 1, nz: 0, overlap: 0 };
 const _plan = {
   ok: false,
@@ -261,6 +272,65 @@ export function launchCorridorLength(ctx) {
 }
 
 /**
+ * Issue #307: rotate the #65 release axis minimally away from the star until the
+ * whole ray from the station centre clears the heat zone by LAUNCH_SUN_MARGIN.
+ * Returns true and fills _sunDir when the axis had to move; a radial whose ray
+ * already misses the heat zone keeps the exact #65 release. The hull is placed along
+ * the returned axis, so dot(nose, radial-away) stays 1 for every approach.
+ * THREE-free and allocation-free; reads ctx only.
+ */
+function sunClearLaunchDir(ctx, sx, sy, sz, rx, ry, rz) {
+  const world = ctx && ctx.config && ctx.config.world;
+  const sun = world && world.sunPosition;
+  if (!sun || !Number.isFinite(sun.x) || !Number.isFinite(sun.y) || !Number.isFinite(sun.z)) return false;
+  let sunR = 0;
+  const sys = ctx.systems && ctx.world && ctx.systems[ctx.world.currentSystem];
+  if (sys && Number.isFinite(sys.sunRadius)) sunR = sys.sunRadius;
+  else if (world && Number.isFinite(world.sunRadius)) sunR = world.sunRadius;
+  if (!(sunR > 0)) return false;
+  const clearance = sunR * PHY.SUN_HEAT_MULT + LAUNCH_SUN_MARGIN;
+  // The release march starts at the station centre, so that is the ray origin.
+  const ox = sx - sun.x, oy = sy - sun.y, oz = sz - sun.z;
+  const L = Math.hypot(ox, oy, oz);
+  if (!(L > 1e-6)) return false;
+  // Unit bearing from the station centre toward the star.
+  const tx = -ox / L, ty = -oy / L, tz = -oz / L;
+  const toward = rx * tx + ry * ty + rz * tz;
+  if (!(toward > 0)) return false; // ray already runs away from the star
+  if (L <= clearance) {
+    // The berth itself is inside the clearance sphere: aim straight out, away
+    // from the star (o runs sun → station).
+    _sunDir.x = ox / L; _sunDir.y = oy / L; _sunDir.z = oz / L;
+    return true;
+  }
+  const beta = Math.acos(toward > 1 ? 1 : toward);
+  const betaMin = Math.asin(clearance / L);
+  if (beta >= betaMin) return false;
+  // Perpendicular (to the radial) component of the star bearing.
+  let ux = tx - rx * toward, uy = ty - ry * toward, uz = tz - rz * toward;
+  let ul = Math.hypot(ux, uy, uz);
+  if (!(ul > 1e-9)) {
+    // The radial sits exactly on the star bearing: pick a deterministic
+    // perpendicular, world up unless the radial is vertical.
+    ux = -rz; uy = 0; uz = rx;
+    ul = Math.hypot(ux, uy, uz);
+    if (!(ul > 1e-9)) { ux = 0; uy = rz; uz = -ry; ul = Math.hypot(ux, uy, uz); }
+    if (!(ul > 1e-9)) return false;
+  }
+  ux /= ul; uy /= ul; uz /= ul;
+  const delta = betaMin - beta;
+  const cd = Math.cos(delta), sd = Math.sin(delta);
+  // Rotate away from the star bearing in the radial/perp plane.
+  _sunDir.x = rx * cd - ux * sd;
+  _sunDir.y = ry * cd - uy * sd;
+  _sunDir.z = rz * cd - uz * sd;
+  const len = Math.hypot(_sunDir.x, _sunDir.y, _sunDir.z);
+  if (!(len > 1e-9)) return false;
+  _sunDir.x /= len; _sunDir.y /= len; _sunDir.z /= len;
+  return true;
+}
+
+/**
  * Plan an ordinary departure. Returns a reused record (copy what you keep):
  *   { ok: true,  x, y, z, dirX, dirY, dirZ, dist, corridor }
  *   { ok: false, token: 'blocked' | 'no-service', blocker,
@@ -302,6 +372,12 @@ export function planLaunch(ctx) {
   } else {
     const inv = 1 / start;
     rx *= inv; ry *= inv; rz *= inv;
+  }
+
+  // Issue #307: a sunward radial would release the hull straight at the star.
+  // Adjust it minimally before publishing the axis and marching the lane.
+  if (sunClearLaunchDir(ctx, sx, sy, sz, rx, ry, rz)) {
+    rx = _sunDir.x; ry = _sunDir.y; rz = _sunDir.z;
   }
 
   // Publish the lane axis BEFORE the marches: a hold hands station.js the same
