@@ -70,14 +70,20 @@ assert.equal(JSON.stringify([ctx.world.credits, ctx.cargo, ctx.world.marketSuppl
 assert.ok(api.observe().station.view.actions.some(a => a.label.startsWith('Buy 61 Provisions') && a.commodity === 'provisions'));
 console.log('PASS remainder review retains commodity and prepares only the unfilled quantity without trading');
 
-const refusalLine = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
+// Issue #317: the refusal now names the live gate and every unlock. The exact
+// copy pin lives in scripts/issue-317-restricted-fence-test.mjs; this suite
+// pins the stable dockmaster prefix and the gate clause's shape so a copy
+// change here still fails loudly.
+const refusalPrefix = '“Not while the Compact watches,” the dockmaster says. “';
+const gateCopy = /^Restricted locker closed — fear \d+\/40 \(opens at 40\); a burned .+ name \(standing below -25\) or a fence's favor at the People desk opens it too\.$/;
 for (const side of ['buy', 'sell']) {
   const before = JSON.stringify([ctx.world.credits, ctx.cargo, ctx.world.marketSupply]);
   assert.equal(api.observe().market.rows.find(r => r.commodity === 'restrictedComponents').tradeAllowed, false);
   const receipt = act('trade', { commodity: 'restrictedComponents', qty: 1, side });
   assert.equal(receipt.ok, false);
   assert.equal(receipt.token, 'restricted');
-  assert.equal(receipt.error, refusalLine);
+  assert.ok(receipt.error.startsWith(refusalPrefix), side + ' keeps the dockmaster prefix');
+  assert.match(receipt.error.slice(refusalPrefix.length, -1), gateCopy, side + ' states the gate clause');
   assert.equal(JSON.stringify([ctx.world.credits, ctx.cargo, ctx.world.marketSupply]), before);
 }
 assert.equal(act('trade', { commodity: 'provisions', qty: 0, side: 'buy' }).token, 'bad-qty');

@@ -6327,6 +6327,25 @@ export function initStation(ctx) {
     return ctx.world.fear >= ECON.fear.tributeOpensAt
       || ctx.world.reputation.freehold < RESTRICTED_REP_GATE;
   }
+  /** Issue #317: one gate read, so every refusal, row and note states the same reason. */
+  function restrictedGateState() {
+    return {
+      openAt: ECON.fear.tributeOpensAt,
+      fear: Number.isFinite(ctx.world?.fear) ? ctx.world.fear : 0,
+      freeholdName: factionDisplayName('freehold') || 'Freehold',
+    };
+  }
+  function restrictedGateClause() {
+    const g = restrictedGateState();
+    return `fear ${g.fear}/${g.openAt} (opens at ${g.openAt}); a burned ${g.freeholdName} name (standing below ${RESTRICTED_REP_GATE}) or a fence's favor at the People desk opens it too`;
+  }
+  function restrictedGateLine() {
+    return `Restricted locker closed — ${restrictedGateClause()}.`;
+  }
+  function restrictedGateShort() {
+    const g = restrictedGateState();
+    return `fear ${g.fear}/${g.openAt}`;
+  }
   function tryTrade(key, qty, buying, quoteStock) {
     if (!ctx.flags.docked || !ui.open || ctx.world.currentSystem !== currentId) {
       ui.notice = 'Dock first at the market.';
@@ -6346,7 +6365,7 @@ export function initStation(ctx) {
     }
     const com = COMMODITIES[key];
     if (!com.legal && !lockerAllowed()) {
-      ui.notice = '“Not while the Compact watches,” the dockmaster says. “Come back when the right people notice you.”';
+      ui.notice = `“Not while the Compact watches,” the dockmaster says. “${restrictedGateLine()}”`;
       return false;
     }
     const stock = marketSupplyAt(ctx.world, currentId, key);
@@ -6428,7 +6447,7 @@ export function initStation(ctx) {
     const cargoUsedAfter = used + (buying ? qty : -qty);
     let reason = '';
     if (!ctx.flags.docked || !ui.open || ui.service !== 'market' || ctx.world.currentSystem !== currentId) reason = 'Dock first at this market.';
-    else if (!allowed) reason = 'Restricted locker closed; trade refused.';
+    else if (!allowed) reason = restrictedGateLine();
     else if (!Number.isSafeInteger(qty) || qty < 1) reason = 'Enter a positive whole quantity using digits only.';
     else if (Math.ceil(qty / tradeOrderLimit(ctx)) > BULK_ORDER_CAP) reason = `Quantity exceeds the ${BULK_ORDER_CAP}-order safety limit; enter a smaller quantity.`;
     else if (!resources || !validUnit || !Number.isSafeInteger(total)
@@ -6787,7 +6806,14 @@ export function initStation(ctx) {
           h('div', 'market-cell' + sel, table, hold);
           const actions = h('div', 'market-cell market-actions' + sel, table);
           if (!com.legal && !lockerAllowed()) {
-            h('span', 'market-refusal', actions, 'trade refused');
+            // Issue #317: boot-test pins the exact 'trade refused' span, so it
+            // stays; the reason is its own visible row text, and the full gate
+            // line rides the status cell and span as titles.
+            const gateLine = restrictedGateLine();
+            status.title = gateLine;
+            const refusal = h('span', 'market-refusal', actions, 'trade refused');
+            refusal.title = gateLine;
+            h('div', 'market-refusal-reason', status, `closed — ${restrictedGateShort()}`);
           } else {
             btn(actions, '+1', () => { tryTrade(key, 1, true); render(); }).commodity = key;
             btn(actions, '+5', () => { tryTrade(key, 5, true); render(); }).commodity = key;
@@ -6835,7 +6861,7 @@ export function initStation(ctx) {
           'Restricted components move openly here — Combine patent stock, licensed at the counter. No lockers, no questions.');
       } else if (!lockerAllowed()) {
         h('div', 'screen-note', panel,
-          `The dockmaster keeps the restricted locker closed. Fear ${ECON.fear.tributeOpensAt}+ or a burned Compact name opens it.`);
+          `The dockmaster keeps the restricted locker closed — ${restrictedGateClause()}.`);
       }
       // Wave 24: the faction's market line, surfaced the way keeper-comp notes
       // are — one note line, not a new service.
@@ -8343,6 +8369,17 @@ export function initStation(ctx) {
           }
           render();
         });
+        // Issue #317: the fence is the sell verb for restricted cargo — an
+        // ordinary market sale at this dock. Only the player's own units count
+        // (issue #177 consignment), and the row is absent with none to sell.
+        const restrictedOwned = cargoSplit(
+          ctx, 'restrictedComponents', holdUnits(ctx, 'restrictedComponents')).owned;
+        if (restrictedOwned > 0) {
+          btn(row, `Sell restricted cargo (${restrictedOwned})`, () => {
+            tryTrade('restrictedComponents', restrictedOwned, false);
+            render();
+          });
+        }
       }
       // Wave 26: a generated-system dockmaster's marker comps the yard — the
       // same session lifecycle as the keeper comp (reset in undock()), spoken
@@ -8774,6 +8811,12 @@ export function initStation(ctx) {
   // Notices that mean the click changed nothing. Everything else is reported
   // as accepted with the player-visible notice echoed back.
   const PERFORM_REFUSALS = Object.freeze([
+    // Issue #317: the People-desk fence sell row is the only perform() path
+    // that can reach tryTrade's gate refusal while the locker is closed (the
+    // market row buttons are not rendered then). Classify it honestly instead
+    // of reporting a refused sale as accepted; deskNoticeToken already maps
+    // this prefix to 'restricted' for act('trade').
+    { re: /^“Not while the Compact watches/, token: 'restricted' },
     { re: /^Trade quantity must/, token: 'bad-args' },
     { re: /^Not enough UU/, token: 'uu' },
     { re: /^Hold is full/, token: 'hold' },
@@ -9453,6 +9496,7 @@ export function initStation(ctx) {
       buyMax: allowed ? Math.min(99, stock.available, room, cash) : 0,
       sellMax: allowed ? Math.min(99, cargoSplit(ctx, key, holdUnits(ctx, key)).owned) : 0,
       tradeAllowed: !!allowed,
+      tradeAllowedReason: allowed ? '' : restrictedGateLine(),
     };
   }
 

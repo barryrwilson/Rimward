@@ -655,6 +655,8 @@ function marketBlock(ctx, docked, service) {
           if (Number.isInteger(value) && value >= 0) row[key] = value;
         }
         row.tradeAllowed = availability.tradeAllowed === true;
+        const reason = availability.tradeAllowedReason;
+        if (typeof reason === 'string' && reason) row.tradeAllowedReason = reason;
       }
       rows.push(row);
     }
