@@ -1157,6 +1157,7 @@ artifacts, with their stated limitations.
 
 | Outcome | Issue / merged PR | Durable design or evidence |
 |---|---|---|
+| Name the restricted-locker gate and its unlocks; add the People-desk fence restricted-cargo sell row | [#317](https://github.com/barryrwilson/Rimward/issues/317) / [PR #321](https://github.com/barryrwilson/Rimward/pull/321) | [Evidence](Issue317RestrictedFenceEvidence.md); `npm run test:restricted-fence` inside `test:boot`; live browser check 2026-11-16. |
 | Clarify haul buy-in, market refusals, and temporary price events | [#179](https://github.com/barryrwilson/Rimward/issues/179) / [PR #199](https://github.com/barryrwilson/Rimward/pull/199) | [Existing design and evidence](Issue179MarketPane.md); merge alone does not establish new QA. |
 | Remember visited station sell prices for trade planning | [#174](https://github.com/barryrwilson/Rimward/issues/174) / [PR #198](https://github.com/barryrwilson/Rimward/pull/198) | [Existing design and evidence](Issue174PriceMemory.md); merge alone does not establish new QA. |
 | Make larger cargo hulls discoverable after maxing hold racks | [#186](https://github.com/barryrwilson/Rimward/issues/186) / [PR #197](https://github.com/barryrwilson/Rimward/pull/197) | Merged outcome; see PR for recorded scope and evidence. |
