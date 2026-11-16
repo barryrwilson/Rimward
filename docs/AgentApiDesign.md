@@ -616,9 +616,16 @@ records leave `jobs.active` as before and pay only once.
 
 **Restricted trade refusals (issue #209).** The `trade` command's
 restricted-goods refusal uses `token: 'restricted'`, retaining the complete
-dockmaster line in `error`. `market.rows[].tradeAllowed === false` describes
-the same standing restriction. The disabled bulk confirmation reached through
-`stationAction` retains its `unavailable` token and makes no trade.
+dockmaster line in `error`. The line names the gate and the unlock: the
+current fear against `ECON.fear.tributeOpensAt`, a burned Freehold name
+(standing below -25), or a fence's favor at the People desk. When
+`market.rows[].tradeAllowed === false`, the same row carries the same line in
+the additive `tradeAllowedReason` string; allowed rows omit it. The disabled
+bulk confirmation reached through `stationAction` retains its `unavailable`
+token and makes no trade. The People desk's fence card offers a
+`Sell restricted cargo (n)` action when the hold carries restricted
+components; it is an ordinary market sale under the same gate and refusal.
+No `VERSION` change, no new command, no persisted field.
 
 **Station receipt fields (issue #64).** Every browser `actResult` receipt has
 both `error` and `notice` as strings. `error` is refusal text only; `notice` is the
