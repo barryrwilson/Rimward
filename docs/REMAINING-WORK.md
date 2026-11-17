@@ -1,3 +1,66 @@
+## The bounty finish is honest at the surrender verb — #314
+
+Implemented on `dsh/issue-314-playtest-piracy-ransom-leaves-a-pirate-b` (base
+master `6e56b96`). The pirate playtest finding was real: a ransom taken from an
+accepted bounty quarry paid the player and left the bounty at `progress 0`
+forever, the surrender card never said so, and the ace card promised "kill or
+capture" for a Named Gun whose surrender can never be captured (playtest #253,
+2026-11-16, API v2, `out/pirate-playtest-2026-11-15/REPORT.md` finding 1).
+Copy-only fix; no settlement, pay, fear, feral or hunt change:
+
+- `hail.js bountyQuarryOf(ctx, live)` reads the accepted bounty row whose
+  `target` names the hull's own RECORD (never the displayed speaker, so a
+  masked Q-ship keeps its cover) and answers `pirate` (`bounty-pirate-*`) or
+  `ace` (`bounty-ace`); offered rows and missing data fail closed to null. On
+  that quarry's surrender card it prints a dim, text-safe note: "Compact claim:
+  a ransom, cargo demand, tribute or letting them go leaves the bounty open.
+  Only a kill or a capture closes it — a capture takes a hail on the yielded
+  hull (take its cargo to yield it first)." An ace card says "Named Gun bounty:
+  only a kill closes it. A ransom, cargo demand, tribute or letting them go
+  leaves the claim open — a Named Gun's surrender is not taken as a capture."
+  Every listed verb states its consequence ("(bounty stays open)" on cargo,
+  ransom, tribute, letGo and respect; "Keep firing — a kill pays the bounty").
+  The note is appended to `terms.line` so the agent API and the player agree,
+  and rides `cardSignature` so a readable change mints a new conversation. The
+  lane and note live on the open card only — no new persisted field, no new
+  observe key.
+- `station.js` ace contract detail now reads "The Compact pays on confirmation
+  of the kill — a Named Gun's surrender is never taken as a capture, so only a
+  kill closes this claim." The ordinary pirate bounty card keeps "kill or
+  capture", which is true for an ordinary reaver.
+
+No settlement change, no pay tuning, no fear/feral or hunt change, no new
+persistent fields, keys/digits, SKUs or `state.js` edit; non-bounty surrender
+and salvage cards keep their byte-identical labels and no note.
+
+Recon finding recorded honestly: after a ransom the yielded hull can be
+captured by a hail even with cargo aboard (the capture gate reads only the
+yield, range, attribution and role), so the note's "(take its cargo to yield it
+first)" is guidance for the cargo-demand/letGo route, not a strict precondition.
+"Consider capture as a card verb" was considered and parked: a new verb would
+change the flow and the agent intent set, while the note and labels now name the
+supported hail path.
+
+Focused regression is `scripts/issue-314-bounty-surrender-copy-test.mjs` (9
+checks: the exact note and labels on a real admitted surrender card through
+`hailApi.peek()`, `observe().hail` and the DOM; ransom paid, recorded, bounty
+accepted at progress 0 across a delivery tick; cargo demand empties the hold and
+the real KeyH capture settles the bounty done; the ace note/labels and a refused
+Named Gun capture; the rendered ace card kill-only copy beside the pirate card's
+"kill or capture"; a non-bounty card untouched; JSON-plain and no persisted or
+observe keys), appended to `npm run test:boot`. `npm run build` passes. Live
+flow is `npm run test:bounty-surrender-copy-live`: disposable loopback Chromium
+accepts Red Marlow (300 UU) and Gallows Wren (375 UU) at Freehold, reads the
+exact note and labels, ransoms Red Marlow for 93 UU and watches the bounty stay
+accepted/progress 0 across eight delivery ticks, empties Gallows Wren's hold,
+takes the surrender with the real hail edge (captured incident causer player,
+record captured, no destroyed incident, bounty paid done +375), and reads the
+ace card kill-only copy with a clean console; evidence under
+`out/issue-314-live/`. Parked follow-ups: already-accepted ace rows in old
+saves keep their old persisted detail until retargeted; the `yielded` bracket
+step still says "Hail to take their surrender" for a Named Gun whose capture is
+refused (pre-existing, outside this issue's scope).
+
 ## Faction standing and bounty heat are observable — #315
 
 Implemented on `dsh/issue-315-playtest-agent-api-observe-publishes-no` (base
