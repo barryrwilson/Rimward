@@ -8,6 +8,7 @@ register('./css-hook.mjs', import.meta.url);
 
 import * as THREE from 'three';
 import { fwdFromQuat, pushRing, sanitizeEvent } from '../src/game/agent-schema.js';
+import { FACTIONS } from '../src/game/state.js';
 
 const { initAgentApi } = await import('../src/systems/agent-api.js');
 const { buildObservation } = await import('../src/game/agent-observe.js');
@@ -823,6 +824,71 @@ pin('no notice or error leaks across the request sequence',
 pin('station receipts are json safe',
   JSON.stringify(JSON.parse(JSON.stringify(saCargo))) === JSON.stringify(saCargo));
 delete ctx.stationDesk.perform;
+ctx.flags.docked = false;
+
+// Issue #315: faction standing and bounty heat are observable, additive-only.
+// The map mirrors the desk's own standingRead/rankFor read; the heat mirrors
+// the desk's bounty evaluator. Neither writes ctx.world nor persists a field.
+ctx.flags.docked = true;
+ctx.world.reputation = { freehold: 30, redledger: -12, veridian: 12 };
+const standObs = rw.observe();
+const stand = standObs.world && standObs.world.reputation;
+const factionKeys = Object.keys(FACTIONS);
+pin('world.reputation covers every authored faction', !!(
+  stand && typeof stand === 'object' && !Array.isArray(stand)
+  && factionKeys.length >= 12
+  && Object.keys(stand).length === factionKeys.length
+  && factionKeys.every((k) => stand[k] && typeof stand[k] === 'object'
+    && typeof stand[k].name === 'string' && stand[k].name.length > 0
+    && typeof stand[k].rank === 'string' && stand[k].rank.length > 0
+    && Number.isFinite(stand[k].standing))
+));
+pin('world.reputation reads the live standing bag through rankFor', !!(
+  stand && stand.freehold.standing === 30 && stand.freehold.rank === 'Trusted'
+  && stand.redledger.standing === -12 && stand.redledger.rank === 'Suspect'
+  && stand.veridian.standing === 12 && stand.veridian.rank === 'Known'
+));
+const repBag = JSON.stringify(ctx.world.reputation);
+rw.observe();
+pin('world.reputation is derived, never written back',
+  JSON.stringify(ctx.world.reputation) === repBag);
+delete ctx.world.reputation;
+const standDefault = rw.observe().world.reputation;
+pin('absent standing bag reads the desk default (Stranger/0)',
+  factionKeys.every((k) => standDefault[k].rank === 'Stranger' && standDefault[k].standing === 0));
+ctx.world.reputation = { freehold: NaN, veridian: 'high' };
+const standJunk = rw.observe().world.reputation;
+pin('non-finite standing reads 0/Stranger, never NaN',
+  standJunk.freehold.standing === 0 && standJunk.freehold.rank === 'Stranger'
+  && standJunk.veridian.standing === 0 && standJunk.veridian.rank === 'Stranger');
+
+ctx.world.jobs = [
+  { id: 'bounty-pirate-1', kind: 'bounty', state: 'accepted', target: 'Fixture Quill', reward: 450 },
+  { id: 'haul-1', kind: 'haul', state: 'accepted', reward: 100 },
+];
+ctx.stationDesk.peekBountyHeat = (j) => (j && j.kind === 'bounty'
+  ? { bounty: 450, tier: 'standard' } : null);
+const heatObs = rw.observe();
+const heatBounty = heatObs.jobs.active.find((j) => j.id === 'bounty-pirate-1');
+const heatHaul = heatObs.jobs.active.find((j) => j.id === 'haul-1');
+pin('bounty row carries the desk heat read', !!(
+  heatBounty && heatBounty.heat && heatBounty.heat.bounty === 450
+  && heatBounty.heat.tier === 'standard'
+));
+pin('non-bounty row carries no heat', !(heatHaul && Object.hasOwn(heatHaul, 'heat')));
+pin('bounty heat is json plain',
+  JSON.stringify(JSON.parse(JSON.stringify(heatBounty.heat))) === JSON.stringify(heatBounty.heat));
+ctx.stationDesk.peekBountyHeat = () => ({ bounty: 'lots', tier: 'hard' });
+pin('non-finite desk heat filtered out',
+  !Object.hasOwn(rw.observe().jobs.active.find((j) => j.id === 'bounty-pirate-1'), 'heat'));
+ctx.stationDesk.peekBountyHeat = () => ({ bounty: 700, tier: '' });
+pin('empty desk heat tier filtered out',
+  !Object.hasOwn(rw.observe().jobs.active.find((j) => j.id === 'bounty-pirate-1'), 'heat'));
+delete ctx.stationDesk.peekBountyHeat;
+pin('absent desk heat leaves the row plain',
+  !Object.hasOwn(rw.observe().jobs.active.find((j) => j.id === 'bounty-pirate-1'), 'heat'));
+pin('no heat persisted on the job row',
+  ctx.world.jobs.every((j) => !Object.hasOwn(j, 'heat')));
 ctx.flags.docked = false;
 
 // The old observe-only token is gone: every dock service is playable.

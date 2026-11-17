@@ -3202,6 +3202,70 @@ function huntHauntPhrase(ctx, sysId, rec) {
 }
 
 /**
+ * Issue #315: the system a bounty row is posted for, bounded to authored
+ * systems; anything else falls back to the current one, as #292/#301 did.
+ */
+function bountyQuarrySystem(ctx, job) {
+  return typeof job.system === 'string' && Object.hasOwn(SYSTEMS, job.system)
+    ? job.system : ctx.world.currentSystem;
+}
+
+/**
+ * Issue #315: the record an offered/accepted bounty row binds, resolved the
+ * way the board and settlement read it — a living pirate carrying the named
+ * target (current bank first, then the other generated banks), or the living
+ * ace whose mantle the `bounty-ace` row names. Read-only; null means the row
+ * binds no living quarry. Shared by the #292/#301 last-seen copy and the #315
+ * heat read so both quote one record, never a second rule set.
+ */
+function resolveBountyQuarry(ctx, job) {
+  if (!job || job.kind !== 'bounty') return null;
+  if (job.state !== 'offered' && job.state !== 'accepted') return null;
+  const id = typeof job.id === 'string' ? job.id : '';
+  const target = typeof job.target === 'string' ? job.target : '';
+  if (!target) return null;
+  if (id === 'bounty-ace') {
+    const ace = liveAceRecord(ctx);
+    return ace && ace.name === target ? ace : null;
+  }
+  if (!id.startsWith('bounty-pirate-')) return null;
+  const sysId = bountyQuarrySystem(ctx, job);
+  const banks = [];
+  if (Array.isArray(ctx.world.records)) banks.push(ctx.world.records);
+  const recordBanks = ctx.world.recordBanks;
+  if (recordBanks && typeof recordBanks === 'object' && !Array.isArray(recordBanks)) {
+    for (const bId of Object.keys(recordBanks).sort()) {
+      if (bId !== sysId && Array.isArray(recordBanks[bId])) banks.push(recordBanks[bId]);
+    }
+  }
+  for (const bank of banks) {
+    for (let i = bank.length - 1; i >= 0; i--) {
+      const r = bank[i];
+      if (r && r.role === 'pirate' && r.name === target
+        && r.state !== 'dead' && r.state !== 'captured') return r;
+    }
+  }
+  return null;
+}
+
+/**
+ * Issue #315: the bounty heat a card or the agent row quotes — the posted
+ * price on the living quarry the row binds plus #272's danger tier, read off
+ * the same record the board and settlement read. Derived at render: no
+ * coordinate, no live handle, no persisted field. Null when the row binds no
+ * living quarry (the plain row keeps only its posted reward).
+ */
+function bountyHeatOf(ctx, job) {
+  try {
+    const rec = resolveBountyQuarry(ctx, job);
+    if (!rec || !Number.isFinite(rec.bounty)) return null;
+    return { bounty: Math.round(rec.bounty), tier: huntTierOf(rec) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Issue #292/#301: the last-seen phrase a pirate-bounty row quotes — accepted
  * (#292) or offered on the board (#301) — while its target is off scanner,
  * the same #271 vocabulary hunts quote, sourced from the record's OWN durable
@@ -3213,33 +3277,14 @@ function huntHauntPhrase(ctx, sysId, rec) {
  */
 function bountyLastSeenPhrase(ctx, job) {
   try {
-    if (!job || job.kind !== 'bounty') return null;
-    if (job.state !== 'offered' && job.state !== 'accepted') return null;
-    if (typeof job.id !== 'string' || !job.id.startsWith('bounty-pirate-')) return null;
-    const sysId = typeof job.system === 'string' && Object.hasOwn(SYSTEMS, job.system)
-      ? job.system : ctx.world.currentSystem;
+    // Pirate rows only: the ace row keeps its plain accepted line (#292), even
+    // though the shared resolver also binds a live ace for the #315 heat read.
+    if (!job || typeof job.id !== 'string' || !job.id.startsWith('bounty-pirate-')) return null;
+    const rec = resolveBountyQuarry(ctx, job);
+    if (!rec) return null;
+    const sysId = bountyQuarrySystem(ctx, job);
     const def = SYSTEMS[sysId];
     if (!def) return null;
-    // Resolve the named reaver the way settlement does: a living pirate record
-    // carrying that name (current bank first, then the other generated banks).
-    let rec = null;
-    const banks = [];
-    if (Array.isArray(ctx.world.records)) banks.push(ctx.world.records);
-    const recordBanks = ctx.world.recordBanks;
-    if (recordBanks && typeof recordBanks === 'object' && !Array.isArray(recordBanks)) {
-      for (const bId of Object.keys(recordBanks).sort()) {
-        if (bId !== sysId && Array.isArray(recordBanks[bId])) banks.push(recordBanks[bId]);
-      }
-    }
-    for (const bank of banks) {
-      for (let i = bank.length - 1; i >= 0; i--) {
-        const r = bank[i];
-        if (r && r.role === 'pirate' && r.name === job.target
-          && r.state !== 'dead' && r.state !== 'captured') { rec = r; break; }
-      }
-      if (rec) break;
-    }
-    if (!rec) return null;
     // a) The escape stamp wins: it names where the hull actually went.
     const site = rec.wakeSite;
     if (site && !site.found && Array.isArray(site.position)) {
@@ -9791,6 +9836,7 @@ export function initStation(ctx) {
     peekJobReward,
     peekJobReturn,
     bountyLastSeenPhrase: (job) => bountyLastSeenPhrase(ctx, job),
+    peekBountyHeat: (job) => bountyHeatOf(ctx, job),
     peekPirateLanePhrase: (sysId = currentId) => pirateLanePhrase(ctx, sysId),
     peekShadow,
     peekShadowStatus,

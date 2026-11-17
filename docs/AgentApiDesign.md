@@ -1,5 +1,35 @@
 # RIMWARD Wave 126 — Agent API (AI play surface)
 
+## Faction standing and bounty heat in the observation — #315
+
+The pirate playtest found that `observe()` published credits, fear and cargo but
+no faction standing and no numeric bounty heat, so a runner could not measure
+what its piracy did to its name. Both reads are now published additively, from
+the same evaluators the desk already prints; there is no HUD gauge, no persisted
+field, no new key or digit, and `VERSION` stays 2.
+
+- `world.reputation` is a JSON-plain map keyed by every authored `FACTIONS` id
+  (`freehold`, `redledger`, `veridian`, …). Each row is
+  `{ name, rank, standing }`: the authored faction name, the rank word `rankFor`
+  derives, and the rounded standing from the live `ctx.world.reputation` bag.
+  It is read through the desk's own `standingRead` (`src/game/data-trade.js`),
+  so a missing bag or key, an unknown or reserved id, or a non-finite value
+  reads `Stranger`/`0` exactly as the Standing (epics) desk shows it. The map is
+  derived per observation and never written back to `ctx.world`.
+- `jobs.offers[].heat` and `jobs.active[].heat` on offered or accepted `bounty`
+  rows are `{ bounty, tier }`: the posted price on the living quarry the row
+  binds and #272's danger tier (`standard` | `hard`). The pirate rows resolve
+  the living record the board and settlement read (current bank first, then the
+  other generated banks); the `bounty-ace` row resolves the live ace mantle.
+  `bounty` is the record's own price (never the posted fallback reward) and
+  `tier` is the existing `huntTierOf` read — a stamped veteran reaver or a
+  price at/above `HUNT_HARD_BOUNTY_AT` posts `hard`. Absent `heat` means the
+  desk found no living quarry behind the row; a non-bounty row never carries
+  `heat`. The desk exposes the same evaluator as
+  `ctx.stationDesk.peekBountyHeat(job)`.
+- Because the map follows the live bag, a rank move is visible in the same pull
+  that shows the Jobs board; no act writes standing.
+
 ## Ordinary job abandonment — #207
 
 `abandonJob { id }` is a Jobs service command for accepted mining, trade, hunt,
@@ -1359,6 +1389,8 @@ Builder rules:
 - `targets.nearby` ≤ 12, nearest first, range ≤ `U.TARGET_RANGE`, **ships, rocks and pods** (AM needs the locked asteroid). Pod rows carry the pod `id` and `units` (issue #115). Ship rows carry `faction`, `factionName`, `resolveBand`, `surrendered`, `disabled` and `hailState` under the bracket's scanner tiers; numeric resolve, `concealedMounts`, the `hail` object and vitals stay on `targets.current` (issue #116). `targets.current` for a ship, rock or pod lock carries the same ship-local `bearing` (x right, y up, nose `-z`, same frame) as its nearby row, including when the lock sits outside the nearby cap (issue #266).
 - `events` ≤ 16 from **`ctx.agent.events` ring**, not `lastEvents`. Authored types only. `hailOpened` has `{ intents, salvage }` — never `ship`. Harvest includes `playerDestroyed` `{ attackerId?, attackerName? }` (the last NPC hull that hit that life, cleared on the receipt and on `systemLoaded`; issue #117), `recovered` `{ source:'autosave'|'berth'|'fresh', rewindSeconds, lostCargo, lostUnits }` (issue #125: `berth` is the docked/launch checkpoint a death inside an encounter returns to; `rewindSeconds` is the sim clock rolled back; `lostCargo` lists `'<units> <commodityKey>'` rows the death-time hold had that the restored hold lacks, `lostUnits` their total), `bodyHit` `{ kind, speed, damage }`. Comm lines collapse identical text+from (keep newest, optional `count`) and occupy at most 4 slots; pirate spam must not evict death/impact. Repeat rows fold per key (`npcHit` per `targetId`, `mineHit` per `asteroidId` — player beam only, `actor: 'player'`; NPC miner cuts never reach the ring (issue #119), `playerFire` per `weapon`, `playerHit` per `family`, `bodyHit` per `kind`; newest kept, `count` accumulates) and folded types are keep-class on overflow, so heavy-combat `playerHit`/`shieldDown` floods cannot evict the agent's own fire/hit feedback. `autopilotDisengaged` `{ reason }` and `automineDisengaged` `{ reason }` are keep-class too (issue #202), so they survive arrival into a saturated combat ring; newer retained events can still age them out FIFO.
 - `jobs` only when `flags.docked`. Copy HUD contract fields when present: `commodity`, `count` or `units`, `destSystem` / `destination`, `deadline`.
+- `jobs.offers[]` / `jobs.active[]` bounty rows add `heat: { bounty, tier }` when the desk binds a living quarry (issue #315); `bounty` is the record's own price and `tier` the #272 `standard` | `hard` read. Absent when no living quarry binds the row, and never on non-bounty rows.
+- `world.reputation` is the full JSON-plain faction map `{ name, rank, standing }` keyed by authored `FACTIONS` ids, read through the desk's `standingRead`/`rankFor` and derived per observe (issue #315); missing or non-finite standing reads `Stranger`/`0`, and the map is never written back.
 - `market` is `{ rows:[{ commodity, name, posted, hold, legal }] }` only while docked and `station.service === 'market'`; otherwise `null`. `posted` is the table price (`priceOf` / `world.prices`); desk fill may apply hermit/epic/rank modifiers.
 - `session.phase` is `'dead'` while `ctx.deathApi.isOpen()` (death overlay). Then `'title'` / `'origin'` / `'playing'` as today.
 - `station` is a **pose copy** (`inZone`, `name`, `systemName`, `range`, `bearing`, `closingSpeed`, `service`, `services`). Never copy `ctx.station` wholesale and never serialize `stationDesk`. `gate` adds `to` / `kind` / `source` / `range` / `bearing` for the active gate (plotted next hop, else nearest live assembly; issue #116).

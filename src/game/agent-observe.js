@@ -9,7 +9,8 @@ import { bestRememberedPrices } from './price-memory.js';
  * flying player can presently see; scanner-tier gates mirror the HUD.
  */
 
-import { U, COMMODITIES, FACTIONS, ORE_TYPES, MINING_LASERS, miningLaserFor, resolveBand } from './state.js';
+import { U, COMMODITIES, FACTIONS, ORE_TYPES, MINING_LASERS, miningLaserFor, resolveBand, rankFor } from './state.js';
+import { standingRead } from './data-trade.js'; // issue #315: the desk's own standing read
 import { hailOffer, hailEncounterState } from './hail-offer.js';
 import { lookupLiveNavGate, lookupLiveNavHopKind, lookupNearestLiveGate } from '../systems/gate.js';
 import { losCloseRate } from './los-close.js';
@@ -516,6 +517,18 @@ function jobRow(ctx, j) {
     const phrase = ctx.stationDesk?.bountyLastSeenPhrase?.(j);
     if (typeof phrase === 'string' && phrase) row.lastSeen = phrase;
   }
+  // Issue #315: the bounty heat the row binds — the posted price on the living
+  // quarry plus #272's danger tier — so a standing change is measurable, not
+  // just visible. Same desk evaluator the card reads; absent means the desk
+  // found no living quarry behind the row.
+  if (row.kind === 'bounty' && row.state !== 'done') {
+    const heat = ctx.stationDesk?.peekBountyHeat?.(j);
+    if (heat && typeof heat === 'object'
+      && typeof heat.bounty === 'number' && Number.isFinite(heat.bounty)
+      && typeof heat.tier === 'string' && heat.tier) {
+      row.heat = { bounty: Math.round(heat.bounty), tier: heat.tier };
+    }
+  }
   if (typeof title === 'string' && title) row.title = title;
   const commodity = own(j, 'commodity');
   if (typeof commodity === 'string' && commodity) row.commodity = commodity;
@@ -576,6 +589,29 @@ function jobsBlock(ctx, docked) {
     if (docked && state === 'offered' && board.includes(j)) offers.push(jobRow(ctx, j));
   }
   return { offers, active };
+}
+
+/**
+ * Issue #315: the faction standing the dock's rank line already prints, as a
+ * JSON-plain map keyed by every authored FACTIONS id — its name, the rank word
+ * rankFor derives, and the rounded standing. Sourced from the live
+ * ctx.world.reputation bag through the desk's own standingRead, so reserved
+ * ids, unknown keys and non-finite values read as 0/Stranger exactly as the
+ * desk shows them. Derived per observe: no persisted field, no ctx.world write.
+ */
+function reputationBlock(ctx) {
+  const bag = ctx.world ? ctx.world.reputation : null;
+  const out = {};
+  for (const key of Object.keys(FACTIONS)) {
+    const faction = FACTIONS[key];
+    const rep = standingRead(bag, key);
+    out[key] = {
+      name: str(faction && faction.name),
+      rank: rankFor(rep).name,
+      standing: Math.round(rep),
+    };
+  }
+  return out;
 }
 
 function holdOf(cargo, key) {
@@ -1194,6 +1230,7 @@ export function buildObservation(ctx) {
         currentSystem: str(world.currentSystem),
         credits: num(world.credits, 0),
         fear: num(world.fear, 0),
+        reputation: reputationBlock(ctx),
         cargoCapacity: num(ctx.cargoCapacity, 0),
         cargo: cargoRows(ctx),
         scanner: num(world.scanner, 0),
