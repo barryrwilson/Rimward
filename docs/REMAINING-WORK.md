@@ -1,3 +1,46 @@
+## Faction standing and bounty heat are observable — #315
+
+Implemented on `dsh/issue-315-playtest-agent-api-observe-publishes-no` (base
+master `5c64d7b`). The pirate playtest finding was real: `observe()` published
+credits, fear and cargo but no faction standing and no numeric bounty heat, so a
+runner could not measure what piracy did to its name (playtest #253, API v2,
+`out/pirate-playtest-2026-11-15/REPORT.md` priority 2). Observation-only fix:
+
+- `world.reputation` publishes a JSON-plain map keyed by every authored
+  `FACTIONS` id with `{ name, rank, standing }` — the authored name, the
+  `rankFor` rank word, and the rounded standing from the live
+  `ctx.world.reputation` bag, read through the desk's own `standingRead`. A
+  missing bag/key or non-finite value reads `Stranger`/`0`, matching the
+  Standing (epics) desk. Derived per observation; never written back.
+- `jobs.offers[].heat` / `jobs.active[].heat` on offered and accepted `bounty`
+  rows are `{ bounty, tier }`: the living quarry record's own posted price and
+  #272's `huntTierOf` danger tier (`standard` | `hard`). Pirate rows resolve the
+  living record the board and settlement read (current bank first, then the
+  other generated banks); the `bounty-ace` row resolves the live ace mantle.
+  Absent when no living quarry binds the row, and never on non-bounty rows. The
+  desk exposes the same evaluator as `peekBountyHeat(job)`, and the #292/#301
+  last-seen copy now shares the quarry resolver, so there is one rule set.
+
+No new persisted field, no `ctx.world` write, no HUD gauge, no new key or digit;
+`VERSION` stays 2 and `state.js` is untouched.
+
+Focused regression is `scripts/issue-315-standing-heat-test.mjs` (12 checks:
+the full faction map and its parity with `rankFor`/`standingRead`; the rendered
+Standing desk printing the same rank and standing; derived-not-written-back and
+JSON-plain; offered/accepted pirate heat quoting the living record and the #272
+tier; a staged 900 bounty and a veteran stamp posting `hard`; the ace contract
+heat; absent heat for a row binding no living quarry and for non-bounty rows;
+the price/tier-only honesty boundary; and no heat/standing field persisted on
+jobs or records). It is appended to `npm run test:boot`; the agent hardening
+suite also pins the map shape/defaults/filtering and the heat pass-through.
+`npm run build` passes. Live flow is `npm run test:standing-heat-live`:
+disposable loopback Chromium docks at Freehold, reads the rendered Standing desk
+line against the observation, stages a disclosed standing move, seeds a priced
+pirate only when the board has none, accepts the bounty and reads the same heat
+on the offered and active rows, stages a 900 bounty for `hard` tier, reads the
+ace contract heat, and confirms no persisted field or `ctx.world` write with a
+clean console; evidence under `out/issue-315-live/`.
+
 ## selectTarget names the targeting ceiling instead of no-service — #316
 
 Implemented on `dsh/issue-316-select-target-range-refusal` (base master
