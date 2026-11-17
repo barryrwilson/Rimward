@@ -21,7 +21,7 @@ import {
 import { tryEngageAutomine, disengageAutomine, amLine } from '../game/automine.js';
 import { disengageFlee } from '../game/agent-flee.js';
 import { hailDigitsAllowed } from './overlay-policy.js';
-import { agentPulse, agentSelectTarget, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear, agentCombatSet, agentCombatActive, agentControlStatus, agentRefusalDetail, markAgentHelm, registerAgentHelmRelease } from './controls.js';
+import { agentPulse, agentSelectTarget, agentSelectTargetDetail, agentSetWeaponGroup, agentClearFullStop, agentControlSet, agentControlClear, agentCombatSet, agentCombatActive, agentControlStatus, agentRefusalDetail, markAgentHelm, registerAgentHelmRelease } from './controls.js';
 import { buildObservation } from '../game/agent-observe.js';
 import {
   VERSION,
@@ -267,8 +267,8 @@ function afterDesk(ctx, name, result) {
   return fail(ctx, name, token, notice || 'The desk could not complete that request.');
 }
 
-function afterControls(ctx, name, token, queued) {
-  if (typeof token === 'string' && token) return fail(ctx, name, token);
+function afterControls(ctx, name, token, queued, detail = '') {
+  if (typeof token === 'string' && token) return fail(ctx, name, token, undefined, detail);
   if (queued === true) {
     return remember(ctx, actResult({ ok: true, error: '', name, token: '', status: 'queued' }));
   }
@@ -656,8 +656,13 @@ function dispatchLive(ctx, name, args) {
   }
   if (name === 'selectTarget') {
     if (ctx.flags && ctx.flags.docked === true) return fail(ctx, name, 'docked');
+    // Issue #316: a known target beyond the targeting ceiling refuses token
+    // 'range' and carries the same distance/ceiling detail observe() publishes,
+    // so a runner flies closer instead of retrying a service/overlay-looking
+    // 'no-service'. Unknown ids and bare cycles keep their old tokens.
     if (Object.hasOwn(args, 'id')) {
-      return afterControls(ctx, name, agentSelectTarget(ctx, args.id));
+      const token = agentSelectTarget(ctx, args.id);
+      return afterControls(ctx, name, token, false, token === 'range' ? agentSelectTargetDetail() : '');
     }
     return afterControls(ctx, name, agentSelectTarget(ctx), true);
   }
