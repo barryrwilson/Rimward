@@ -2335,7 +2335,9 @@ function aceContractFields(ctx, ace) {
     reward,
     homeId,
     title: `Bounty: ${name}`,
-    detail: `${name} flies an ace frame and bleeds the lanes of ${homeName} dry. The Compact pays on confirmation of the kill or capture — your guns, your name on the claim.`,
+    // Issue #314: the ace claim is kill-only — a Named Gun's surrender is
+    // never taken as a capture, so the card states the exception up front.
+    detail: `${name} flies an ace frame and bleeds the lanes of ${homeName} dry. The Compact pays on confirmation of the kill — a Named Gun's surrender is never taken as a capture, so only a kill closes this claim.`,
   };
 }
 /** A system whose def flies tradesRestricted sells patent stock openly (§16). */

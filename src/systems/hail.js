@@ -137,6 +137,43 @@ function isDemandHail(ev) {
 const SURRENDER_VERBS = Object.freeze(['demandCargo', 'demandRansom', 'acceptTribute']);
 
 /**
+ * Issue #314 — the bounty claim the open surrender card must be honest about.
+ * These are the card's own words, not settlement: a surrender verb never closes
+ * a bounty (only a kill or a capture does), and a Named Gun's surrender is
+ * never taken as a capture. They ride the surrender card only and are never
+ * written onto a job or a record.
+ */
+const PIRATE_BOUNTY_NOTE = 'Compact claim: a ransom, cargo demand, tribute or letting them go leaves the bounty open. Only a kill or a capture closes it — a capture takes a hail on the yielded hull (take its cargo to yield it first).';
+const ACE_BOUNTY_NOTE = 'Named Gun bounty: only a kill closes it. A ransom, cargo demand, tribute or letting them go leaves the claim open — a Named Gun\'s surrender is not taken as a capture.';
+
+/**
+ * Issue #314 — which ACCEPTED bounty this hull is the quarry of, if any. Read
+ * only: the job row that names the RECORD's name (never the displayed speaker,
+ * so a masked Q-ship keeps its cover), in state 'accepted'. The ace posting is
+ * 'ace'; every 'bounty-pirate-*' row is 'pirate'. Offered rows, a missing
+ * world/jobs/record and anything else fail closed to null.
+ */
+function bountyQuarryOf(ctx, live) {
+  try {
+    if (!ctx || !ctx.world || !Array.isArray(ctx.world.jobs)) return null;
+    const rec = live && live.record;
+    if (!rec || typeof rec.name !== 'string' || !rec.name) return null;
+    const jobs = ctx.world.jobs;
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
+      if (!job || job.kind !== 'bounty' || job.state !== 'accepted') continue;
+      if (job.target !== rec.name) continue;
+      if (typeof job.id !== 'string') continue;
+      if (job.id === 'bounty-ace') return 'ace';
+      if (job.id.startsWith('bounty-pirate-')) return 'pirate';
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Issue #99 — may this hull's break still be sold to the player? Two facts,
  * both read live from the hull rather than from anything the card remembers:
  * the player broke it (npc.js reads the instance damage trail), and the break
@@ -234,8 +271,9 @@ function termAmounts(h) {
  * the opening line, and every monetary figure the card actually prints. A
  * re-rolled ransom or tribute on a redraw is therefore a NEW conversation,
  * while a quote the card keeps to itself (a ransom with no ransom button on
- * the card) never moves the token. Structured JSON, so no field can spell
- * another field's value.
+ * the card) never moves the token. Issue #314: the bounty note is part of what
+ * the player reads, so a lane that changes the note mints a new conversation.
+ * Structured JSON, so no field can spell another field's value.
  */
 function cardSignature(h, baseLine) {
   return JSON.stringify({
@@ -245,6 +283,7 @@ function cardSignature(h, baseLine) {
     speaker: String(h.speaker),
     amounts: termAmounts(h),
     line: String(baseLine),
+    bountyNote: String(h && h.bountyNote ? h.bountyNote : ''),
   });
 }
 
@@ -929,6 +968,28 @@ export function initHail(ctx) {
   }
 
   function intentLabel(h, intent) {
+    // Issue #314: on an ACCEPTED bounty quarry's surrender card every verb
+    // states its consequence for the claim. Nothing else changes: a card with
+    // no bounty lane keeps its byte-identical labels below.
+    const bounty = !!(h && (h.bountyLane === 'pirate' || h.bountyLane === 'ace'));
+    if (bounty) {
+      switch (intent) {
+        case 'demandCargo':
+          return 'Demand cargo (bounty stays open)';
+        case 'demandRansom':
+          return `Demand ransom — ${h.ransom} UU (bounty stays open)`;
+        case 'acceptTribute':
+          return `Accept tribute — ${h.tribute} UU (bounty stays open)`;
+        case 'letGo':
+          return 'Let them go (bounty stays open)';
+        case 'keepFiring':
+          return 'Keep firing — a kill pays the bounty';
+        case 'respect':
+          return 'Mutual respect — stand down (bounty stays open)';
+        default:
+          break;
+      }
+    }
     const salvage = !!(h && (h.salvage || h.ship?.state?.disabled));
     switch (intent) {
       case 'demandCargo':
@@ -988,6 +1049,15 @@ export function initHail(ctx) {
       && !surrenderPayoutOk(live, st)) {
       return;
     }
+    // Issue #314: a surrender card on an ACCEPTED bounty quarry must say what
+    // the verbs below actually do to the claim. Read-only, and the lane and its
+    // note live on the open card only — never on the job row or the record.
+    const bountyLane = (!salvageCard && !demandHail && intents.some(isSurrenderVerb))
+      ? bountyQuarryOf(ctx, live)
+      : null;
+    const bountyNote = bountyLane === 'pirate'
+      ? PIRATE_BOUNTY_NOTE
+      : (bountyLane === 'ace' ? ACE_BOUNTY_NOTE : '');
     const demandN = demandHail ? finiteDemandAmount(ev.demand) : (ev.demand ?? null);
     const speaker = speakerNameOf(live, st);
     const now = ctx.world && typeof ctx.world.time === 'number' ? ctx.world.time : 0;
@@ -1000,6 +1070,9 @@ export function initHail(ctx) {
       // Issue #99: the event decides the family, never the hull's current
       // state — the steady update below converts a card whose hull has died.
       salvage: ev.salvage === true,
+      // Issue #314: bounty honesty rides the card only (never persisted).
+      bountyLane,
+      bountyNote,
       buttons: null,
       demandHail,
       speaker,
@@ -1068,6 +1141,15 @@ export function initHail(ctx) {
     textCol.appendChild(header);
     textCol.appendChild(sub);
     textCol.appendChild(line);
+    // Issue #314: the bounty note is dim, text-safe display data under the
+    // quote line — textContent, never a markup parse, so no world string can
+    // change the card's structure.
+    if (bountyNote) {
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;line-height:1.35;color:rgba(215,228,234,.62);margin:0 0 10px;';
+      note.textContent = bountyNote;
+      textCol.appendChild(note);
+    }
     row.appendChild(textCol);
     card.appendChild(row);
 
@@ -1159,6 +1241,11 @@ export function initHail(ctx) {
       if (text) line = text;
     } catch {
       /* keep the stored line */
+    }
+    // Issue #314: the bounty note is part of the terms the player can read, so
+    // report it with the quote line — the agent API and the card agree.
+    if (typeof open.bountyNote === 'string' && open.bountyNote) {
+      line = `${line}\n${open.bountyNote}`;
     }
     return {
       open: true,
