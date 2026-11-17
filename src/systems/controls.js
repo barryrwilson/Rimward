@@ -247,6 +247,10 @@ let discardPhysical = () => {};
 // returned by agentControlSet / agentCombatSet. The token stays the stable
 // enum; this string only says which field or which precondition failed.
 let refusalDetail = '';
+// Issue #316: human-readable context for the last selectTarget refusal. The
+// token stays the enum; this says which known target sits beyond the targeting
+// ceiling and by how much, so a runner flies closer instead of retrying.
+let selectTargetDetail = '';
 let combatRelease = () => {};
 let physicalHeld = () => false;
 
@@ -433,6 +437,9 @@ function refuse(token, detail = '') {
 
 /** Detail recorded by the most recent agentControlSet / agentCombatSet refusal. */
 export function agentRefusalDetail() { return refusalDetail; }
+
+/** Detail recorded by the most recent selectTarget range refusal (issue #316). */
+export function agentSelectTargetDetail() { return selectTargetDetail; }
 
 /**
  * Issue #118: why combatSample() has no fresh HUD digest for a live ship lock.
@@ -759,17 +766,25 @@ function shouldSkipWeaponGroupDigits(ctx) {
 
 /** In-range cycle candidates: ships, plus rocks when mining group is 3. Sort later. */
 function collectCycleCands(ctx) {
+  return cycleCandidates(ctx);
+}
+
+/**
+ * Cycle candidates: ships, plus rocks when the mining group is 3. `maxD2`
+ * bounds the squared distance (default: the targeting ceiling). Pass Infinity
+ * to read every candidate for an honest range refusal (issue #316).
+ */
+function cycleCandidates(ctx, maxD2 = U.TARGET_RANGE * U.TARGET_RANGE) {
   const cands = [];
   const shipObj = ctx && ctx.ship && ctx.ship.object;
   if (!shipObj || !shipObj.position) return cands;
   const p = shipObj.position;
-  const range2 = U.TARGET_RANGE * U.TARGET_RANGE;
   const ships = ctx.ships;
   if (ships) {
     for (const s of ships) {
       if (!s?.object || !s.object.position || s.state?.destroyed) continue;
       const d2 = s.object.position.distanceToSquared(p);
-      if (!Number.isFinite(d2) || d2 > range2) continue;
+      if (!Number.isFinite(d2) || d2 > maxD2) continue;
       cands.push({ ref: s, d2 });
     }
   }
@@ -795,7 +810,7 @@ function collectCycleCands(ctx) {
         if (!ok) continue;
       }
       const d2 = a.position.distanceToSquared(p);
-      if (!Number.isFinite(d2) || d2 > range2) continue;
+      if (!Number.isFinite(d2) || d2 > maxD2) continue;
       cands.push({ ref: a, d2 });
     }
   }
@@ -889,6 +904,84 @@ function matchCycleCand(ctx, cands, id) {
   return null;
 }
 
+/** Squared distance from the player ship to one cycle candidate, or null. */
+function cycleCandD2(ctx, ref) {
+  const p = ctx && ctx.ship && ctx.ship.object && ctx.ship.object.position;
+  const q = ref && ((ref.object && ref.object.position) || ref.position);
+  if (!p || !q) return null;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  const dz = q.z - p.z;
+  const d2 = dx * dx + dy * dy + dz * dz;
+  return Number.isFinite(d2) ? d2 : null;
+}
+
+/** Player-facing name for a cycle candidate, for refusal detail only. */
+function cycleCandLabel(ctx, ref) {
+  if (ref && ref.object && ref.state && !ref.lockKind) {
+    const rec = ref.record;
+    const st = ref.state;
+    const name = (rec && typeof rec.name === 'string' && rec.name)
+      || (st && typeof st.name === 'string' && st.name)
+      || '';
+    const id = Object.hasOwn(ref, 'id') ? ref.id : null;
+    if (name && id !== null) return name + ' (' + String(id) + ')';
+    if (name) return name;
+    if (id !== null) return String(id);
+    return 'target';
+  }
+  const list = ctx && ctx.asteroids && ctx.asteroids.list;
+  const idx = list ? list.indexOf(ref) : -1;
+  return idx >= 0 ? 'rock ' + String(idx) : 'target';
+}
+
+/**
+ * Issue #316: the one range-refusal sentence for a known target beyond the
+ * targeting ceiling. The act receipt and observe().availability quote it, so a
+ * runner reads the same reason on both channels.
+ */
+function targetRangeDetail(ctx, ref, d2) {
+  const ceiling = U.TARGET_RANGE;
+  const label = cycleCandLabel(ctx, ref);
+  const range = Number.isFinite(d2) ? Math.sqrt(d2) : null;
+  if (range === null) {
+    return 'target ' + label + ' is beyond the ' + String(ceiling) + ' u targeting ceiling; fly closer to lock it.';
+  }
+  // Round to whole units for readability, but never round a just-outside
+  // distance down onto the ceiling (600.4 u would read "600 u away; the
+  // targeting ceiling is 600 u" and contradict the refusal): keep one decimal
+  // in that one case.
+  const rounded = Math.round(range);
+  const shown = range > ceiling && rounded === ceiling ? range.toFixed(1) : String(rounded);
+  return 'target ' + label + ' is ' + shown + ' u away; the targeting ceiling is '
+    + String(ceiling) + ' u, so fly closer to lock it.';
+}
+
+/**
+ * Issue #316: the honest targeting-range read for discovery. `inRange` is true
+ * when any cycle candidate sits inside the ceiling; otherwise `detail` is the
+ * same refusal text an id-specific selectTarget would carry for the nearest
+ * known candidate (empty when the system holds none). Cheap flag-level gating
+ * only — the authoritative validation still happens inside act().
+ */
+export function agentTargetRangeRead(ctx) {
+  try {
+    if (collectCycleCands(ctx).length) return { inRange: true, detail: '' };
+    const cands = cycleCandidates(ctx, Infinity);
+    const limit2 = U.TARGET_RANGE * U.TARGET_RANGE;
+    let nearest = null;
+    for (let i = 0; i < cands.length; i++) {
+      const d2 = cands[i] && cands[i].d2;
+      if (!Number.isFinite(d2)) continue;
+      if (d2 <= limit2) return { inRange: true, detail: '' };
+      if (!nearest || d2 < nearest.d2) nearest = cands[i];
+    }
+    return { inRange: false, detail: nearest ? targetRangeDetail(ctx, nearest.ref, nearest.d2) : '' };
+  } catch {
+    return { inRange: false, detail: '' };
+  }
+}
+
 /** Agent AP/AM engage: clear the double-tap F latch. Does not write throttle. */
 /** Shared human double-tap F command; controls remains the input owner. */
 export function commandFullStop(ctx) {
@@ -955,25 +1048,44 @@ export function agentSetWeaponGroup(ctx, n) {
   }
 }
 
-/** Cycle (no id) pulses KeyT. id selects an in-range cycle candidate. Does not warp. */
+/**
+ * Cycle (no id) pulses KeyT. id selects an in-range cycle candidate. Does not
+ * warp. Issue #316: an id that names a known hull/rock beyond the targeting
+ * ceiling refuses token 'range' with a detail sentence (the lock is unchanged);
+ * an id that names nothing stays 'no-service'. Inside range, behaviour is
+ * unchanged.
+ */
 export function agentSelectTarget(ctx, id) {
+  selectTargetDetail = '';
   try {
     if (ctx && ctx.flags && ctx.flags.docked === true) return 'docked';
     if (!ctx || !ctx.targets || typeof ctx.targets !== 'object') return 'no-service';
-    const cands = collectCycleCands(ctx);
-    if (!cands.length) return 'no-service';
     if (id === undefined) {
+      if (!collectCycleCands(ctx).length) return 'no-service';
       pendingTarget = true;
       return '';
     }
     if (typeof id !== 'string' && typeof id !== 'number') return 'no-service';
     if (typeof id === 'string' && reservedToken(id)) return 'no-service';
     if (typeof id === 'number' && !Number.isFinite(id)) return 'no-service';
-    const hit = matchCycleCand(ctx, cands, id);
-    if (!hit) return 'no-service';
-    ctx.targets.current = hit;
-    return '';
+    const hit = matchCycleCand(ctx, collectCycleCands(ctx), id);
+    if (hit) {
+      ctx.targets.current = hit;
+      return '';
+    }
+    // A known candidate outside the ceiling is a range refusal, not a
+    // service/overlay miss: the caller can fly closer instead of retrying.
+    const far = matchCycleCand(ctx, cycleCandidates(ctx, Infinity), id);
+    if (far) {
+      const d2 = cycleCandD2(ctx, far);
+      if (Number.isFinite(d2) && d2 > U.TARGET_RANGE * U.TARGET_RANGE) {
+        selectTargetDetail = targetRangeDetail(ctx, far, d2);
+        return 'range';
+      }
+    }
+    return 'no-service';
   } catch {
+    selectTargetDetail = '';
     return 'no-service';
   }
 }

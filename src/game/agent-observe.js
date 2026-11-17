@@ -13,7 +13,7 @@ import { U, COMMODITIES, FACTIONS, ORE_TYPES, MINING_LASERS, miningLaserFor, res
 import { hailOffer, hailEncounterState } from './hail-offer.js';
 import { lookupLiveNavGate, lookupLiveNavHopKind, lookupNearestLiveGate } from '../systems/gate.js';
 import { losCloseRate } from './los-close.js';
-import { agentControlStatus, agentFrameClock } from '../systems/controls.js';
+import { agentControlStatus, agentFrameClock, agentTargetRangeRead } from '../systems/controls.js';
 import { surveyObjective } from './survey-nav.js';
 import { queuedDockDest } from './dock-queue.js';
 import { originChoices } from './origins.js';
@@ -962,8 +962,8 @@ function sessionBlock(phase) {
 
 /**
  * Dynamic per-command availability (v2 discovery): phase, dock/service,
- * overlay, and helm ownership reasons. Cheap flag-level gating only — the
- * authoritative validation still happens inside act().
+ * overlay, helm ownership and targeting-range reasons. Cheap flag-level gating
+ * only — the authoritative validation still happens inside act().
  */
 function availabilityBlock(ctx, phase, control) {
   const flags = ctx.flags && typeof ctx.flags === 'object' ? ctx.flags : {};
@@ -983,6 +983,7 @@ function availabilityBlock(ctx, phase, control) {
     const name = COMMAND_NAMES[i];
     let reason = '';
     let overlayDetail = ''; // issue #267: the surface an 'overlay' refusal names
+    let rangeDetail = ''; // issue #316: the targeting-ceiling sentence selectTarget refuses with
     if (name === 'clearControl') {
       // Idempotent cancellation is available through overlays and pause.
     } else if (paused && !(name === 'ping' || name === 'disable' || name === 'startGame' || name === 'chooseOrigin')) {
@@ -1002,7 +1003,20 @@ function availabilityBlock(ctx, phase, control) {
       if (!docked || (name === 'abandonJob' && stationService(ctx) !== 'jobs')) reason = 'no-service';
     } else if (combat && ['engageAutopilot', 'engageAutomine', 'afterburner', 'approachDock'].includes(name)) {
       reason = 'helm';
-    } else if (name === 'selectTarget' || name === 'setWeaponGroup' || name === 'afterburner' || name === 'approachDock') {
+    } else if (name === 'selectTarget') {
+      if (docked) reason = 'docked';
+      else {
+        // Issue #316: discovery agrees with act(). When no cycle candidate sits
+        // inside the targeting ceiling, the entry carries reason 'range' and
+        // the same detail sentence an id-specific refusal would quote for the
+        // nearest known target, so a runner flies closer instead of retrying.
+        const read = agentTargetRangeRead(ctx);
+        if (!read.inRange && read.detail) {
+          reason = 'range';
+          rangeDetail = read.detail;
+        }
+      }
+    } else if (name === 'setWeaponGroup' || name === 'afterburner' || name === 'approachDock') {
       if (docked) reason = 'docked';
     } else if (name === 'setControl' || name === 'setCombatIntent') {
       // Issue #267: 'overlay' always names its surface via entry.detail —
@@ -1040,6 +1054,8 @@ function availabilityBlock(ctx, phase, control) {
     const entry = { ok: reason === '', reason };
     // Issue #267: the entry names the surface the same way act() detail does.
     if (reason === 'overlay' && overlayDetail) entry.detail = overlayDetail;
+    // Issue #316: the entry quotes the same targeting-ceiling sentence.
+    else if (reason === 'range' && rangeDetail) entry.detail = rangeDetail;
     out[name] = entry;
   }
   return out;

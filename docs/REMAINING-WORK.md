@@ -1,3 +1,57 @@
+## selectTarget names the targeting ceiling instead of no-service — #316
+
+Implemented on `dsh/issue-316-select-target-range-refusal` (base master
+`6f9fdbd`). The pirate playtest finding was real: eight
+`selectTarget { id: 'rec-7' }` calls answered `no-service` — the token an
+overlay/service gate uses — while the hull sat at 752–873 u with the lock
+retained, and `observe().availability.selectTarget` still read `ok:true`, so
+the runner retried instead of flying closer. The fix keeps every in-range
+behaviour and the lock semantics unchanged:
+
+- An id that names a known live hull — or a rock the mining group (3) accepts
+  under the active job's ore match — beyond the 600 u targeting ceiling now
+  refuses token `range` with a detail sentence naming the target, its measured
+  distance and the ceiling — e.g.
+  `target Tallow-3 (rec-7) is 766 u away; the targeting ceiling is 600 u, so
+  fly closer to lock it.` The refusal moves no lock.
+- Unknown ids and bare cycles keep their existing tokens: an id that names
+  nothing stays `no-service`, and a bare cycle with no in-range candidate keeps
+  `no-service` (an in-range cycle still queues).
+- `observe().availability.selectTarget` publishes reason `range` with the same
+  sentence format when no cycle candidate sits inside the ceiling — one detail
+  builder, so act and discovery carry the same wording. Discovery names the
+  nearest known target while act names the requested id, so the two are
+  verbatim only when those coincide; availability also cannot see the requested
+  id, so with an in-range candidate elsewhere it stays `ok:true` while an
+  id-specific call for a far hull refuses `range` (read the act receipt).
+  Docked precedence and every other availability
+  reason are unchanged. The ceiling read is the authored `U.TARGET_RANGE`, not
+  a new number.
+
+No tuning change, no new event, no new persisted field, no `state.js` edit;
+`VERSION` stays 2. The detail lives in a session-only module string
+(`agentSelectTargetDetail`), like the #118/#267 refusal details.
+
+Focused regression is `scripts/issue-316-select-target-range-test.mjs`
+(9 checks: in-range id selection unchanged with no detail; a known hull beyond
+the ceiling refusing `range` with name/id/distance/ceiling and no lock move; the
+playtest shape where availability quotes the act sentence verbatim while the
+retained lock survives; unknown ids and bare cycles keeping their old tokens;
+docked precedence; a rock beyond the ceiling refused only in the mining group;
+the exact 600 u boundary unchanged (including 600.4 u staying 600.4 u); the
+in-range-candidate + far-id case where availability stays `ok:true` while act
+refuses `range`; `lastIntent` mirroring the receipt detail; and JSON-plain
+receipts). It is appended to
+`npm run test:boot` and fails on the pre-fix source with `no-service` where
+`range` is expected. `npm run build` passes. The live flow is
+`npm run test:select-target-range-live`: disposable loopback Chromium runs the
+contracted shape — a real live hull acquired through the public `selectTarget`
+at 400 u, moved to 766 u with the lock retained (issue-67 spatial staging only),
+then act() and observe() in one JS turn: token `range` with the distance
+sentence, the same sentence on `availability.selectTarget`, no lock move, an
+unknown id still `no-service`, `lastIntent` mirroring the detail, and a clean
+console; evidence under `out/issue-316-live/`.
+
 ## approachDock names its autopilot takeover path — #308
 
 Implemented on `dsh/issue-308-agent-api-approachdock-refuses-autopilot` (base

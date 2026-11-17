@@ -723,7 +723,11 @@ keys, or schema version.
 (session, pilot, trader, miner, combat, hail, missions, explorer, rescue,
 services) with explicit status, command argument shapes, outcome types, and
 per-service status. `observe().availability` is the dynamic per-command
-ok/reason derived from phase, dock/service, overlay, and helm ownership.
+ok/reason derived from phase, dock/service, overlay, helm ownership and the
+targeting ceiling (issue #316: `selectTarget` names `range` with the same
+sentence format `act()` uses — naming the nearest known target — when nothing
+is inside 600 u; act names the requested id, so the two sentences coincide
+verbatim only when the nearest candidate is that id).
 
 **Recovery.** `ctx.deathApi.recover()` exposes the exact death-overlay
 recovery closure (Enter/click/auto-timer path); `act({ name:'recover' })`
@@ -1374,7 +1378,7 @@ Rough size: ~2–8 KB per pull at 2 Hz ≪ one screenshot. This is HUD-visible e
 | `cancelAutopilot` | — | `disengage(ctx, 'cancel')` | not flying |
 | `engageAutomine` | — | `agentClearFullStop` then `tryEngageAutomine` | `AM_LINES`; `paused` |
 | `cancelAutomine` | — | `disengageAutomine(ctx, 'cancel')` | — |
-| `selectTarget` | `{ id? }` or cycle | controls export / pulse `target` | `flags.docked` → `docked`; none in range; PR3 |
+| `selectTarget` | `{ id? }` or cycle | controls export / pulse `target` | `flags.docked` → `docked`; bare cycle with no in-range candidate → `no-service`; an unknown id → `no-service`; a known hull/rock beyond the 600 u targeting ceiling → `range` + detail (issue #316); PR3 |
 | `hail` | — | pulse `pendingHail` via controls | overlay policy; PR3 |
 | `hailResolve` | `{ intent }` or `{ index }`, optional `expectedConversationId` (issue #66) | `ctx.hailApi.resolve` | card closed → `closed`; missing hailApi / overlay block → `no-service`; unknown intent; `hailDigitsAllowed` false; malformed expected id → `bad-args`; replaced card → `stale`; `flags.docked` → `docked` first (issue #100) |
 | `dock` | — | pulse `pendingDock` via controls | `station.inZone !== true` → `range` immediately (no pulse, not queued); same as KeyJ skip; **not in pad zone** (no warp); PR3 |
@@ -1390,7 +1394,7 @@ Rough size: ~2–8 KB per pull at 2 Hz ≪ one screenshot. This is HUD-visible e
 | `clearControl` | — | `agentControlClear` | never; idempotent, and allowed while paused or berth-held. **For raw leases it does not brake; combat lease release applies full stop.** Handshake: `setControl { throttle: 0 }`, then confirm `ship.throttle === 0` **and** `flags.fullStop === true` before clearing; read `ship.speed` for actual rest (issue #103) |
 | `disable` | — | clear `optIn` | never (does not cancel AP) |
 
-`token` is the enum; `error` may copy live English (`AP_LINES`, `ui.notice`). Desk wrappers **do not** return `AP_LINES` keys; they set `token` from an authored desk map or `notice` as `error`. Issue #118 adds an optional `detail` string to `setControl` / `setCombatIntent` refusals: the failing argument (`unknown argument burner`, `defense must be 'evade'|'break-off'|'off'`) or the unmet target precondition. `setCombatIntent` target refusals are split into `lock-kind` (rock/pod/station/gate lock), `stale-lock` (no lock or another id), `no-sample` (locked hull, HUD digest not fresh — one rendered frame after `selectTarget`/`setWeaponGroup`) and `target-lost` (hull left the roster). `detail` is absent when empty, so older callers see the same receipt shape; `lastIntent` mirrors it under the same rule. Not a version bump.
+`token` is the enum; `error` may copy live English (`AP_LINES`, `ui.notice`). Desk wrappers **do not** return `AP_LINES` keys; they set `token` from an authored desk map or `notice` as `error`. Issue #118 adds an optional `detail` string to `setControl` / `setCombatIntent` refusals: the failing argument (`unknown argument burner`, `defense must be 'evade'|'break-off'|'off'`) or the unmet target precondition. `setCombatIntent` target refusals are split into `lock-kind` (rock/pod/station/gate lock), `stale-lock` (no lock or another id), `no-sample` (locked hull, HUD digest not fresh — one rendered frame after `selectTarget`/`setWeaponGroup`) and `target-lost` (hull left the roster). Issue #316 adds the same optional `detail` to the `range` refusal of an id-specific `selectTarget`: the target's name/id, its distance and the 600 u ceiling. `detail` is absent when empty, so older callers see the same receipt shape; `lastIntent` mirrors it under the same rule. Not a version bump.
 
 **Attach point (PR2):** `initStation` assigns `ctx.stationDesk = { selectService, acceptJob, trade, repairAll, feed, undock, peekService }` synchronously, same as `ctx.models` (`modelsbrowser.js` **832–836**). `initHail` assigns `ctx.hailApi = { resolve, peek }`. Do **not** put functions on `ctx.station`. PR2 writes **helpers only** — no overlay CSS/HTML rewrite.
 

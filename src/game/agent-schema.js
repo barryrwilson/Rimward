@@ -834,7 +834,8 @@ export const COMMAND_SPECS = freeze({
   selectTarget: freeze({
     args: freeze({ id: 'optional nearby target id; omit to cycle' }),
     roles: freeze(['combat', 'miner', 'rescue']),
-    note: 'the lock moves on acceptance, but the HUD aim digest that setCombatIntent needs is written once per rendered frame: after selectTarget (or setWeaponGroup) wait one rendered HUD frame — read observe().t advancing — before setCombatIntent, or expect token no-sample. A hidden or suspended tab renders no frames, so the sample never freshens until it is visible again.',
+    note: 'the lock moves on acceptance, but the HUD aim digest that setCombatIntent needs is written once per rendered frame: after selectTarget (or setWeaponGroup) wait one rendered HUD frame — read observe().t advancing — before setCombatIntent, or expect token no-sample. A hidden or suspended tab renders no frames, so the sample never freshens until it is visible again.'
+      + ' Issue #316: an id selects only a known hull, or a rock the mining group (3) accepts under the active job\'s ore match, inside the 600 u targeting ceiling. A known target beyond it refuses token range with a detail naming its distance and the ceiling (the lock does not move) — fly closer instead of retrying; an id that names nothing stays no-service, and a bare cycle keeps its old tokens. observe().availability.selectTarget reads reason range with the same sentence when no cycle candidate is inside the ceiling.',
   }),
   pulse: cmd({ edge: "'dock'|'hail'|'target'|'reticleLock'" }, ['pilot', 'combat', 'miner', 'explorer', 'rescue']),
   afterburner: freeze({
