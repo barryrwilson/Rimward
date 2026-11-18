@@ -1,3 +1,51 @@
+## One-landmark origins stop paying witnessed surveys — #327
+
+Implemented on `dsh/issue-327-playtest-explorer-one-landmark-origins-t` (base
+master `73c007e`). The explorer playtest finding was real: Freehold has one
+landmark, so its board collapses the twin survey slots to one card; accepting
+and filing that card left the site witnessed but the slot re-posted the same
+witnessed site, and every later redock paid the quoted survey again from the
+berth (279 accepted Freehold surveys for 133,938 UU, playtest #326). The owner
+decision on the issue (2026-11-18) is the contract implemented here: witnessed
+work must not pay again and must not be offered again at the same station; the
+explorer takes a gate to a new system for fresh survey work.
+
+- `src/systems/station.js` `makeExploreJob` now refuses a site already on
+  `mystery.visited` (the existing discovery read; no new persisted field). A
+  witnessed filing therefore retires its slot instead of re-posting.
+- `syncExploreJobs` fills slots 0/1 independently, withdraws offered rows whose
+  resolved site is witnessed or twinned, and skips a witnessed slot without
+  stopping the other one. `exploreBoardExhausted` drives a Jobs-pane
+  `screen-note`: "EXPLORE — every survey site for this dock is already
+  witnessed. Take a gate; fresh survey work waits at another dock."
+- The 0.5 s delivery tick withdraws an offered row whose resolved site is
+  already witnessed, with the comm line "Survey posting withdrawn — that
+  landmark is already witnessed.", and pays nothing. Accepted rows keep the one
+  earned payment on filing. Unwitnessed expiry still replaces the same site.
+- No new persisted fields or world keys; save envelope stays v1, Agent API
+  stays v2, `state.js` is untouched. The API `jobs.offers` block agrees with
+  the rendered board (no explore card at a witnessed dock).
+
+Focused regression is `scripts/issue-327-explore-witnessed-test.mjs` (8
+checks: fresh one-card Freehold board; offered expiry replacement; accepted
+expiry no-pay replacement; witnessed filing pays once, retires the slot, pays
+nothing later, board note and empty API offers; Veridian still offers; a
+two-landmark dock withdraws only the witnessed posting and retires the last
+site; a restored offered witnessed row withdraws without pay; save v1, API v2,
+zero update errors), appended to `npm run test:boot`. `npm run build` passes.
+The boot pins WAVE78/WAVE80 were updated for the new lifecycle. Live flow is
+`npm run test:issue-327-live`: fresh Greenhand accepts the real Freehold
+survey, flies the accepted marker with `setControl` until The Shepherd is
+witnessed, `approachDock` flies home and the berth files once, then the board
+has no explore card, names the gate and pays nothing on later ticks; a real
+`plotRoute`/`engageAutopilot`/`approachDock` gate run docks at Veridian and
+finds its fresh Hulk Row survey. Evidence under `out/issue-327-live/`.
+`docs/Msn02ExploreDesign.md` §4–§6 and the acceptance direction record the
+owner decision. Parked follow-ups: generated one-landmark systems behave the
+same way (a witnessed dock has no survey work until a gate); old saves that
+still hold an offered row for a witnessed site withdraw it without pay on the
+next tick, which is the intended repair, not a migration.
+
 ## The bounty finish is honest at the surrender verb — #314
 
 Implemented on `dsh/issue-314-playtest-piracy-ransom-leaves-a-pirate-b` (base

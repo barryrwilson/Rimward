@@ -3854,6 +3854,12 @@ function makeExploreJob(ctx, sysId, slot) {
   if (!Object.hasOwn(SYSTEMS, sysId)) return null;
   const site = resolveExploreSite(ctx, sysId, slot);
   if (!site) return null;
+  // Issue #327: a witnessed landmark is not offered again at this dock. A
+  // completed survey therefore retires its slot instead of re-posting the same
+  // site for a berth-side instant payout; the explorer takes a gate for a fresh
+  // landmark in another system. mystery.visited is the same read the delivery
+  // tick uses for progress, so no visit-time world key is invented.
+  if (exploreVisitedHas(ctx, site.landmark.id)) return null;
   if (exploreTwin(ctx, sysId, slot)) return null;
   const id = nextExploreId(ctx.world.jobs, sysId);
   if (!id) return null;
@@ -3875,17 +3881,56 @@ function makeExploreJob(ctx, sysId, slot) {
 }
 
 function syncExploreJobs(ctx, sysId) {
-  // Keep legacy accepted slot 1 resolvable; only withdraw offered twins.
-  for (const j of ctx.world.jobs.slice()) {
-    if (j.kind === 'explore' && j.originSystem === sysId && j.state === 'offered'
-      && exploreTwin(ctx, sysId, j.slot, j)) replaceExploreJob(ctx, j);
+  if (!Object.hasOwn(SYSTEMS, sysId)) return;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return;
+  // Issue #327: withdraw an offered card whose site is already witnessed (a
+  // shared dest-fallback site can be witnessed by another origin's contract) or
+  // whose site is covered by a twin. ACCEPTED rows stay: filing that witnessed
+  // survey is the one payment the work has earned.
+  for (const j of jobs.slice()) {
+    if (j.kind !== 'explore' || j.originSystem !== sysId || j.state !== 'offered') continue;
+    const site = resolveExploreSite(ctx, sysId, j.slot);
+    if (!site || exploreVisitedHas(ctx, site.landmark.id) || exploreTwin(ctx, sysId, j.slot, j)) {
+      replaceExploreJob(ctx, j);
+    }
   }
-  syncJobSlots(ctx, sysId, 'explore', EXPLORE_SLOTS_PER_SYSTEM, makeExploreJob, resolveExploreSite);
+  // Fill every open slot independently. A witnessed slot is skipped without
+  // stopping the other slot, so a two-landmark system keeps its remaining
+  // unwitnessed survey until that one is filed too.
+  for (let slot = 0; slot < EXPLORE_SLOTS_PER_SYSTEM; slot++) {
+    if (jobSlotTaken(jobs, sysId, slot, 'explore')) continue;
+    if (!resolveExploreSite(ctx, sysId, slot)) continue;
+    const next = makeExploreJob(ctx, sysId, slot);
+    if (next) jobs.push(next);
+  }
 }
 
 
 
 
+
+/** Issue #327: true when every survey site this dock can post is already
+ * witnessed and no live explore row remains. The board says why the section is
+ * empty instead of letting the career silently vanish at the berth. */
+function exploreBoardExhausted(ctx, sysId) {
+  if (!Object.hasOwn(SYSTEMS, sysId)) return false;
+  const jobs = ctx.world.jobs;
+  if (!Array.isArray(jobs)) return false;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (j.kind === 'explore' && j.originSystem === sysId
+      && (j.state === 'offered' || j.state === 'accepted')) return false;
+  }
+  let seen = false;
+  for (let slot = 0; slot < EXPLORE_SLOTS_PER_SYSTEM; slot++) {
+    const site = resolveExploreSite(ctx, sysId, slot);
+    if (!site) continue;
+    seen = true;
+    if (!exploreVisitedHas(ctx, site.landmark.id)) return false;
+  }
+  return seen;
+}
 
 function replaceExploreJob(ctx, job) {
   const slot = detachJobSlot(ctx, job, 'explore');
@@ -5697,6 +5742,17 @@ function tickDeliveryJobs(ctx, ui, render) {
         boardDirty = true;
         continue;
       }
+      // Issue #327: an offered posting whose landmark is already witnessed is
+      // withdrawn without pay, independent of whether the Jobs pane is open.
+      // This covers a restored save and a shared dest-fallback site witnessed
+      // by another origin's contract, so witnessed work never pays twice.
+      if (job.state === 'offered' && exploreVisitedHas(ctx, site.landmark.id)) {
+        job.state = 'failed';
+        ctx.emit('commLine', { text: 'Survey posting withdrawn — that landmark is already witnessed.' });
+        replaceExploreJob(ctx, job);
+        boardDirty = true;
+        continue;
+      }
       if (job.state !== 'accepted') continue;
       if (!site) continue;
       if (job.need !== 1) {
@@ -7444,6 +7500,11 @@ export function initStation(ctx) {
     syncEspionageJobs(ctx, currentId);
     syncWarJobs(ctx, currentId);
     syncChainJobs(ctx, currentId);
+    // Issue #327: a dock whose landmarks are all witnessed has no survey work
+    // left; name the reason and point the explorer at the next gate.
+    if (exploreBoardExhausted(ctx, currentId)) {
+      h('div', 'screen-note', panel, 'EXPLORE — every survey site for this dock is already witnessed. Take a gate; fresh survey work waits at another dock.');
+    }
     // Issue #272: an empty hunt board tells the player the work is cyclical —
     // new reavers drift in over time, so the board refills where they fly.
     if (!huntBoardHasWork(ctx, currentId)) {
