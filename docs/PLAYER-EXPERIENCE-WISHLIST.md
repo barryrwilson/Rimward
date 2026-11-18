@@ -738,6 +738,9 @@ demand card, and the autopilot NAV panel with its cancel bar.
   full boot, API schema and hardening pass. Live browser verification confirms
   accepted-survey reload, marker/API parity, discovery and the quoted dock
   payment with no console errors.
+- [x] Issue #327 (2026-11-18): a witnessed landmark pays once and is not
+  offered again at the same dock; the witnessed dock shows no explore card and
+  names the gate, while another system's dock still posts fresh survey work.
 
 ### Agent API playtest corrections — 2026-09-14
 

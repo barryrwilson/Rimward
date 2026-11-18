@@ -17051,10 +17051,11 @@ removeLiveShip(w42indyCtx, w42indy);
     return !blob.includes('fh_shepherd') && !blob.includes('rec-') && !blob.includes('visited');
   });
 
-  const payJob78e = explores78e.find((j) => j.state === 'offered') ?? explores78e[0] ?? null;
-  const payId78e = payJob78e?.id;
-  const paySlot78e = payJob78e?.slot;
-  const reboundLm78e = payJob78e ? siteLm78e(payJob78e.originSystem, payJob78e.slot) : null;
+  // Issue #327: witnessed work is neither offered nor paid again at this dock.
+  // Freehold's single landmark is the same site for both slots, so the board can
+  // hold only one card there. Walk the whole lifecycle on the real station:
+  // offered withdrawal -> replacement, accepted expiry -> replacement, then a
+  // witnessed filing -> paid once, slot retired, no re-post and no second pay.
   const freezeSlotJobs78e = (keep) => {
     const jobs = ctx.world.jobs ?? [];
     for (let i = 0; i < jobs.length; i++) {
@@ -17069,6 +17070,46 @@ removeLiveShip(w42indyCtx, w42indy);
       }
     }
   };
+
+  const firstOffer78e = explores78e.find((j) => j.state === 'offered') ?? explores78e[0] ?? null;
+  const firstId78e = firstOffer78e?.id;
+  const firstSlot78e = firstOffer78e?.slot;
+  const credWithdraw78e = ctx.world.credits;
+  if (firstOffer78e) firstOffer78e.deadline = ctx.world.time - 1;
+  tick(40, 'wave78e offered withdraw');
+  const offeredWithdrawn78e = !!(firstId78e
+    && !(ctx.world.jobs ?? []).some((j) => j.id === firstId78e));
+  const withdrawNoPay78e = ctx.world.credits === credWithdraw78e;
+  const replacedOffered78e = !!(firstId78e
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+      && j.slot === firstSlot78e && j.state === 'offered' && j.id !== firstId78e));
+
+  const expireAccepted78e = (ctx.world.jobs ?? []).find((j) => j.kind === 'explore'
+    && j.originSystem === 'freehold' && j.slot === firstSlot78e && j.state === 'offered') ?? null;
+  const expireAcceptedId78e = expireAccepted78e?.id;
+  const credAccepted78e = ctx.world.credits;
+  if (expireAccepted78e) {
+    expireAccepted78e.state = 'accepted';
+    expireAccepted78e.payQuoted = 17;
+    expireAccepted78e.need = 1;
+    expireAccepted78e.deadline = ctx.world.time - 1;
+  }
+  freezeSlotJobs78e(expireAccepted78e);
+  tick(40, 'wave78e accepted expire');
+  const acceptedExpired78e = !!(expireAcceptedId78e
+    && !(ctx.world.jobs ?? []).some((j) => j.id === expireAcceptedId78e));
+  const acceptedExpireNoPay78e = ctx.world.credits === credAccepted78e;
+  const acceptedExpireNotDone78e = !expireAcceptedId78e
+    || !(ctx.world.jobs ?? []).some((j) => j.id === expireAcceptedId78e && j.state === 'done');
+  const replacedAccepted78e = !!(expireAcceptedId78e
+    && (ctx.world.jobs ?? []).some((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+      && j.slot === firstSlot78e && j.state === 'offered' && j.id !== expireAcceptedId78e));
+
+  const payJob78e = (ctx.world.jobs ?? []).find((j) => j.kind === 'explore'
+    && j.originSystem === 'freehold' && j.slot === firstSlot78e && j.state === 'offered') ?? null;
+  const payId78e = payJob78e?.id;
+  const paySlot78e = payJob78e?.slot;
+  const reboundLm78e = payJob78e ? siteLm78e(payJob78e.originSystem, payJob78e.slot) : null;
   if (payJob78e) {
     payJob78e.state = 'accepted';
     payJob78e.payQuoted = 18;
@@ -17115,39 +17156,23 @@ removeLiveShip(w42indyCtx, w42indy);
   const cargoUnchanged78e = JSON.stringify(ctx.cargo ?? []) === cargoBeforePayE
     && cargoBeforePayE === cargoBeforeStuffE;
   const noDataGrant78e = !(ctx.cargo ?? []).some((r) => r && (r.commodity === 'dataCrystal' || r.commodity === 'dataCube'));
-  const replaced78e = !!(payId78e && paySlot78e != null
+  // Issue #327: the witnessed site retires its slot; nothing re-posts at the
+  // berth and no second payout can happen on later ticks.
+  const retired78e = !!(payId78e && paySlot78e != null
     && !(ctx.world.jobs ?? []).some((j) => j.id === payId78e)
-    && (ctx.world.jobs ?? []).some((j) => j.kind === 'explore' && j.originSystem === 'freehold'
-      && j.slot === paySlot78e && j.state === 'offered' && j.id !== payId78e));
-
-  const again78e = (ctx.world.jobs ?? []).find((j) => j.kind === 'explore' && j.originSystem === 'freehold'
-    && j.slot === paySlot78e && j.state === 'offered' && j.id !== payId78e) ?? null;
-  const againId78e = again78e?.id;
-  if (again78e) {
-    again78e.state = 'accepted';
-    again78e.payQuoted = 19;
-    again78e.need = 1;
-    again78e.deadline = ctx.world.time + 600;
-  }
-  freezeSlotJobs78e(again78e);
-  tick(60, 'wave78e file again');
-  const againReplaced78e = !!(againId78e
-    && !(ctx.world.jobs ?? []).some((j) => j.id === againId78e)
-    && (ctx.world.jobs ?? []).some((j) => j.kind === 'explore' && j.originSystem === 'freehold'
-      && j.slot === paySlot78e && j.state === 'offered' && j.id !== againId78e));
-
-  const expJob78e = (ctx.world.jobs ?? []).find((j) => j.kind === 'explore' && j.originSystem === 'freehold'
-    && (j.state === 'offered' || j.state === 'accepted') && j.id !== payId78e && j.id !== againId78e) ?? null;
-  const expId78e = expJob78e?.id;
-  const credExp78e = ctx.world.credits;
-  if (expJob78e) {
-    expJob78e.state = 'accepted';
-    expJob78e.deadline = ctx.world.time - 1;
-  }
-  tick(40, 'wave78e expire');
-  const expired78e = !!(expId78e && !(ctx.world.jobs ?? []).some((j) => j.id === expId78e));
-  const expireNoPay78e = ctx.world.credits === credExp78e;
-  const expireNotDone78e = !expId78e || !(ctx.world.jobs ?? []).some((j) => j.id === expId78e && j.state === 'done');
+    && !(ctx.world.jobs ?? []).some((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+      && (j.state === 'offered' || j.state === 'accepted')));
+  const credAfterPay78e = ctx.world.credits;
+  tick(40, 'wave78e no repeat pay');
+  const noRepeatPay78e = ctx.world.credits === credAfterPay78e
+    && !(ctx.world.jobs ?? []).some((j) => j.kind === 'explore' && j.originSystem === 'freehold'
+      && (j.state === 'offered' || j.state === 'accepted'));
+  dispatchKey('Digit2');
+  tick(2, 'wave78e witnessed board');
+  const jobsNotes78e = [...walkDom(stationOverlay() ?? { children: [] })]
+    .filter((n) => typeof n.className === 'string' && n.className.split(' ').includes('screen-note'))
+    .map((n) => String(n.textContent ?? ''));
+  const witnessedNote78e = jobsNotes78e.some((t) => /every survey site for this dock is already witnessed/.test(t));
 
   const exploreTickAt = st78e.indexOf("if (job.kind === 'explore')");
   const exploreTickSlice = exploreTickAt >= 0 ? st78e.slice(exploreTickAt, exploreTickAt + 5000) : '';
@@ -17211,12 +17236,16 @@ removeLiveShip(w42indyCtx, w42indy);
     stuffedDestIgnored: stuffedIgnored78e,
     stuffedRestoreKept: stuffedPay78e.world.jobs.some((j) => j.id === 'explore-freehold-0' && j.destSystem === 'redmarch')
       && stuffedPay78e.world.jobs.every((j) => !Object.hasOwn(j, 'landmarkId')),
-    completeReplace: !!replaced78e,
+    offeredWithdrawNoPay: !!offeredWithdrawn78e && withdrawNoPay78e,
+    offeredReplace: !!replacedOffered78e,
+    acceptedExpireNoPay: !!acceptedExpired78e && acceptedExpireNoPay78e && acceptedExpireNotDone78e,
+    acceptedReplace: !!replacedAccepted78e,
     completePay: !!paid78e,
-    completeAgain: !!againReplaced78e,
+    completeRetiresSlot: !!retired78e,
+    completeNoRepeatPay: !!noRepeatPay78e,
+    witnessedBoardNote: !!witnessedNote78e,
     cargoUnchanged: cargoUnchanged78e,
     noDataGrant: noDataGrant78e,
-    expireNoPay: !!expired78e && expireNoPay78e && expireNotDone78e,
     exploreTickNoGrant,
     extraAfterPassenger: save78e.includes('function extraOfferedPassenger')
       && save78e.includes('function extraOfferedExplore')
@@ -17966,8 +17995,10 @@ removeLiveShip(w42indyCtx, w42indy);
     fieldsJobs: w80sFields.includes('jobs') && w80sFields.filter((k) => k === 'jobs').length === 1
       && !w80sFields.includes('missions') && !w80sFields.includes('spies'),
     fillHome: spies80s.length >= 1 && spies80s.length <= 2,
-    exploreStillUnique: exploresLive80s.length === 1
-      && exploresLive80s[0].originSystem === 'freehold' && exploresLive80s[0].need === 1,
+    // Issue #327: the WAVE78 filing witnessed Freehold's only landmark, so the
+    // dock posts no survey now. The twin collapse is pinned at WAVE78
+    // (fillUniqueSite) before any witness exists.
+    exploreRetiredAfterWitness: exploresLive80s.length === 0,
     needOne: need1LiveS,
     noAsteroidId: noAst80s,
     titlesHideKeys,

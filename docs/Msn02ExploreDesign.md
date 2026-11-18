@@ -178,10 +178,15 @@ renderJobs
   → syncPirateBounties / syncRecoveryJob / syncMiningJobs / syncTradeJobs (unchanged)
   → syncExploreJobs(currentId)   // fill missing slots only; skip if no reachable site
 
-explore complete or expire
+explore complete (witnessed site) or expire
   → splice that job
-  → push replacement for same originSystem + slot
+  → witnessed site: retire the slot (no re-post at this dock)
+  → unwitnessed expire: push replacement for same originSystem + slot
   → render if the Jobs pane is open
+
+tick, offered row whose resolved site is already witnessed
+  → withdraw without pay
+  → splice, then the same retire/replace rule above
 ```
 
 Offered explore: home dock only (mining/pirate/recovery/trade precedent).  
@@ -197,9 +202,10 @@ No reachable landmark (empty origin table and empty/unusable dest fallback): **d
 
 1. Dock home → Jobs → two explore cards (named landmark in a named system; origin is the file dock).
 2. Accept. Reward, site name, employer, remaining time are visible before and after accept (wishlist acceptance).
-3. Fly to the named landmark (100 u discovery already on `mystery.js`). If the player already visited it, that counts (information recovery).
-4. Redock origin. Delivery tick pays `payQuoted`, +2 employer rep (origin faction), dockmaster trust as today, splice, new card on the **origin** board.
-5. Ignore a card for 600 s: posting withdraws, replacement appears. Ignore an accepted card: fail closed, no pay, replacement.
+3. Fly to the named landmark (100 u discovery already on `mystery.js`). A witnessed landmark counts once for the accepted contract; it is not offered again at the same dock.
+4. Redock origin. Delivery tick pays `payQuoted`, +2 employer rep (origin faction), dockmaster trust as today, splice, and retire the slot. No new card for a witnessed site at that dock; the Jobs pane names why and points to a gate.
+5. Ignore a card for 600 s: posting withdraws, replacement appears for the same unwitnessed site. Ignore an accepted card: fail closed, no pay, replacement. A witnessed offered row is withdrawn without pay on the next tick.
+6. Take a gate. Another system's dock still posts its own unwitnessed survey, so the career continues; a dock whose every site is witnessed shows no explore card and the board note.
 
 **Not:** ferry fronting. **Not:** unique haul dest-dock `jobPayFor`. **Not:** a lock on a rock. **Not:** Archive filing. **Not:** a crystal in the hold. Accept only at the origin dock (`currentSystem === originSystem`). `need` is exactly **1** (sanitize drops any other explore need).
 
@@ -207,7 +213,7 @@ No reachable landmark (empty origin table and empty/unusable dest fallback): **d
 
 **Site bind:** pay and progress use `resolveExploreSite(origin, slot)` from live `SYSTEMS` (contract §2.2). Stuffed `job.destSystem` or stuffed landmark id cannot retarget payout. UI names also resolve through that helper + `landmarks[i].name` + `SYSTEMS[site].name`.
 
-**Already visited:** legal. Same class as mining when the hold already has ore. Do not invent a visit-time world key.
+**Already visited (owner decision, issue #327):** witnessed work does not pay again and is not offered again at the same station. Filing a survey for a site already on `mystery.visited` pays once (the accepted contract), then the slot retires; an offered row for a witnessed site is withdrawn without pay. The explorer takes a gate to a new system for fresh survey work. `mystery.visited` is the only read; do not invent a visit-time world key.
 
 ### 6. Deadlines
 
@@ -215,8 +221,9 @@ Live mining/trade already use `deadline` vs `world.time` and fail closed. Explor
 
 | State | Timer | On fire |
 |---|---|---|
-| offered | `deadline = postTime + 600` | withdraw, replace |
-| accepted | `deadline = acceptTime + 600` (restarts) | fail closed, replace |
+| offered | `deadline = postTime + 600` | withdraw; replace the same unwitnessed site |
+| offered, site witnessed | next 0.5 s tick | withdraw without pay; slot retires |
+| accepted | `deadline = acceptTime + 600` (restarts) | fail closed, no pay; replace the same unwitnessed site |
 
 600 s is ~10 minutes. A same-system landmark hop at cruise is well under honest play. The window is deliberately generous (MSN-01).
 
@@ -351,12 +358,12 @@ Matches contract §8. **Named only. Do not implement in Wave 77.**
 From the wishlist, made testable for the **explore** slice:
 
 1. A Freehold Jobs board shows two explore cards plus today’s unique/overlay/mining/trade rows.
-2. Accept → fly to The Shepherd (or already visited) → redock origin: card gone, credits up, **new** explore card on the origin board.
-3. Completing again still yields an explore card (career does not exhaust).
+2. Accept → fly to The Shepherd → redock origin: card gone, credits up, slot retired, no repeat payout. The board note names the witnessed dock.
+3. A witnessed dock does not exhaust the career: another system's dock still posts its own unwitnessed survey.
 4. Origin is a real `SYSTEMS` key. Site landmark is on that system’s `landmarks` table (or dest fallback). Site ≠ an asteroid index.
 5. Player copy names The Shepherd and Freehold Drift (display). It never names `fh_shepherd` or a clue id.
 6. Reward, site name, and remaining time are visible before accept.
-7. After 600 s accepted without file: no pay, card replaced, state not `DONE`.
+7. After 600 s accepted without file: no pay, card replaced for the same unwitnessed site, state not `DONE`. After 600 s offered: same withdrawal/replace; a witnessed offered row withdraws immediately.
 8. Restore of `__proto__` / `explore-__proto__-0` drops those rows; unique four and `mine-freehold-0` and `trade-freehold-0` and `explore-freehold-0` remain; 10k-length heals to ≤620; stuffed dest/landmark does not retarget pay; no throw; no extra credits; no new data hangar row.
 9. Unique `haul-provisions` / `ferry-consignment` ids still exist. WAVE26 / WAVE35 behaviour unchanged.
 10. No job field names an asteroid index. No new `WORLD_FIELDS`. No `innerHTML`. No Archive debit. No drop %.
@@ -367,4 +374,4 @@ From the wishlist, made testable for the **explore** slice:
 
 Defaults in the contract §12 **stand**. None of them block impl.
 
-No blocking owner question. A later owner may still override slot count, already-visited counting, or +2 vs 0 — until then, implement the defaults. Do not invent a drop percent, Archive UU, or a third clock while waiting. Any data-grant stays **proposed, needs owner**.
+No blocking owner question. Already-visited counting was resolved by the owner in issue #327 (witnessed work pays once and is not offered again at the same dock). A later owner may still override slot count or +2 vs 0 — until then, implement the defaults. Do not invent a drop percent, Archive UU, or a third clock while waiting. Any data-grant stays **proposed, needs owner**.
