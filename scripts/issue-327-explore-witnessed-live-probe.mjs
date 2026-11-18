@@ -163,7 +163,22 @@ await runLive('explore-witnessed', async ({ c, result, act, observe, wait, check
   await act('engageAutopilot');
   const queued = await act('approachDock');
   assert.equal(queued.status, 'queued', 'the arrival dock is queued: ' + JSON.stringify(queued));
-  await wait((x) => x.flags.docked === true && x.world.currentSystem === 'veridian', 300, 'gate run to Veridian and dock');
+  // Traffic can cancel a dock approach; a player re-issues it. Retry the
+  // queued arrival exactly as issue-234's light-dock probe does, bounded.
+  const cancelled = new Set(['impact', 'blocked', 'stale', 'lost-station', 'dock-refused']);
+  let arrived = null;
+  for (let attempt = 0; attempt <= 2 && !arrived; attempt++) {
+    const x = await wait((o) => (o.flags.docked === true && o.world.currentSystem === 'veridian')
+      || (o.autopilot?.mode === 'dock' && o.autopilot.engaged === false
+        && cancelled.has(o.autopilot.reason)), 150, 'gate run attempt ' + attempt);
+    if (x.flags.docked && x.world.currentSystem === 'veridian') { arrived = x; break; }
+    (result.dockCancellations ??= []).push({ attempt, t: x.t, reason: x.autopilot.reason, range: x.autopilot.range });
+    if (attempt < 2) {
+      const retry = await act('approachDock', {}, false);
+      assert.equal(retry.ok, true, 'dock retry accepted: ' + JSON.stringify(retry));
+    }
+  }
+  assert.ok(arrived, 'the gate run docked at Veridian after bounded retries');
   result.veridianArrival = { t: (await observe()).t, system: (await observe()).world.currentSystem };
   await act('openService', { id: 'jobs' });
   await sleep(600);
