@@ -1,3 +1,64 @@
+## Explore offers report the live origin reward quote — #326
+
+Implemented on `dsh/issue-326-playtest-agent-api-explore-offers-report` (base
+master `c087941`, which includes merged #327). The explorer playtest finding was
+real: every accepted Freehold explore offer carried `jobs.offers[].reward = 300`
+while the Jobs card for the same offer printed the live origin quote and the
+accepted contract paid `payQuoted` 420 before Freehold epic stage 2, then 483
+after it (playtest #252, 2026-11-18, API v2, 279/279 delivered surveys paid
+`payQuoted`). The raw persisted base is not the agreement; the desk quote is.
+
+- `src/systems/station.js` `peekJobReward` now covers `kind: 'explore'`:
+  an offered survey returns the origin dock's live `jobPayFor` quote (420 at
+  baseline, 483 with Freehold epic stage 2), and an accepted survey returns its
+  stamped `payQuoted` (fallback matches settlement). This is the existing
+  desk quote source the Agent API row already consults, mirroring the #178/#223
+  haul/trade pattern; `src/game/agent-observe.js` needed no edit.
+- The Jobs card explore reward line and the accept path now call that same
+  source, so the card, the offered API reward and the stamped agreement cannot
+  drift apart. The persisted `job.reward` stays `RECOVERY_REWARD` (300); no
+  new saved field, no new event, save envelope stays v1, Agent API stays v2.
+- `jobs.active[].reward` for an accepted survey reports `payQuoted`; a live
+  epic/price drift cannot move the accepted agreement.
+
+Focused regression is `scripts/issue-326-explore-quote-test.mjs` (7 checks:
+docked Freehold offer API reward === card line === origin `jobPayFor` 420;
+Freehold epic stage 2 moves the offered card and API quote live to 483 without
+rewriting the raw 300; restore-shaped JSON offered row still yields the quote;
+accept stamps the displayed 483 as `payQuoted` with the desk success notice;
+active row reward === payQuoted === accepted card line and holds across
+epic/price drift; restore-shaped JSON accepted row still yields `payQuoted`;
+filing pays exactly `payQuoted` once, emits the delivered `jobState` receipt,
+then retires the witnessed slot without a second payout; zero update errors and
+no console errors). It is appended to `npm run test:boot` and standalone as
+`npm run test:explore-quote`; `npm run test:issue-326-live` runs the live flow.
+`npm run build` passes (bundle policy: 1995.27 KiB minified, 604.11 KiB gzip;
+`dist/assets/index-*.js` 2,043.15 kB / 618.61 kB gzip). Full
+`npm run test:boot` exits 0 with `BOOT TEST PASS — no update errors`,
+`ISSUE #326 PASS (7 checks)`, `ISSUE #327 PASS (8 checks)`, no FAIL lines
+(boot log under `out/issue-326-verification/test-boot.log`). Live flow
+`npm run test:issue-326-live` PASSes on disposable loopback Chromium with the
+real app and agent handle: fresh Greenhand docks at Freehold, opens Jobs, reads
+the DOM card line "File the survey at this dock — pays 420 UU" and
+`jobs.offers[].reward = 420` (raw 300), accepts through the desk (notice
+`Accepted: Survey The Shepherd`), reads `jobs.active[].reward = payQuoted = 420`
+and the accepted card line 420, flies the real survey marker with `setControl`
+until The Shepherd is witnessed, `approachDock` flies home and the filed
+payment is exactly 420 (`jobState delivered pay = 420`, credits 350 → 770);
+no fixtures/pose/credit writes in the offer path, console errors and exceptions
+empty, runtime source stable. Evidence under `out/issue-326-live/`.
+`docs/AgentApiDesign.md` (desk quote paragraph), `docs/Msn02ExploreDesign.md`
+§7 and the wishlist record the parity.
+
+Parked follow-ups: unlike haul/trade, an offered explore card has no
+displayed-quote cache — its quote is deliberately live on every redraw, and
+acceptance stamps whatever the current origin quote is (the same value the card
+last printed at that render). Passenger offers still report their unmodified
+base reward and must be read from the `job-reward` row until accepted (existing
+documented behavior, not this issue). The legacy espionage accepted-row fallback
+still uses `explorePayBase()` (pre-existing, untouched). The graft graph is
+absent in this fresh worktree; source was inspected directly at the cited lines.
+
 ## One-landmark origins stop paying witnessed surveys — #327
 
 Implemented on `dsh/issue-327-playtest-explorer-one-landmark-origins-t` (base

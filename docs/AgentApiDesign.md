@@ -221,8 +221,16 @@ the agreement behind a visible card. When Jobs is hidden, observations use
 current prices; dock and successful undock clear the prior berth's quote
 cache. Acceptance locks the applicable amount in the existing `payQuoted`
 field and includes it in the success `notice`. Subsequent price changes do
-not change accepted pay. Legacy accepted-job fallback calculations and
-passenger fare semantics remain unchanged.
+not change accepted pay.
+
+`explore` postings report the same quote the card prints (issue #326): an
+offered survey's `jobs.offers[].reward` is the origin dock's live
+`jobPayFor` — 420 at baseline, 483 with Freehold epic stage 2 — and an
+accepted survey's `jobs.active[].reward` is its stamped `payQuoted`, which
+settlement pays. The persisted raw `reward` stays the base 300
+(`RECOVERY_REWARD`); no new saved field, no new event, Agent API stays v2.
+Legacy accepted-job fallback calculations and passenger fare semantics
+remain unchanged.
 
 Focused entry point: `npm run test:agent-playtest-fixes`. The same checked
 fresh-process group runs inside `test:boot` and `test:release-focused`;

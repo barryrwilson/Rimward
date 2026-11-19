@@ -7200,7 +7200,9 @@ export function initStation(ctx) {
         render();
         return;
       }
-      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, explorePayBase()));
+      // Issue #326: the accepted agreement is the same origin quote the card
+      // and the API offer displayed; one source of truth, stamped as payQuoted.
+      job.payQuoted = peekJobReward(job);
       job.deadline = ctx.world.time + MINING_DEADLINE;
     } else if (job.kind === 'espionage') {
       if (job.state !== 'offered') {
@@ -7687,10 +7689,9 @@ export function initStation(ctx) {
       } else if (job.kind === 'passenger') {
         rewardLine = passengerPayLine(ctx, job);
       } else if (job.kind === 'explore') {
-        const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
-        const est = job.state === 'accepted'
-          ? (Number.isFinite(job.payQuoted) ? clampJobPay(job.payQuoted) : jobPayFor(ctx, originId, explorePayBase()))
-          : jobPayFor(ctx, originId, explorePayBase());
+        // Issue #326: one source of truth with the API row (peekJobReward) —
+        // offered cards quote the live origin pay, accepted cards keep payQuoted.
+        const est = peekJobReward(job, false, h === hDom);
         rewardLine = `File the survey at this dock — pays ${est} UU`;
       } else if (job.kind === 'espionage' && isShadowJob(job)) {
         const originId = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
@@ -9340,7 +9341,17 @@ export function initStation(ctx) {
   // retain it despite price drift; a deliberate board visit posts fresh quotes.
   function peekJobReward(job, refresh = false, rememberDrawn = refresh) {
     if (isShadowJob(job)) return job.state === 'accepted' ? shadowEarnedPay(job) : clampJobPay(job.reward);
-    if (!job || (job.kind !== 'haul' && job.kind !== 'trade')) return undefined;
+    if (!job) return undefined;
+    // Issue #326: an explore posting quotes the origin dock's live pay — the
+    // same line the Jobs card prints — and an accepted contract reads its
+    // stamped payQuoted (fallback matches settlement). The persisted reward
+    // stays RECOVERY_REWARD; no new saved field.
+    if (job.kind === 'explore') {
+      const origin = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+      if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
+      return clampJobPay(jobPayFor(ctx, origin, explorePayBase()));
+    }
+    if (job.kind !== 'haul' && job.kind !== 'trade') return undefined;
     if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
     const shown = displayedHaulQuotes.get(job.id);
     // A retargeted posting is a different contract, even when its ID survives.

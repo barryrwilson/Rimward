@@ -741,6 +741,10 @@ demand card, and the autopilot NAV panel with its cancel bar.
 - [x] Issue #327 (2026-11-18): a witnessed landmark pays once and is not
   offered again at the same dock; the witnessed dock shows no explore card and
   names the gate, while another system's dock still posts fresh survey work.
+- [x] Issue #326 (2026-11-18): the explore offer's `jobs.offers[].reward`
+  reports the same live origin quote the Jobs card prints (420 at baseline,
+  483 with Freehold epic stage 2), and an accepted survey's active row
+  reports its stamped `payQuoted`; the persisted raw reward stays 300.
 
 ### Agent API playtest corrections — 2026-09-14
 
