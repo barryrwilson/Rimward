@@ -1,3 +1,78 @@
+## The engage lease finishes a disabled war quarry — #325
+
+Implemented on `dsh/issue-325-playtest-agent-api-combat-intent-stops-a` (base
+master `32c5ddf`). The #250 war playtest finding was real: war-veridian-2
+"Strike Watchful Apt" disabled its bound Freehold patrol at 15% hull, the
+combat lease then ended `target-disabled` and `setCombatIntent engage` refuses
+a disabled target, so a driver that only used combat intents never landed the
+witnessed kill the strike pays on; both accepted war jobs lapsed unpaid at the
+600 s deadline. The Agent API already exposed `setControl { fireHeld: true }`,
+but a combat-intent-only caller had no supported finish. This fix keeps every
+#61/#265 ending for other hulls and for a disable intent, and gives the strike
+its own kill:
+
+- `src/game/prize.js` adds `isWarQuarry(ctx, rec)` — record-id precise, true
+  only for a LIVE (`state === 'accepted'`) war row's bound `recordId`; an
+  offered posting is not a bind and lapsed/failed rows stop marking. It fails
+  closed on non-array jobs, missing records and non-string ids, and reads the
+  same bind the war settlement uses (`resolveWarRecord`/`warPayComplete`), so
+  a stuffed `job.target` cannot retarget the finish.
+- `src/game/agent-combat.js` lets an `engage` lease on that bound quarry keep
+  firing through the hull's disabled/surrendered state; the lease ends
+  `target-destroyed` only when the hull dies. A `disable` intent keeps its
+  `target-disabled`/`target-surrendered` endings, and every other hull is
+  unchanged.
+- `src/systems/controls.js` accepts a fresh or renewed `engage` on that
+  already-broken bound quarry (a `disable` intent still refuses
+  `target-disabled` there). Every other acquisition gate (destroyed, lock-kind,
+  stale-lock, no-sample, weapon) is untouched.
+- `src/game/bio.js` and `src/systems/npc.js` skip the atrocity/feral gate and
+  the `killedSurrendered` fear bump for the bound war quarry's kill — the same
+  #265 lawful-work decision already applied to a bound hunt. The +2 witnessed
+  capitulation still counts, and a bystander keeps every consequence.
+- `src/game/agent-schema.js` documents the exception in the
+  `setCombatIntent` note; `terminalReasons`/`refusalReasons` are unchanged.
+  `docs/AgentCombatIntentDesign.md` (maneuvers/endings) and
+  `docs/Msn02FactionWarDesign.md` §5 record the supported finish.
+
+No settlement, pay, deadline or capture change; no new persisted field, event,
+key, SKU or `state.js` edit; no card-copy change. `VERSION` stays 2.
+
+Focused regression is `scripts/issue-325-war-quarry-overkill-test.mjs` (21
+checks: `isWarQuarry` record-id precision and fail-closed rows; an engage lease
+staying active and firing through disabled then surrendered and ending only
+`target-destroyed`; the unchanged #61 endings without the accepted bind,
+including an offered posting; disable-intent endings; acquisition/renewal on an
+already-disabled bound quarry vs a bystander; and a real-system boot that loads
+the war dest bank, accepts an offered Freehold war row, runs the combat.js
+witness kill, and asserts no atrocity/feral, no killedSurrendered fear, the
+record dead, the strike paid `payQuoted`, employer +2, target -2, the accepted
+row gone, a bystander still feral, and JSON-plain records/jobs). It is appended
+to `npm run test:boot` and standalone as `npm run test:war-quarry-overkill`;
+it exits 1 on the pre-fix source (with `src/` stashed the new export is absent,
+so the suite fails to link). `npm run build` passes (vite 6.4.3; bundle policy
+1996.15 KiB minified, 604.33 KiB gzip; `dist/assets/index-*.js` 2,044.06 kB /
+618.84 kB gzip). Live flow `npm run test:war-quarry-overkill-live` PASSes on
+disposable loopback Chromium with the real app and agent handle: fresh
+Greenhand, dest bank loaded through the disclosed `systemLoaded` staging, dock
+at Freehold, accept `war-freehold-0` "Strike Steadfast Ivo" (`rec-28`,
+payQuoted 300), spawn the bound dest-faction patrol near the ship with the real
+`spawnLiveShip`, lock it, grant `setCombatIntent engage` (accepted), stamp the
+break (hull 15%, disabled, `npcDisabled`), read the lease still owner
+`combat`, state `active`, reason `''`, `fireBlocked: 'reposition'` at 0.6 s,
+then run the witness finishing blow and read the lease terminal
+`target-destroyed`, record `dead`, mood `keen` (not feral), fear 0 → 0, a
+player-caused destroyed incident, and the strike paid inside the delivery tick
+(credits 350 → 650, employer +2, target -2, accepted row gone) with a clean
+console and stable runtime source; evidence under `out/issue-325-live/`.
+
+Parked follow-ups: the same lease-refusal shape for an ACCEPTED hunt quarry
+still relies on #265's raw-fire fallback (a hunt pays on a witnessed kill but a
+`disable`/`engage` lease still ends at the yield; not changed here); a war row
+still carries no `jobs.active[].objective` block (the card detail already
+names the quarry; not this issue). The graft graph is absent in this fresh
+worktree; source was inspected directly at the cited lines.
+
 ## Explore offers report the live origin reward quote — #326
 
 Implemented on `dsh/issue-326-playtest-agent-api-explore-offers-report` (base

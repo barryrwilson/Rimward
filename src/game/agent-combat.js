@@ -13,6 +13,7 @@ import { collectBodies } from './collision.js';
 import { PHY } from './physics.js';
 import { effectiveTurnRadius } from './ap-path.js';
 import { hoverTurnRateFor } from './flight-feel.js';
+import { isWarQuarry } from './prize.js';
 
 const bodies = { count: 0, items: [] };
 const clamp = (n, lo = -1, hi = 1) => Math.max(lo, Math.min(hi, n));
@@ -169,8 +170,13 @@ export function combatTick(ctx, lease) {
   if (c.system !== ctx.world.currentSystem) return 'jump';
   if (target.state?.destroyed) return 'target-destroyed';
   if (!ctx.ships.includes(target) || target.record !== c.record || target.id !== c.targetId) return 'target-lost';
-  if (attack(c.intent) && target.state?.surrendered) return 'target-surrendered';
-  if (attack(c.intent) && target.state?.disabled) return 'target-disabled';
+  // Issue #325: the bound quarry of an accepted war contract must die (the
+  // strike pays on a witnessed kill; a patrol's yield has no capture path), so
+  // an ENGAGE lease keeps firing until target-destroyed. A disable intent keeps
+  // its state endings, and every non-quarry hull is unchanged.
+  const finishKill = c.intent === 'engage' && isWarQuarry(ctx, target.record);
+  if (attack(c.intent) && target.state?.surrendered && !finishKill) return 'target-surrendered';
+  if (attack(c.intent) && target.state?.disabled && !finishKill) return 'target-disabled';
   if (ctx.input.weaponGroup !== c.weaponGroup) return 'weapon-changed';
   if (ctx.flags.matchSpeed) return 'match-speed';
   if (!target.object?.position) return 'target-lost';

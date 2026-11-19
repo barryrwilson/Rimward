@@ -15,6 +15,7 @@ import { COMMANDS, codeOf, conflictFor } from './bindings.js';
 import { registerBerthInput } from '../game/launch-clearance.js';
 import { defenseApplied } from '../game/agent-defense.js';
 import { combatWeapon, combatSample, createCombat, combatTick, combatView } from '../game/agent-combat.js';
+import { isWarQuarry } from '../game/prize.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -605,9 +606,15 @@ export function agentCombatSet(ctx, spec) {
     const renewingPursuit = keep && prior.phase === 'pursuit';
     if (!renewingPursuit && !combatSample(ctx, target)) return refuse('no-sample', sampleGap(ctx, target));
     if (target.state.destroyed) return 'target-destroyed';
+    // Issue #325: an engage on the bound quarry of an ACCEPTED war contract is
+    // accepted even when the hull is already disabled or surrendered — the
+    // lease keeps firing until the witnessed kill. A disable intent on that
+    // already-broken bound quarry still refuses target-disabled, and every
+    // other hull keeps its endings.
+    const finishKill = spec.intent === 'engage' && isWarQuarry(ctx, target.record);
     if (spec.intent === 'engage' || spec.intent === 'disable') {
-      if (target.state.surrendered) return 'target-surrendered';
-      if (target.state.disabled) return 'target-disabled';
+      if (target.state.surrendered && !finishKill) return 'target-surrendered';
+      if (target.state.disabled && !finishKill) return 'target-disabled';
       if (!combatWeapon(ctx)) return 'weapon';
     }
     const combat = keep ? prior : createCombat(ctx, target, spec.intent, stance, burner);

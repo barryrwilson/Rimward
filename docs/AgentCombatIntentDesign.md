@@ -189,6 +189,17 @@ Shelter remains a live ship. Departure, stale/mismatched sensing, removal or
 range loss stops fire and ends the session. A changed selection reports
 `target-changed`; changed weapon reports `weapon-changed`.
 
+Issue #325: an `engage` lease on the bound quarry of an ACCEPTED war contract
+is the one exception — it keeps firing through the hull's disabled or
+surrendered state until it is destroyed, because the strike pays on a witnessed
+kill and a patrol's yield has no capture path. A fresh or renewed `engage` on
+that already-broken bound quarry is accepted; a `disable` intent still ends at
+the state it asked for, and every other hull keeps
+`target-disabled`/`target-surrendered`. The bound war quarry's kill is lawful
+work — no atrocity/feral and no `killedSurrendered` fear — the same #265
+decision already applied to a bound hunt. Bargaining and willingness to yield
+remain morale states, not terminal surrender.
+
 Visible station/gate/asteroid and sun clearance can suppress fire and slow the
 ordinary throttle while turning away, with `movementBlocked: 'obstructed'`.
 Obstacle collection excludes private traffic entirely. Selected target hull

@@ -204,6 +204,8 @@ No eligible patrol in an existing origin/dest bank: **do not post**. Do not fabr
 4. Delivery tick (space-side, hunt cadence) pays `payQuoted`, +2 employer rep (origin faction), **no target write**, dockmaster trust as mining (not fence favor), splice, new card on the **origin** board if another quarry exists. Do not wait for origin redock: incidents are a 40-row ring (`world.js` 813).
 5. Ignore a card for 600 s: posting withdraws, replacement appears. Ignore an accepted card: fail closed, no pay, replacement.
 
+**Issue #325 supported finish:** an `engage` combat lease on the bound patrol keeps firing through its disabled or surrendered hull until the witnessed kill; that kill is lawful work (no atrocity/feral, no `killedSurrendered` fear), the same #265 decision for a bound hunt. Completion and pay semantics are unchanged.
+
 **Not:** unique ace. **Not:** Named Gun hunter/aspirants. **Not:** local pirate hunt. **Not:** unique `patrol-lane`. **Not:** a lock on a rock. **Not:** cargo. Accept only at the origin dock (`currentSystem === originSystem`). `need` is exactly 1 (sanitize drops any other war need).
 
 **Pay:** `jobPayFor` at the **origin** dock, live `PATROL_REWARD` 300. Stamp `payQuoted` on accept so epic/faction shifts cannot move the agreement (Wave 26 law; mining origin stamp). Unique patrol remains unstamped current-system `jobPay`.
