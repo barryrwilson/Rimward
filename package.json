@@ -160,7 +160,8 @@
     "test:standing-heat": "node --import ./scripts/with-css-stub.mjs scripts/issue-315-standing-heat-test.mjs",
     "test:standing-heat-live": "node scripts/issue-315-standing-heat-live-probe.mjs",
     "test:war-quarry-overkill": "node --import ./scripts/with-css-stub.mjs scripts/issue-325-war-quarry-overkill-test.mjs",
-    "test:war-quarry-overkill-live": "node scripts/issue-325-war-quarry-overkill-live-probe.mjs"
+    "test:war-quarry-overkill-live": "node scripts/issue-325-war-quarry-overkill-live-probe.mjs",
+    "test:perf-live": "node scripts/issue-337-perf-live-probe.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

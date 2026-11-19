@@ -58,6 +58,9 @@ import { COMM_REPEAT_SECONDS } from '../game/state.js';
  *   (issue #149); asteroids.js is the only writer; save.js sanitizes.
  * - ships (live NPC list): written by traffic.js (spawn/despawn) and npc.js
  *   (AI state); combat.js may damage their state records.
+ * - perf: written ONLY by systems/perf.js when ?perf=1 (session-only dev
+ *   instrumentation; never persisted and absent by default). asteroids.js
+ *   writes perf.metrics.asteroidMatrixWrites once per frame when present.
  * - targets: written by controls.js (selection) + npc.js (availability).
  *   targets.part is controls.js only, live `'engine'|null`, not WORLD_FIELDS.
  *   targets.aim is hud.js only: the player-visible selected-target aim digest

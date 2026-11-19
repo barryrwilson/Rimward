@@ -1576,6 +1576,7 @@ export function initAsteroids(ctx) {
   let lastRespawnRef = ctx.world.fieldRespawn;
   let sawSaveRestored = ctx.flags.saveRestored;
   let fieldBand = 0; // §15 band of the built field (respawn ore draw)
+  let matrixWritesFrame = 0; // issue #337: per-frame setMatrixAt count (dev perf probe)
   let fieldOreMult = 1; // built field's oreMult (respawn units)
   // Reused bookkeeping arrays — reset on build, never reallocated per frame.
   const dirtyBundles = [];
@@ -1753,6 +1754,7 @@ export function initAsteroids(ctx) {
     _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
     _mat4.compose(rock.position, _quat, _scale);
     rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+    matrixWritesFrame += 1;
     rock.mesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -1787,6 +1789,7 @@ export function initAsteroids(ctx) {
       _scale.set(0, 0, 0);
       _mat4.compose(rock.position, _quat.identity(), _scale);
       old.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+      matrixWritesFrame += 1;
       old.mesh.instanceMatrix.needsUpdate = true;
       old.free.push(rock.instanceIndex);
       let slot;
@@ -2251,6 +2254,7 @@ export function initAsteroids(ctx) {
       _scale.copy(rock.scaleVec).multiplyScalar(radius);
       _mat4.compose(position, _quat, _scale);
       bundle.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+      matrixWritesFrame += 1;
       bundle.mesh.setColorAt(rock.instanceIndex, baseColor);
     }
     for (let b = 0; b < bundles.length; b++) {
@@ -2367,6 +2371,7 @@ export function initAsteroids(ctx) {
 
   return {
     update(dt) {
+      matrixWritesFrame = 0; // issue #337: per-frame matrix-write metric
       // --- System swap (jump.js midpoint event, consumed next frame) ---
       for (let e = 0; e < ctx.lastEvents.length; e++) {
         const ev = ctx.lastEvents[e];
@@ -2409,6 +2414,7 @@ export function initAsteroids(ctx) {
         _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
         _mat4.compose(rock.position, _quat, _scale);
         rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+        matrixWritesFrame += 1;
         markDirty(rock);
       }
 
@@ -2431,6 +2437,7 @@ export function initAsteroids(ctx) {
         _scale.copy(rock.scaleVec).multiplyScalar(rock.radius); // grow-in keeps its scale
         _mat4.compose(rock.position, _quat, _scale);
         rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+        matrixWritesFrame += 1;
         markDirty(rock);
       }
       cursor = end >= n ? 0 : end;
@@ -2456,6 +2463,7 @@ export function initAsteroids(ctx) {
         _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
         _mat4.compose(rock.position, _quat, _scale);
         rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+        matrixWritesFrame += 1;
         markDirty(rock);
       }
 
@@ -2499,6 +2507,7 @@ export function initAsteroids(ctx) {
         _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
         _mat4.compose(rock.position, _quat, _scale);
         rock.mesh.setMatrixAt(rock.instanceIndex, _mat4);
+        matrixWritesFrame += 1;
         markDirty(rock);
       }
 
@@ -2524,6 +2533,7 @@ export function initAsteroids(ctx) {
           _scale.setScalar(sh.size * fade);
           _mat4.compose(sh.pos, _shardQuat, _scale);
           shardMesh.setMatrixAt(k, _mat4);
+          matrixWritesFrame += 1;
           shardMesh.setColorAt(k, sh.color);
         }
         shardMesh.count = shardCount;
@@ -2645,6 +2655,10 @@ export function initAsteroids(ctx) {
         rock.mesh.setColorAt(rock.instanceIndex, _color);
         rock.mesh.instanceColor.needsUpdate = true;
       }
+
+      // Issue #337: publish this frame's matrix-write count for the dev perf
+      // probe. One branch per frame; nothing is written when ?perf=1 is absent.
+      if (ctx.perf) ctx.perf.metrics.asteroidMatrixWrites = matrixWritesFrame;
     },
   };
 }

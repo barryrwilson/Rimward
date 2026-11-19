@@ -1,6 +1,6 @@
 /** Shared issue #74 live-browser runner. Disposable loopback-only Chrome. */
 import {spawn} from 'node:child_process';
-import {mkdir,readFile,writeFile,mkdtemp} from 'node:fs/promises';
+import {access,mkdir,readFile,writeFile,mkdtemp} from 'node:fs/promises';
 import {createServer} from 'node:net';
 import {dirname,join,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -20,11 +20,18 @@ class CDP{
   send(method,params={}){const id=++this.id;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP timeout '+method));},Number(process.env.ISSUE74_CDP_TIMEOUT||120000));this.pending.set(id,{resolve,reject,timer});this.ws.send(JSON.stringify({id,method,params}));});}
   async eval(expression){const r=await this.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result?.value;}
 }
-export async function runLive(name,fn,{seed,origin}={}){
+export async function runLive(name,fn,{seed,origin,query,serve}={}){
   if(seed!==undefined&&(!Number.isInteger(seed)||seed<0||seed>0xffffffff))throw Error('Live seed must be an unsigned 32-bit integer');
   // Rejected before any port, profile, Vite or Chrome exists: an unusable run
   // must never reach a browser launch.
   if(origin!==undefined&&(typeof origin!=='string'||!LIVE_ORIGINS.includes(origin)))throw Error('Live origin must be one of '+LIVE_ORIGINS.join(', '));
+  // Issue #337 additive options. `query` is appended verbatim after the
+  // harness's own '?agent=1' (e.g. '&perf=1'); `serve` selects the existing dev
+  // server (default) or a production `vite preview` over the current dist/.
+  // Both are validated here, before ports/profiles/Vite/Chrome exist.
+  if(query!==undefined&&(typeof query!=='string'||!query.startsWith('&')||query.includes('#')))throw Error("Live query must be a string starting with '&' and containing no '#'");
+  const serveMode=serve===undefined?'dev':serve;
+  if(serveMode!=='dev'&&serveMode!=='preview')throw Error("Live serve must be 'dev' or 'preview'");
   const originId=origin===undefined?'greenhand':origin;
   await mkdir(out,{recursive:true});const folder=join(out,name);await mkdir(folder,{recursive:true});
   const resumed=process.env.ISSUE74_RESUME_PROFILE?resolve(process.env.ISSUE74_RESUME_PROFILE):null;
@@ -42,6 +49,7 @@ export async function runLive(name,fn,{seed,origin}={}){
   const result={name,profile,started:new Date().toISOString(),fixture:false,actions:[],checkpoints:[],samples:[],consoleErrors:[],exceptions:[]};
   result.rendererConfig=process.env.ISSUE74_RENDERER||'platform';
   result.resumedProfile=!!resumed;
+  result.serve=serveMode;result.query=query??null;
   // EPERM-robust repo identity (issue #286): git when allowed, labeled
   // filesystem-only identity (dirtyUnknown) when the sandbox refuses spawns.
   const identity=gitIdentity(repo,{hashSubdir:'src'});
@@ -49,7 +57,14 @@ export async function runLive(name,fn,{seed,origin}={}){
   result.headCommit=identity.commit;result.workingTreeDirty=identity.workingTreeDirty;result.runtimeSourceDirty=identity.workingTreeDirty;
   const save=()=>writeFile(join(folder,'result.json'),JSON.stringify(result,null,2));
   try{
-    vite=spawn(process.execPath,[fileURLToPath(new URL('../../bin/vite.js',import.meta.resolve('vite'))),'--config',config,'--host','127.0.0.1','--port',String(p),'--strictPort'],{cwd:repo,windowsHide:true,stdio:['ignore','pipe','pipe']});
+    // Preview serves the production bundle, so a missing dist/ is a clear
+    // precondition failure rather than a 404 page that looks like a boot hang.
+    if(serveMode==='preview'&&!(await access(join(repo,'dist','index.html')).then(()=>true).catch(()=>false)))throw Error('Preview serve requires a production build: dist/index.html is missing — run npm run build first');
+    const viteBin=fileURLToPath(new URL('../../bin/vite.js',import.meta.resolve('vite')));
+    const viteArgs=serveMode==='preview'
+      ?['preview','--config',config,'--host','127.0.0.1','--port',String(p),'--strictPort']
+      :['--config',config,'--host','127.0.0.1','--port',String(p),'--strictPort'];
+    vite=spawn(process.execPath,[viteBin,...viteArgs],{cwd:repo,windowsHide:true,stdio:['ignore','pipe','pipe']});
     result.vitePid=vite.pid;result.port=p;
     vite.stderr.on('data',b=>console.log('VITE',String(b).trim()));
     for(let i=0;i<100;i++){if(await fetch(`http://127.0.0.1:${p}`).then(r=>r.ok).catch(()=>false))break;if(vite.exitCode!==null)throw Error('Vite exited');await sleep(250);}
@@ -58,7 +73,7 @@ export async function runLive(name,fn,{seed,origin}={}){
     const errors=[];chrome.stderr.on('data',b=>errors.push(String(b).slice(0,250)));
     let pages;for(let i=0;i<120;i++){try{const cp=Number((await readFile(join(profile,'DevToolsActivePort'),'utf8')).split(/\r?\n/)[0]);pages=await fetch(`http://127.0.0.1:${cp}/json/list`).then(r=>r.json());if(pages.some(p=>p.type==='page')){result.cdpPort=cp;break;}}catch{}if(chrome.exitCode!==null)throw Error('Chrome exited '+errors.slice(-3));await sleep(250);}
     c=new CDP(pages.find(p=>p.type==='page').webSocketDebuggerUrl);await c.ready();await c.send('Runtime.enable');await c.send('Page.enable');if(seed!==undefined){result.seed=seed;await c.send('Page.addScriptToEvaluateOnNewDocument',{source:`{let seed=${seed};Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);}`});}
-    await c.send('Page.navigate',{url:`http://127.0.0.1:${p}/?agent=1`});
+    await c.send('Page.navigate',{url:`http://127.0.0.1:${p}/?agent=1${query??''}`});
     const observe=()=>c.eval('window.rimward.observe()');
     const act=async(name,args={},must=true)=>{const r=await c.eval(`window.rimward.act(${JSON.stringify({v:2,name,args})})`);result.actions.push({at:Date.now(),name,args,result:r});if(must&&!r.ok)throw Error(name+' refused '+JSON.stringify(r));return r;};
     const shot=async name=>{const s=await c.send('Page.captureScreenshot',{format:'png'});await writeFile(join(folder,name+'.png'),Buffer.from(s.data,'base64'));};
@@ -87,7 +102,7 @@ export async function runLive(name,fn,{seed,origin}={}){
     originRec.actual=await c.eval('window.__ctx?.world?.origin ?? null');
     originRec.observedSystem=(await observe()).world?.currentSystem??null;
     result.graphics=await c.eval(`(()=>{const canvas=document.querySelector('canvas'),g=canvas?.getContext('webgl2');if(!g)return null;const e=g.getExtension('WEBGL_debug_renderer_info');return {renderer:e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER),vendor:e?g.getParameter(e.UNMASKED_VENDOR_WEBGL):g.getParameter(g.VENDOR)};})()`);console.log('BOOT',name,JSON.stringify(result.graphics));
-    await fn({c,result,save,observe,act,shot,checkpoint,wait,folder});
+    await fn({c,result,save,observe,act,shot,checkpoint,wait,folder,baseUrl:`http://127.0.0.1:${p}/`});
     result.consoleErrors=c.console.filter(e=>['error','assert'].includes(e.type));result.exceptions=c.exceptions;
     if(result.consoleErrors.length||result.exceptions.length)throw Error('Browser console errors or exceptions');
     result.verdict='PASS';
