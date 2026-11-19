@@ -242,6 +242,13 @@ Each explore card (all `textContent`):
 - If offered: Accept (n). Deadline remaining as whole seconds or minutes (reuse `miningTimeLeftLabel`).
 - If accepted: `ACCEPTED — survey <landmarkName> in <systemName> · t left`.
 
+**Agent API parity (issue #326):** `jobs.offers[].reward` for an offered
+survey is the same live origin `jobPayFor` quote the card prints (420 at
+baseline, 483 with Freehold epic stage 2); an accepted survey's
+`jobs.active[].reward` is its stamped `payQuoted`, which filing pays. The
+persisted raw `reward` stays `RECOVERY_REWARD` — no new saved field, no new
+event, Agent API stays v2.
+
 **Never** print `fh_shepherd`, clue lines, clue ids, or `mystery.visited`.
 
 No `innerHTML`. No `job.faction` as a write source. `reducedMotion`: no extra animation; copy stays.
