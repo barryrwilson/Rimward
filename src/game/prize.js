@@ -125,6 +125,25 @@ export function isHuntQuarry(ctx, rec) {
   return false;
 }
 
+/**
+ * Issue #325: is this record the bound quarry of the pilot's LIVE (accepted)
+ * war contract? Record-id precise; an offered posting is not a bind, and a
+ * lapsed/failed row stops marking. This is the same bind the war settlement
+ * reads (station.js resolveWarRecord / warPayComplete), so a stuffed name
+ * cannot retarget the finish.
+ */
+export function isWarQuarry(ctx, rec) {
+  const jobs = ctx && ctx.world && ctx.world.jobs;
+  if (!Array.isArray(jobs) || !rec || typeof rec.id !== 'string') return false;
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (!j || j.kind !== 'war') continue;
+    if (j.state !== 'accepted') continue;
+    if (j.recordId === rec.id) return true;
+  }
+  return false;
+}
+
 /** True when any posted or accepted job names this record as its target. */
 export function isJobQuarry(ctx, rec) {
   const jobs = ctx && ctx.world && ctx.world.jobs;
