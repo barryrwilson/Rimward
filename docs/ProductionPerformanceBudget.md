@@ -124,3 +124,88 @@ authorization mechanisms. The matcher checks that these strings are nonempty;
 it does not verify that the release-note path exists, inspect its contents, or
 authenticate the owner's approval. Independent review and the authorized release
 owner must verify the actual approval record and release note before activation.
+
+## Frame-time budget — system scale/population Phase 0 (issue #337)
+
+Issue #337 added the measurement gate for the system-scale/population phases
+(#338–#341): a dev-only `?perf=1` overlay plus an unattended production-build
+probe. It ships no gameplay, visual, tuning, save, HUD-key or aim-glass change.
+The overlay is absent by default and creates no DOM when off.
+
+### Instrumentation and reproduce
+
+- `?perf=1` (combine with `&agent=1` for the probe) creates `#perf-overlay`
+  and `window.__ctx.perf.snapshot()`. F3 hides/shows the overlay;
+  `setVisible(bool)` is the programmatic form. The snapshot reports frame
+  p50/p95/p99, `renderer.info` draw calls/triangles/points/lines/geometries/
+  textures, live NPC counts by tier (near ≤ `U.INSTANTIATE_RANGE`, mid ≤ 2500 u,
+  far beyond), abstract records for the current and generated banks, asteroid
+  matrix writes per frame, CPU per subsystem, and renderer/JS memory.
+- Session-only: no persisted field, no player keybinding, no aim-glass digit.
+- Reproduce the baseline from a clean worktree:
+  1. `npm run build` (the probe serves the production bundle with `vite preview`).
+  2. `npm run test:perf-live` (isolated loopback Vite preview + headless Chrome,
+     fresh profile, fixed route, 60 s sampling, cleanup, machine/build metadata).
+  3. Evidence lands in `out/issue-337-live/perf-baseline/` (`result.json` and
+     `evidence.json`, untracked). The probe fails on console errors, exceptions,
+     cleanup failure, or a source change during the run.
+
+### Measured baseline (2026-11-19, issue #337)
+
+Named machine/build: Windows 10.0.26200 x64 on an Intel Core Ultra 9 285K
+(24 threads, 136.77 GB RAM), Node v24.22.1, headless Chrome 157.0.8103.79,
+GPU ANGLE NVIDIA GeForce RTX 4090 Direct3D11. The served artifact was the
+production `dist/` build (447 files, 39,371,097 bytes; `index.html` 9,900
+bytes; `assets/index-CkDBdGGd.js` 2,049,722 bytes) from base commit
+`f0d15d2` with runtime source hash
+`33a15277e77947a969d759c594ff25a99c09f48449d5d42a33e4b1b2f5af034c`
+(stable start=end). Fixed route: fresh Greenhand → undock →
+`plotRoute(veridian)` → `engageAutopilot` → queued `approachDock`; docked at
+Veridian at 53.0 s wall / simT 94.46. 60 one-second samples over 59.0 s;
+phase counts route 16, jump 3, dock 34, docked 7; systems Freehold 17,
+Veridian 43. Console errors and exceptions were 0; Vite/Chrome cleanup and
+port closure were verified.
+
+| Measure | Phase-0 baseline |
+|---|---:|
+| Frame p50 | 31.2 ms median (max 31.3) |
+| Frame p95 | 31.8 ms median (max 31.9) |
+| Frame p99 | 32.0 ms median (max 32.5); worst single frame 107.4 ms |
+| Renderer draw calls | 48.5 median / 106 max |
+| Renderer triangles | 130,700 median / 198,844 max |
+| Points / lines | 7,600 / 384 median; 7,800 / 641 max |
+| Geometries / textures | 94 / 39 max |
+| Live NPCs | 10 max (near 10, mid 8, far 0) |
+| Abstract records | current bank 17 max; generated galaxy 31 max |
+| Asteroid matrix writes | 112 median / 191 max per frame |
+| CPU per subsystem (median of per-sample averages) | ship 0.46 ms, npc 0.18 ms, autopilot 0.07 ms, perf 0.06 ms, hud 0.06 ms, asteroids 0.06 ms (single 10.0 ms max), controls 0.05 ms, song 0.05 ms, galaxyChart 0.03 ms, agentApi 0.03 ms; 35 subsystems observed |
+| Render CPU | 0.7 ms median / 75.6 ms max (startup spike) |
+| Memory | geometries 94, textures 39; JS heap 77.3 MB median / 98.5 MB max / 84.3 MB last |
+
+The headless frame cadence is ~31 ms (~32 fps), so p50/p95 here measure the
+compositor's pacing, not game CPU. Summed subsystem CPU was ~1.1 ms and render
+CPU 0.7 ms at this baseline. Use per-subsystem CPU, draw calls/triangles and
+same-harness relative p50/p95 for regression decisions; the brainstorm's
+earlier "≤ 20 ms p95" line was a placeholder and is not a headless measurement.
+
+### Budgets for Phases 1–4
+
+| Budget | Phase-0 baseline | Later-phase target |
+|---|---|---|
+| Frame p50/p95 (same probe, same machine) | 31.2 / 31.8 ms | no regression > 2 ms vs this baseline |
+| CPU per subsystem | top ship 0.46 ms; total ~1.1 ms | no subsystem +> 1 ms; total +≤ 1 ms |
+| Draw calls | 48.5 median / 106 max | +≤ 25 |
+| Triangles | 130,700 median | +≤ 30k |
+| Near full-detail NPCs | 10 max | 10–14 |
+| Mid proxies | 0 (none yet) | 30–40 instanced, 5–10 Hz |
+| Far impostors | 0 (none yet) | 150–300, 1 Hz |
+| Abstract records | 17 max current bank | 40–80/system |
+| Asteroid matrix writes | 112 median / 191 max | no growth without range-gating |
+| Bundle growth | 2,049,722-byte JS | ≤ 50 KB per phase |
+| Memory | shared geometry | no per-instance material clones |
+
+No CI frame-time gate is added yet (issue #337 out of scope: baseline first,
+enforce later). Each Phase 1–4 PR must attach before/after evidence from
+`npm run test:perf-live` on the same named machine/build; a later CI gate can
+pin these budgets. A low-end-profile baseline can be recorded separately
+without changing this workstation baseline.

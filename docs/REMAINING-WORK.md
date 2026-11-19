@@ -1,3 +1,61 @@
+## Frame-time instrumentation and a live perf baseline — #337
+
+Implemented on `dsh/issue-337-perf-add-frame-time-instrumentation-and` (base
+master `f0d15d2`). This is the measurement gate for the system
+scale/population phases #338–#341: it ships no gameplay, visual, tuning, save,
+HUD-key or aim-glass change.
+
+- `src/systems/perf.js` is opt-in with `?perf=1`: it creates `#perf-overlay`
+  and `window.__ctx.perf.snapshot()` (frame p50/p95/p99, renderer draw
+  calls/triangles/points/lines/geometries/textures, live NPC counts by tier,
+  current/generated abstract record counts, per-frame asteroid matrix writes,
+  CPU per subsystem, renderer/JS memory). F3 is a dev-only visibility toggle
+  (F1–F12 are reserved in bindings.js); `setVisible(bool)` is the programmatic
+  form. When the flag is absent the module creates no DOM and sets no ctx
+  field, and main.js keeps the original unwrapped update path.
+- `src/main.js` adds a named system list (same load-bearing order) and wraps
+  subsystem updates only when `ctx.perf` exists; it also times the render call.
+  `src/systems/asteroids.js` publishes its per-frame `setMatrixAt` count into
+  `ctx.perf.metrics` once per frame. `src/core/ctx.js` records the session-only
+  `perf` ownership.
+- `scripts/issue-337-perf-live-probe.mjs` runs the existing issue-74 live
+  harness against the PRODUCTION preview build (`serve: 'preview'`,
+  `?agent=1&perf=1`): fresh Greenhand, undock, plotRoute(veridian),
+  engageAutopilot, queued approachDock, 60 one-second snapshots, overlay/toggle
+  checks, then a reload without the query to prove absence by default. It
+  writes machine-readable `result.json` + `evidence.json` (machine, Chrome,
+  GPU, dist artifact and source-hash metadata) under `out/issue-337-live/`.
+  The harness gained additive `query`/`serve`/`baseUrl` options; the default
+  dev path and every existing probe are unchanged. `npm run test:perf-live`
+  runs it (run `npm run build` first).
+- `docs/SystemScalePopulationDesign.md` is committed with this issue;
+  `docs/ProductionPerformanceBudget.md` now carries the instrumentation
+  protocol, measured baseline and Phase 1–4 budgets.
+
+Verification: `npm run build` passes (2001.68 KiB minified / 606.71 KiB gzip;
+`dist/assets/index-CkDBdGGd.js` 2,049,722 bytes). `npm run test:boot` exits 0
+(`BOOT TEST PASS — no update errors`, plus the focused suites). The live probe
+exits 0 with verdict PASS and zero console errors/exceptions; Chrome and Vite
+cleaned up and their ports closed; runtime source stayed stable
+(`33a15277…`). Baseline on the named machine (Windows 10.0.26200, Intel Core
+Ultra 9 285K, 136.77 GB RAM, Node 24.22.1, headless Chrome 157.0.8103.79,
+ANGLE RTX 4090 D3D11): frame p50 31.2 ms / p95 31.8 ms median (headless
+compositor cadence ~32 fps; worst single frame 107.4 ms), draw calls 48.5
+median / 106 max, triangles 130,700 median / 198,844 max, live NPCs 10 max,
+current-bank records 17 max, asteroid matrix writes 112 median / 191 max,
+summed subsystem CPU ~1.1 ms (ship 0.46 ms top), render CPU 0.7 ms median,
+JS heap 77.3 MB median / 98.5 MB max. The fixed route docked at Veridian at
+53.0 s wall / simT 94.46 across route→jump→dock→docked phases. Full evidence
+is in the untracked `out/issue-337-live/perf-baseline/evidence.json`.
+
+Parked follow-ups: no CI frame-time gate yet (baseline first, enforce later);
+the optional adaptive-quality metrics hook was not added (no behavior change
+was in scope); the overlay renders p50/p95/p99 on one FRAME line rather than
+separate literal labels; mid/far tier counts are forward-compatible fields
+that stay 0 until Phase 2 proxies exist; a low-end hardware profile can be
+baselined separately without changing this workstation baseline. No new
+persistent field, player keybinding, aim-glass digit or tuning value.
+
 ## The engage lease finishes a disabled war quarry — #325
 
 Implemented on `dsh/issue-325-playtest-agent-api-combat-intent-stops-a` (base
@@ -1594,7 +1652,7 @@ outcome before implementation; preserve the original product intent.
 |---|---|
 | Intermittent live dock approach collision | **Resolved by [#139](https://github.com/barryrwilson/Rimward/issues/139) / [PR #142](https://github.com/barryrwilson/Rimward/pull/142)**: the collider was a station-anchored loitering NPC hull on a ring whose first waypoint sat on the +X docking axis; loiterers now sweep the far side of the station. Kept here only as the record of the baseline observation ([run 34498199689](https://github.com/barryrwilson/Rimward/actions/runs/34498199689)); no follow-up remains. |
 | Smoke/capture reliability | One of ten local #139 bridge smoke runs (2026-09-12) timed out only on the later `systemTransition` jump pin (90 s) with docking and console clean, so the flake is real and unrelated to docking. [Intermediate run 34499466594](https://github.com/barryrwilson/Rimward/actions/runs/34499466594) had no eligible public combat target (`attempted:false`) and a Models `captureScreenshot` timeout with four missing flows. The final run passed; retain these as bounded smoke/capture diagnostic follow-ups, not independently confirmed gameplay bugs. |
-| Performance headroom | The enforceable byte caps are now 3,671,906 minified / 1,098,526 gzip bytes: the owner approved doubling the #100 artifact counts by direct request on 2026-09-10, superseding the earlier 1,800,000 / 537,600 limits. Historic measurements are unchanged: #56 measured 1,835,632 minified / 549,169 gzip with a 7,340.4 ms startup median and one of five runs at 8,280 ms against 8,000 ms. The exact descriptor still pins the #100 artifact `assets/index-CY-oCepC.js` at 1,835,953 minified / 549,263 gzip for that exact bundle only. The 8,000 ms startup limit and the browser dependency boundary are unchanged and unwaived. Use the [#56](releases/issue-56-measured-decision.md) and [#100](releases/issue-100-measured-decision.md) measured decisions and the [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. |
+| Performance headroom | The enforceable byte caps are now 3,671,906 minified / 1,098,526 gzip bytes: the owner approved doubling the #100 artifact counts by direct request on 2026-09-10, superseding the earlier 1,800,000 / 537,600 limits. Historic measurements are unchanged: #56 measured 1,835,632 minified / 549,169 gzip with a 7,340.4 ms startup median and one of five runs at 8,280 ms against 8,000 ms. The exact descriptor still pins the #100 artifact `assets/index-CY-oCepC.js` at 1,835,953 minified / 549,263 gzip for that exact bundle only. The 8,000 ms startup limit and the browser dependency boundary are unchanged and unwaived. Use the [#56](releases/issue-56-measured-decision.md) and [#100](releases/issue-100-measured-decision.md) measured decisions and the [performance contract](ProductionPerformanceBudget.md) when assessing new evidence. The frame-time instrumentation protocol, measured baseline and Phase 1–4 budgets are now in the same contract (#337). |
 | Agent Play mouse ownership | **Implemented for [#163](https://github.com/barryrwilson/Rimward/issues/163)** (owner report 2026-09-06; owner decision 2026-09-13: Escape is the only takeover). `controls.js` no longer drops a lease on pointer motion, clicks, flight keys or fire; an agent-engaged helm (autopilot, dock approach, automine, flee) is marked by the bridge and released only by Escape. Kept here as the record of the observation; the completed table carries the durable evidence. |
 | Historical raw afterburner/flee report (local PIR-02) | The old raw command acquired a flee helm. #171 replaces that command with a single burner pulse, so its old flee-timer observations do not describe the new raw path. Tactical combat withdrawal retains its separate bounded authorization. See merged PR #180 and its live evidence before filing any remaining motion or station-contact defect. |
 | Supported resumable API playtest runner (local PIR-07) | Local tooling proposal: expected build/API version, isolated profile, durable sequence recovery, acknowledged safe handoffs and sanitized evidence. Existing scenario probes do not by themselves establish the full resumable-runner contract. Scope only if selected; no browser credentials or in-game LLM runner. |

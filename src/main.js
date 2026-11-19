@@ -11,6 +11,7 @@ import { initLandmarks } from './systems/landmarks.js';
 import { initShip } from './systems/ship.js';
 import { initHail } from './systems/hail.js';
 import { initHud } from './systems/hud.js';
+import { initPerf } from './systems/perf.js';
 import { initSong } from './systems/song.js';
 import { initModelsBrowser } from './systems/modelsbrowser.js';
 import { configureShipAssets } from './systems/ship-assets.js';
@@ -107,43 +108,47 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // queue. wakes after npc + pods (reads ctx.ships flee modes, spawns discovery
 // pods), before HUD (consumes its events); title runs FIRST so its capture-phase
 // keydown listener registers before controls.js and origins.js, and it
-// pauses the sim until the player chooses Continue or New Game.
-const systems = [
-  initTitle,
-  initStarfield,
-  initSolarSystem,
-  initAsteroids,
-  initStation,
-  initLandmarks,
-  initGate,
-  initControls,
-  initAutopilot,
-  initAutomine,
-  initAgentFlee,
-  initSettings,
-  initBio,
-  initShip,
-  initWorld,
-  initContacts,
-  initMystery,
-  initEpics,
-  initJump,
-  initNav,
-  initTraffic,
-  initNpc,
-  initCombat,
-  initPods,
-  initWakes,
-  initHail,
-  initSong,
-  initSave,
-  initOrigins,
-  initOnboarding,
-  initGalaxyChart,
-  initModelsBrowser,
-  initAgentApi,
-  initHud,
-].map((init) => init(ctx));
+// pauses the sim until the player chooses Continue or New Game. perf runs
+// LAST after HUD as the dev-only ?perf=1 sampler (no event consumption; absent
+// by default, so a normal session keeps the original unwrapped update path).
+const systemDefs = [
+  ['title', initTitle],
+  ['starfield', initStarfield],
+  ['solarSystem', initSolarSystem],
+  ['asteroids', initAsteroids],
+  ['station', initStation],
+  ['landmarks', initLandmarks],
+  ['gate', initGate],
+  ['controls', initControls],
+  ['autopilot', initAutopilot],
+  ['automine', initAutomine],
+  ['agentFlee', initAgentFlee],
+  ['settings', initSettings],
+  ['bio', initBio],
+  ['ship', initShip],
+  ['world', initWorld],
+  ['contacts', initContacts],
+  ['mystery', initMystery],
+  ['epics', initEpics],
+  ['jump', initJump],
+  ['nav', initNav],
+  ['traffic', initTraffic],
+  ['npc', initNpc],
+  ['combat', initCombat],
+  ['pods', initPods],
+  ['wakes', initWakes],
+  ['hail', initHail],
+  ['song', initSong],
+  ['save', initSave],
+  ['origins', initOrigins],
+  ['onboarding', initOnboarding],
+  ['galaxyChart', initGalaxyChart],
+  ['modelsBrowser', initModelsBrowser],
+  ['agentApi', initAgentApi],
+  ['hud', initHud],
+  ['perf', initPerf],
+];
+const systems = systemDefs.map(([name, init]) => ({ name, update: init(ctx)?.update }));
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -167,11 +172,23 @@ renderer.setAnimationLoop(() => {
   // is not pause — readers freeze flight/gate/jump/AP/player DPS; this loop still runs.
   if (!ctx.flags.paused) {
     ctx.world.time += dt;
-    for (const system of systems) system?.update?.(dt, ctx);
+    // The ?perf=1 path wraps each subsystem so CPU cost can be attributed; the
+    // default path stays the original unwrapped loop (zero added per-frame work).
+    if (ctx.perf) {
+      for (const system of systems) ctx.perf.runSystem(system, dt, ctx);
+    } else {
+      for (const system of systems) system.update?.(dt, ctx);
+    }
   }
   ctx.lastEvents = ctx.events; // previous frame's queue, for early-system consumers
   ctx.events = [];             // fresh queue for this frame
-  renderer.render(scene, camera);
+  if (ctx.perf) {
+    ctx.perf.beginRender();
+    renderer.render(scene, camera);
+    ctx.perf.endRender();
+  } else {
+    renderer.render(scene, camera);
+  }
 });
 
 // Pause is orchestrator-owned: a direct listener so it works while the
