@@ -86,10 +86,27 @@ function checkArrival(to) {
   assert.ok(inward > moved - 1, `${from}->${to}: drift heads into the system (${inward.toFixed(1)}u inward)`);
   assert.ok(ctx.ship.speed < 0.1, `${from}->${to}: idle arrival rests (${ctx.ship.speed.toFixed(2)} u/s)`);
   start.copy(obj.position);
+  const hitsBeforeRest = hits.length;
   tick(30 * 60);
   const rested = obj.position.distanceTo(start);
-  assert.ok(rested < 0.5, `${from}->${to}: idle arrival stays at rest (${rested.toFixed(2)}u in 30 s)`);
-  assert.deepEqual(hits, [], `${from}->${to}: idle arrival hit nothing`);
+  // Issue #339: ambient crowd traffic can spawn near a resting hull at the
+  // arrival gate and give it a zero-damage bump. A bump may nudge the hull;
+  // the arrival-hold contract under test is that an *un-bumped* idle hull
+  // stays at rest. Only ambient ship bumps (no static hits) may explain drift.
+  const restWindowHits = hits.slice(hitsBeforeRest);
+  const bumpedByAmbientShip = restWindowHits.length > 0
+    && restWindowHits.every((h) => h.kind === 'ship' && h.damage === 0);
+  assert.ok(rested < 0.5 || bumpedByAmbientShip,
+    `${from}->${to}: idle arrival stays at rest (${rested.toFixed(2)}u in 30 s)`);
+  // Issue #339 (system scale/population Phase 2): ambient crowd traffic can
+  // spawn near a resting hull at the arrival gate. A zero-damage hull bump is
+  // not the arrival-hold contract — that contract is the slow drift out of the
+  // jump zone and the stop short of the gate bore. Keep the static-world
+  // assertion strict and require any ambient hull bump to be harmless.
+  const staticHits = hits.filter((h) => h.kind !== 'ship');
+  assert.deepEqual(staticHits, [], `${from}->${to}: idle arrival hit no static body`);
+  assert.ok(hits.every((h) => h.kind !== 'ship' || h.damage === 0),
+    `${from}->${to}: ambient hull bumps are zero-damage`);
   const gate = SYSTEMS[to].gates.find(g => g.to === from) ?? SYSTEMS[to].gates[0];
   const gateRange = obj.position.distanceTo(new THREE.Vector3(...gate.position));
   assert.ok(gateRange > JUMP.zone, `${from}->${to}: hull rests outside the jump zone (${gateRange.toFixed(1)}u)`);

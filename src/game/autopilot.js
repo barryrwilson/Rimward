@@ -13,7 +13,7 @@ import { resolveNavGatePos, navSystemName } from '../systems/nav-guidance.js';
 import { lookupLiveNavHopKind } from '../systems/gate.js';
 import { planApPath, throttleForPath, keepRadius, sphereChordHit, AP_KEEP_PAD } from './ap-path.js';
 import { berthHeld } from '../systems/overlay-policy.js';
-import { collectDockCruiseBodies, dockCruiseExitAim, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
+import { collectDockCruiseBodies, dockCruiseExitAim, dockCruiseKeepExitAim, dockCruiseShouldBrake, dockHoldCanAdvance, dockTrafficClears } from './dock-cruise.js';
 import { agentPulse, agentCombatActive, agentClearFullStop, commandFullStop, markAgentHelm, agentControlStatus } from '../systems/controls.js';
 import {
   queueDockAt,
@@ -131,6 +131,7 @@ const _dockBodies = { count: 0, items: [] };
 const _cruiseBodies = { count: 0, items: [] };
 const _stageTrafficBodies = { count: 0, items: [] };
 const _cruiseExitAim = { x: 0, y: 0, z: 0 };
+const _cruiseKeepExitAim = { x: 0, y: 0, z: 0 };
 const _playerLive = {
   role: 'player',
   id: -1,
@@ -1416,6 +1417,16 @@ function dockTick(ctx) {
       const exit = dockCruiseExitAim(p, _aim, planningBodies, _cruiseExitAim);
       if (exit === 'clear') _aim.set(_cruiseExitAim.x, _cruiseExitAim.y, _cruiseExitAim.z);
       else if (exit === 'blocked') cruiseExitBlocked = true;
+      // Issue #339: a crowd traffic sidestep can leave the hull just inside
+      // the sun's heat keep. The shared planner then hands back its inward
+      // inside-tangent waypoint, so cruise rings the keep until the blocked
+      // watch fires. Turn that course outward before the throttle decision;
+      // the static-keep correction vetoes every other keep sphere itself.
+      const keepExit = dockCruiseKeepExitAim(p, _aim, planningBodies, _cruiseKeepExitAim);
+      if (keepExit === 'clear') {
+        _aim.set(_cruiseKeepExitAim.x, _cruiseKeepExitAim.y, _cruiseKeepExitAim.z);
+        cruiseExitBlocked = false;
+      } else if (keepExit === 'blocked') cruiseExitBlocked = true;
     }
     let trafficDetour = false;
     let trafficBlocked = false;

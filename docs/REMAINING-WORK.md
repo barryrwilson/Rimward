@@ -53,6 +53,105 @@ presentation-only by design (not minable, no save data); Phase 2 (#339) reuses
 the impostor infrastructure; a low-end hardware profile can be baselined
 separately without changing this workstation baseline.
 
+## Population tiering: abstract growth, mid-tier proxies, and AI tick LOD — #339
+
+Implemented on `dsh/issue-339-ai-population-tiering-abstract-growth-mi` (base
+master `771c8bb1`). Phase 2 of the system scale/population plan (#337 is the
+Phase 0 measurement gate, #338 Phase 1; #340–#341 are later phases). Ships no
+new persistent record field, no save-format change, no player keybinding and no
+aim-glass digit.
+
+- Cast growth is content-only and deterministic: authored systems and
+  `scripts/generate-galaxy.mjs` carry a `crowd` count, and `world.js` appends
+  crowd records after the featured cast with a per-system/per-role RNG that
+  consumes zero global `Math.random` draws (the boot harness's seeded stream
+  and the #201 route fixture stay intact). Every bank is 25–47 records/system
+  (galaxy 3,210 vs the 549 baseline), names are unique and deterministic, crowd
+  pirates carry bounty 0 so the explicit bounty-board cap stays 2, and crowd ids
+  use a separate namespace so legacy `rec-N` ids do not shift. The record
+  schema and save format are unchanged; only the record count grows.
+- `src/game/traffic-tiers.js` owns the derived tier constants: near ≤900 u,
+  mid 900–2,500 u, far >2,500 u; near cap 10, mid cap 40, far cap 256.
+- `src/systems/mid-traffic.js` renders the mid band as ONE 40-capacity
+  instanced 8-triangle proxy layer at 8 Hz with per-instance faction colour,
+  coarse heading to the record's next waypoint, and `reducedMotion` support. It
+  hides live/terminal records and records outside the band, re-hides promoted
+  records every frame (`hidePromoted`), rebuilds/disposes on `systemLoaded`,
+  and adds no persistent field. Presentation-only: no AI, collision, combat or
+  hail.
+- `src/systems/far-traffic.js` keeps the Phase 1 256-capacity impostor layer
+  but starts it beyond the mid band (2,500 u), so the three tiers do not overlap.
+- `src/systems/npc.js` adds AI tick LOD: near hulls (≤900 u) keep full-frame
+  AI/physics/combat; live hulls in the 900–1,400 u hysteresis band step at 8 Hz
+  with a session-only accumulator, a dead-reckoned pose, an immediate boundary
+  step, per-frame mesh animation and reduced-rate escape; combat, collision and
+  hail stay near-only. `MAX_LIVE` remains 10.
+- `src/game/world.js` adds abstract tick LOD: the current system bank ticks at
+  1 Hz as before, every other visited bank ticks at 0.2 Hz (1/5 real time) with
+  a session-only throttle reset on a real system change. Migration, transit
+  registry, same-system restore and gate-linger paths are untouched.
+- `src/systems/perf.js` exposes the near/mid/far caps and the mid/far visible
+  counts in the `?perf=1` overlay and `snapshot()`, so the caps are observable.
+- Dock-lane blockage control: sustained live traffic can push the dock helm
+  inside the sun's heat keep (a crowd traffic sidestep cut the tangent at cruise
+  speed), where the shared planner's inside-tangent waypoint points inward and
+  the hull rings the keep until the blocked watch cancels. A private cruise
+  correction (`dockCruiseKeepExitAim` in `src/game/dock-cruise.js`, called only
+  by the dock helm) keeps the planner's lateral side but originates a 45-degree
+  outward course from a static keep sphere (sun/station/planet), vetoes every
+  other keep sphere, and leaves gates, traffic and the stage corridor to their
+  existing policies. The shared tangent planner and `dockCruiseExitAim` are
+  untouched; no persisted field. Pinned by
+  `scripts/issue-339-dock-escape-test.mjs` (26 cases) in `npm run test:boot`.
+- Coupling caps were reviewed and pinned, not raised: pirate bounty board 2,
+  contact rows 24 (16 MK1), nearby rows 12, market walk 30 s, hangar 8,
+  single-card hail. Ambient crowd traffic stays out of contact lists; only
+  featured and nearest hulls enter them.
+- Focused tests: `scripts/issue-339-tier-test.mjs` (30 pins: caps, layer,
+  8 Hz, colour, handoff, nearest-first, rebuild/dispose, no mutation),
+  `scripts/issue-339-tick-lod-test.mjs` (16 pins),
+  `scripts/issue-339-abstract-tick-test.mjs` (11 pins),
+  `scripts/issue-339-coupling-test.mjs` (30 pins: caps, bank counts, save
+  delta, boot observability) and `scripts/issue-339-dock-escape-test.mjs`
+  (26 pins: the recorded run-3 sun-keep poses at several bearings, heat-zone
+  and station-body cases, the outside/annulus bounds, gate and traffic
+  exclusions, other-keep veto, fail-closed inputs); all are wired into
+  `npm run test:boot`. `scripts/issue-339-live-probe.mjs` is the 10-minute
+  production live probe (`npm run test:population-live`).
+- Two pre-existing fixtures needed bounded updates because #339 changed their
+  assumptions, not their contracts: `scripts/issue-272-hunt-supply-test.mjs`
+  now waits for a NEW reaver under its forced veteran-band RNG (earlier seeded
+  picks already set `reaverTier`, and the larger crowd banks shifted the
+  seeded stream), and `scripts/issue-307-respawn-heading-test.mjs` sweeps the
+  near-tier refill after its clear tick so a freshly spawned ambient hull
+  cannot hold the departure lane. Both still assert their original outcomes.
+
+Verification: `npm run build` passes (2,076.55 kB minified / 628.12 kB gzip;
++14.8 kB minified / +2.7 kB gzip vs the Phase 1 artifact, within the ≤50 KB
+phase budget). `npm run test:boot` passes end-to-end on that artifact,
+including the six focused #339 tests and the two bounded fixture updates. The
+10-minute production live probe (`npm run test:population-live`, 600
+one-second samples, production `dist/`, `?agent=1&perf=1`) verdict PASS: 8
+completed dockings over 8 legs (3 blocked cancels with one retry each on three
+legs, 2 undock refusals), authored cast 42–47 per system with the first observed
+bank equal to the authored cast, live bank 34–52 (crowd 24–33, reaver ≤1), tier
+caps live max 10/10 near, mid proxies max 36/40, far 0/256, no record drawn as
+both a hull and a proxy/impostor, zero hails, clean console and a stable source
+hash. `npm run test:perf-live` on the same artifact verdict PASS: frame p50
+32.5 / p95 33.3 / p99 33.75 ms (inside the 2 ms regression limit), draw calls 58
+median / 115 max, triangles 134,080 median (below the Phase 1 median), points
+8,239, asteroid matrix writes unchanged at 113/163, CPU ~1.05 ms top-10 sum, 0
+console errors and a stable source hash; its 60 s window ended on the Veridian
+corridor approach (73 u) because the heavier traffic lengthened the dock leg,
+and the 600 s probe on the same artifact completed all eight dockings.
+
+Parked: no CI frame-time gate yet (same Phase 0 decision); off-screen abstract
+banks advance at 1/5 real time by design (dwell/gate-linger resolve up to 5 s
+late); crowd pirates are ambient only (bounty 0, not board-bearing); Phase 3
+(P5 extent + P6 in-system chart) still needs the save-migration decision; a
+bank-compaction pass can be considered later if a full-galaxy save becomes a
+concern (measured +485.6% record-bank JSON, only visited systems persist).
+
 ## Frame-time instrumentation and a live perf baseline — #337
 
 Implemented on `dsh/issue-337-perf-add-frame-time-instrumentation-and` (base

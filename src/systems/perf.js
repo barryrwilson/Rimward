@@ -10,8 +10,9 @@
  * - frame-time ring: p50/p95/p99 of the real animation-loop cadence, sampled
  *   from the same loop that renders (systems + render included);
  * - renderer.info draw calls/triangles/points/lines/geometries/textures;
- * - live NPCs by tier: near <= U.INSTANTIATE_RANGE, mid <= 2500 u, far beyond.
- *   Phase 0 has no mid/far proxies yet; the fields are forward-compatible;
+ * - live NPCs by tier: near <= 900 u, mid <= 2500 u, far beyond; Phase 2
+ *   (#339) adds the mid instanced proxy and far impostor layer counts/caps so
+ *   the near/mid/far caps are observable in the overlay and snapshot;
  * - abstract records: the current bank plus every generated record bank;
  * - asteroid matrix writes per frame, published by asteroids.js;
  * - CPU per subsystem, collected by main.js calling runSystem() only when on;
@@ -21,15 +22,13 @@
  * are not player-bindable), not a new player key. The machine-readable form is
  * `window.__ctx.perf.snapshot()`, consumed by scripts/issue-337-perf-live-probe.mjs.
  */
-import { U } from '../game/state.js';
+import { NEAR_RANGE, MID_RANGE, NEAR_CAP, MID_CAP, FAR_CAP } from '../game/traffic-tiers.js';
 
 const OVERLAY_ID = 'perf-overlay';
 const FRAME_RING = 600; // 10 s at 60 fps
 const STATS_WINDOW = 300; // 5 s at 60 fps
 const CPU_WINDOW = 180; // 3 s at 60 fps
 const TEXT_INTERVAL_MS = 200; // 5 Hz overlay refresh
-const NEAR_RANGE = U.INSTANTIATE_RANGE;
-const MID_RANGE = 2500; // Phase 2 mid-tier boundary; no live mid proxies yet
 const CPU_TOP = 6;
 const MB = 1048576;
 
@@ -75,6 +74,33 @@ function sum(values) {
   let total = 0;
   for (let i = 0; i < values.length; i++) total += values[i];
   return total;
+}
+
+/**
+ * Issue #339: session-only tier layer readout. Looks up the two instanced
+ * presentation layers by their scene names and returns their own userData
+ * counters (capacity/visible). No scene object is created or mutated.
+ */
+function layerStats(ctx, name, fallbackCapacity) {
+  const obj = ctx.scene && typeof ctx.scene.getObjectByName === 'function'
+    ? ctx.scene.getObjectByName(name) : null;
+  const ud = obj && obj.userData ? obj.userData : {};
+  const capacity = Number.isFinite(ud.capacity) ? ud.capacity : fallbackCapacity;
+  const visible = Number.isFinite(ud.visibleCount) ? ud.visibleCount : 0;
+  return { visible, capacity };
+}
+
+/**
+ * Pure tier readout for focused tests: caps plus the two presentation-layer
+ * counters. Exported so scripts/issue-339-tier-test.mjs can pin the Phase 2
+ * tier contract without a DOM/perf opt-in.
+ */
+export function tierLayerStats(ctx) {
+  return {
+    caps: { near: NEAR_CAP, mid: MID_CAP, far: FAR_CAP },
+    midProxies: layerStats(ctx, 'mid-traffic-proxies', MID_CAP),
+    farImpostors: layerStats(ctx, 'far-traffic-impostors', FAR_CAP),
+  };
 }
 
 export function initPerf(ctx) {
@@ -223,7 +249,18 @@ export function initPerf(ctx) {
       }
     }
     const recordsCurrent = ctx.world && Array.isArray(ctx.world.records) ? ctx.world.records.length : 0;
-    return { live: ships.length, near, mid, far, recordsCurrent, recordsGalaxy };
+    const layers = tierLayerStats(ctx);
+    return {
+      live: ships.length,
+      near,
+      mid,
+      far,
+      caps: { near: NEAR_CAP, mid: MID_CAP, far: FAR_CAP },
+      midProxies: layers.midProxies,
+      farImpostors: layers.farImpostors,
+      recordsCurrent,
+      recordsGalaxy,
+    };
   }
 
   function snapshot() {
@@ -253,7 +290,8 @@ export function initPerf(ctx) {
       'RIMWARD PERF — F3 hide — t ' + fmt(ctx.elapsed) + ' s',
       'FRAME p50 ' + fmt(f.p50) + ' ms  p95 ' + fmt(f.p95) + ' ms  p99 ' + fmt(f.p99) + ' ms  (n=' + f.window + ')',
       'DRAW CALLS ' + r.calls + '  TRIANGLES ' + r.triangles + '  GEO ' + r.geometries + '  TEX ' + r.textures,
-      'LIVE NPC ' + n.live + '  near ' + n.near + '  mid ' + n.mid + '  far ' + n.far,
+      'LIVE NPC ' + n.live + '  near ' + n.near + '/' + n.caps.near + '  mid ' + n.mid + '  far ' + n.far,
+      'MID PROXY ' + n.midProxies.visible + '/' + n.midProxies.capacity + '  FAR IMPOSTOR ' + n.farImpostors.visible + '/' + n.farImpostors.capacity,
       'RECORDS current ' + n.recordsCurrent + '  galaxy ' + n.recordsGalaxy,
       'AST MATRIX WRITES ' + perf.metrics.asteroidMatrixWrites,
       'CPU ' + (top.length ? top.map((s) => s.name + ' ' + fmt(s.avgMs)).join('  ') : 'warming up'),

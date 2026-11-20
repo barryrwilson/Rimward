@@ -77,12 +77,19 @@ function startOrigin(ctx, systems) {
   tick(ctx, systems, 30);
 }
 function clearTraffic(ctx, systems, binds) {
-  for (const live of [...ctx.ships]) {
-    const i = ctx.ships.indexOf(live);
-    if (i >= 0) ctx.ships.splice(i, 1);
-    binds.removeLiveShip(ctx, live);
-  }
+  const sweep = () => {
+    for (const live of [...ctx.ships]) {
+      const i = ctx.ships.indexOf(live);
+      if (i >= 0) ctx.ships.splice(i, 1);
+      binds.removeLiveShip(ctx, live);
+    }
+  };
+  sweep();
   tick(ctx, systems, 1);
+  // Issue #339: that tick refills the near tier from ambient crowd records, and
+  // a hull spawned into the departure lane holds the launch. The fixture wants
+  // an empty lane, so sweep the refill too; traffic respawns on the next tick.
+  sweep();
 }
 /** Park on a chosen approach side and run the REAL dock. */
 function dockFrom(ctx, systems, dir, range = 36) {

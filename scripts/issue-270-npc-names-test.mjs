@@ -9,6 +9,10 @@
  * the names are JSON-stable and that a restored bank is adopted instead of
  * regenerated.
  *
+ * Issue #339 adds the deterministic ambient crowd: every system must now hold
+ * 25-50 records, crowd names must be unique/deterministic and consume no global
+ * Math.random draws, and crowd pirates stay bounty-0 and classic (no Q-ship).
+ *
  * Run: npm run test:npc-names
  */
 import assert from 'node:assert/strict';
@@ -17,27 +21,38 @@ import { ensureBank, minerCountForCast } from '../src/game/world.js';
 
 const FALLBACK = /^(Reaver|Freighter|Patrol|Miner|Hauler) [a-z0-9_]+-\d+$/;
 
-function expectedCount(cast) {
+function legacyCount(cast) {
   const miners = minerCountForCast(cast);
   return (cast.traders | 0) + (cast.pirates | 0) + (cast.patrols | 0) + miners + (cast.ace ? 1 : 0);
+}
+
+function crowdCount(crowd) {
+  if (!crowd || typeof crowd !== 'object') return 0;
+  return (crowd.traders | 0) + (crowd.pirates | 0) + (crowd.patrols | 0) + (crowd.miners | 0);
 }
 
 const ctx = { world: { recordBanks: {} } };
 const generated = {};
 let checked = 0;
 let covers = 0;
+let crowdChecked = 0;
 
 for (const [sysId, def] of Object.entries(SYSTEMS)) {
   const bank = ensureBank(ctx, sysId);
   generated[sysId] = bank;
 
-  assert.equal(bank.length, expectedCount(def.cast), `${sysId}: bank covers every cast slot`);
+  const legacy = legacyCount(def.cast);
+  const crowd = crowdCount(def.crowd);
+  const expected = legacy + crowd;
+  assert.equal(bank.length, expected, `${sysId}: bank covers every cast + crowd slot`);
+  assert.ok(expected >= 25 && expected <= 50, `${sysId}: record total ${expected} in the 25-50 band`);
 
   const byRole = { trader: 0, pirate: 0, patrol: 0, miner: 0, ace: 0 };
   const seen = new Set();
   let systemCovers = 0;
 
-  for (const rec of bank) {
+  for (let index = 0; index < bank.length; index++) {
+    const rec = bank[index];
     assert.equal(typeof rec.name, 'string', `${sysId}/${rec.id}: name is a string`);
     assert.ok(rec.name.trim().length > 0, `${sysId}/${rec.id}: name is not blank`);
     assert.ok(rec.name.length <= 40, `${sysId}/${rec.id}: name fits the 40-char record limit`);
@@ -57,12 +72,20 @@ for (const [sysId, def] of Object.entries(SYSTEMS)) {
       seen.add(rec.coverName);
       systemCovers++;
     }
+
+    if (index >= legacy) {
+      // Crowd records: deterministic, ambient, no Q-ship, no board bounty.
+      crowdChecked++;
+      assert.equal(rec.bounty, rec.role === 'pirate' ? 0 : rec.bounty, `${sysId}/${rec.id}: crowd pirate is bounty-0`);
+      assert.ok(!rec.qship, `${sysId}/${rec.id}: crowd stays classic`);
+    }
   }
 
-  assert.equal(byRole.trader, def.cast.traders | 0, `${sysId}: traders match cast`);
-  assert.equal(byRole.pirate, def.cast.pirates | 0, `${sysId}: pirates match cast`);
-  assert.equal(byRole.patrol, def.cast.patrols | 0, `${sysId}: patrols match cast`);
-  assert.equal(byRole.miner, minerCountForCast(def.cast), `${sysId}: miners match cast`);
+  const crowdRoles = def.crowd ?? {};
+  assert.equal(byRole.trader, (def.cast.traders | 0) + (crowdRoles.traders | 0), `${sysId}: traders match cast + crowd`);
+  assert.equal(byRole.pirate, (def.cast.pirates | 0) + (crowdRoles.pirates | 0), `${sysId}: pirates match cast + crowd`);
+  assert.equal(byRole.patrol, (def.cast.patrols | 0) + (crowdRoles.patrols | 0), `${sysId}: patrols match cast + crowd`);
+  assert.equal(byRole.miner, minerCountForCast(def.cast) + (crowdRoles.miners | 0), `${sysId}: miners match cast + crowd`);
   assert.equal(byRole.ace, def.cast.ace ? 1 : 0, `${sysId}: ace matches cast`);
   assert.equal(systemCovers, (def.cast.pirates | 0) >> 1, `${sysId}: every disguised pirate has a cover`);
 
@@ -71,9 +94,26 @@ for (const [sysId, def] of Object.entries(SYSTEMS)) {
 }
 
 assert.ok(Object.keys(SYSTEMS).length >= 100, 'authored and generated systems are all covered');
-assert.ok(checked >= 500, `generated ${checked} records`);
+assert.ok(checked >= 3000, `generated ${checked} records`);
 assert.ok(covers >= 40, `generated ${covers} Q-ship covers`);
-console.log(`ok ${Object.keys(SYSTEMS).length} systems: ${checked} records, ${covers} Q-ship covers, no fallback names`);
+assert.ok(crowdChecked >= 2500, `generated ${crowdChecked} crowd records`);
+console.log(`ok ${Object.keys(SYSTEMS).length} systems: ${checked} records (${crowdChecked} crowd), ${covers} Q-ship covers, no fallback names`);
+
+// Determinism: a second fresh generation must produce the same crowd names and
+// crowd-only fields. Legacy fields legitimately draw the process Math.random,
+// so only the crowd suffix (and every name) is compared byte-for-byte.
+const ctx2 = { world: { recordBanks: {} } };
+for (const [sysId, def] of Object.entries(SYSTEMS)) {
+  const bank = generated[sysId];
+  const bank2 = ensureBank(ctx2, sysId);
+  assert.equal(bank2.length, bank.length, `${sysId}: deterministic crowd count`);
+  assert.deepEqual(bank2.map((r) => r.name), bank.map((r) => r.name), `${sysId}: deterministic names`);
+  const legacy = legacyCount(def.cast);
+  const crowdA = bank.slice(legacy).map((r) => [r.name, r.role, r.route, r.legT, r.personality, r.resolveSeed, r.cargo]);
+  const crowdB = bank2.slice(legacy).map((r) => [r.name, r.role, r.route, r.legT, r.personality, r.resolveSeed, r.cargo]);
+  assert.deepEqual(crowdB, crowdA, `${sysId}: crowd records are deterministic`);
+}
+console.log('ok determinism: every name and every crowd record is reproducible');
 
 // Save/reload: names are plain strings in the persisted bank. A restored bank
 // must be adopted as-is (ensureBank's existing-bank path), not regenerated.

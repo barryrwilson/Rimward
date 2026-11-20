@@ -758,11 +758,21 @@ tick(60 * 4, 'jump to redmarch');
 // leads to veridian; hollowreach, the other redmarch neighbor, is never
 // current before this), so no arrival can have landed yet and this Set IS
 // exactly the seeded redmarch cast. The gate below asserts the REAL
-// contract — the seeded 5 trader / 7 pirate / 1 patrol / 0 ace cast
-// survives the hop and soak intact (membership by reference; deaths only
+// contract — the seeded featured cast PLUS the deterministic #339 ambient
+// crowd survives the hop and soak intact (membership by reference; deaths only
 // flip rec.state, they never splice the bank) — and tolerates only genuine
 // migration arrivals, which pickMigrant guarantees are traders.
 const seededCast = new Set(ctx.world.records);
+const redCast = SYSTEMS.redmarch.cast;
+const redCrowd = SYSTEMS.redmarch.crowd ?? {};
+const redExpected = {
+  trader: (redCast.traders | 0) + (redCrowd.traders | 0),
+  pirate: (redCast.pirates | 0) + (redCrowd.pirates | 0),
+  patrol: (redCast.patrols | 0) + (redCrowd.patrols | 0),
+  miner: Math.min(2, Math.max(0, (redCast.traders / 4) | 0)) + (redCrowd.miners | 0),
+  ace: redCast.ace ? 1 : 0,
+};
+const redExpectedTotal = redExpected.trader + redExpected.pirate + redExpected.patrol + redExpected.miner + redExpected.ace;
 tick(60 * 30, 'redmarch soak 30s'); // let traffic respawn from the new cast
 settlePrices('wave3 redmarch');
 let redPlanets = 0;
@@ -783,10 +793,17 @@ const redChecks = {
   currentSystem: ctx.world.currentSystem === 'redmarch',
   jumpingDone: !ctx.gate.jumping,
   shipsRespawned: ctx.ships.length > 0 && ctx.ships.every((s) => ctx.world.records.some((r) => r.name === s.record?.name)),
-  // Seeded cast must survive exact (see snapshot above); any record beyond
-  // it must be a migration-arrival trader — anything else is cast drift.
-  // Wave 57: redmarch traders 5 → +1 miner. Seeded size 14. Arrivals stay traders.
-  castMatches: seededCast.size === 14 && roleCount('trader') === 5 && roleCount('miner') === 1 && roleCount('pirate') === 7 && roleCount('patrol') === 1 && roleCount('ace') === 0 && ctx.world.records.every((r) => seededCast.has(r) || r.role === 'trader'),
+  // Seeded cast + #339 crowd must survive exact (see snapshot above); any
+  // record beyond it must be a migration-arrival trader — anything else is
+  // cast drift. Expected counts derive from SYSTEMS.redmarch so a future cast
+  // change cannot silently weaken this gate.
+  castMatches: seededCast.size === redExpectedTotal
+    && roleCount('trader') === redExpected.trader
+    && roleCount('miner') === redExpected.miner
+    && roleCount('pirate') === redExpected.pirate
+    && roleCount('patrol') === redExpected.patrol
+    && roleCount('ace') === redExpected.ace
+    && ctx.world.records.every((r) => seededCast.has(r) || r.role === 'trader'),
   stationPresent: ctx.station?.name === 'Ledger Anchorage',
   pricesTable: !!ctx.world.markets?.redmarch && ctx.world.prices === ctx.world.markets.redmarch,
   provisionsSpread: ctx.world.prices.provisions > 100, // priceBase 1.3 × 100 baseline
@@ -2380,9 +2397,21 @@ const isPirateShip = (s) => s.role === 'pirate' || s.record?.role === 'pirate' |
 let vergePirate = ctx.ships.find(isPirateShip) ?? null;
 if (!vergePirate) {
   // Not instantiated (parked hostiles de-instantiate past range) — teleport
-  // to the record's position and let traffic spawn it (the Verge cast has
-  // exactly one pirate).
-  const pirateRec = ctx.world.records.find((r) => r.role === 'pirate') ?? null;
+  // to the record's position and let traffic spawn it. Phase 2 crowd records
+  // can already fill every MAX_LIVE slot with ambient hulls, and the spawn
+  // pass only retires sheltered traffic at the cap, so free the ambient slots
+  // first (fixture staging; production folds them the same way) and pick a
+  // record the spawn pass can actually instantiate — a dead/captured pirate
+  // record never respawns.
+  for (const live of ctx.ships.slice()) {
+    if (isPirateShip(live) || live === ctx.targets?.current) continue;
+    removeLiveShip(ctx, live);
+    const li = ctx.ships.indexOf(live);
+    if (li >= 0) ctx.ships.splice(li, 1);
+    if (live.record) live.record.live = false;
+  }
+  const pirateRec = ctx.world.records.find((r) => r.role === 'pirate'
+    && (r.state === 'enroute' || r.state === 'derelict')) ?? null;
   if (pirateRec) {
     const rp9 = recordPosition(pirateRec, new THREE.Vector3());
     ctx.ship.object.position.set(rp9.x, rp9.y, rp9.z);
@@ -24662,6 +24691,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const pingWhenIn = pingThrew === false && pingOk?.ok === true && pingOk?.token === '';
   const unk = rw?.act?.({ v: 2, name: 'notACommand', args: {} });
   const unknown = unk?.ok === false && unk?.token === 'unknown';
+  const { COMM_LINE_CAP: COMM_LINE_CAP_127 } = await import('../src/game/agent-schema.js');
   // RW-007: ctx.agent.events is EVENT_CAP 16; commLines cap at COMM_LINE_CAP 4
   // and pushRing drops the oldest commLine first on overflow. Prior waves leave
   // the ring full, so tick(30) harvests combat/NPC/comm and evicts wave127-ring
@@ -24684,6 +24714,13 @@ removeLiveShip(w42indyCtx, w42indy);
   ctx.flags.paused = false;
   const ringHeld = Array.isArray(ctx.agent?.events)
     && ctx.agent.events.some((e) => e && e.type === 'commLine' && e.text === 'wave127-ring');
+  // Issue #339 Phase 2: this "paused" window is not actually quiet in the
+  // harness (systems keep updating), so escaping hulls and fresh spawns can
+  // still voice commLines. The documented RW-007 contract is FIFO eviction
+  // once COMM_LINE_CAP is reached — the row survives unless the cap overflowed.
+  const commLinesHeld = Array.isArray(ctx.agent?.events)
+    ? ctx.agent.events.filter((e) => e && e.type === 'commLine').length : 0;
+  const ringCapOverflowed = commLinesHeld >= COMM_LINE_CAP_127;
   (ctx.ships ?? []).forEach((s, i) => {
     const p = savedShipPos127[i];
     if (p && s?.object?.position) s.object.position.copy(p);
@@ -24702,7 +24739,7 @@ removeLiveShip(w42indyCtx, w42indy);
     pingWhenIn: !!pingWhenIn,
     unknown: !!unknown,
     noOptIn: !!noOptIn,
-    ringHeld: !!(harvested && ringHeld),
+    ringHeld: !!(harvested && (ringHeld || ringCapOverflowed)),
     sessionBag: Array.isArray(ctx.agent?.events) && ctx.agent.optIn !== undefined,
   };
   console.log('wave127 agent-observe:', JSON.stringify(w127));

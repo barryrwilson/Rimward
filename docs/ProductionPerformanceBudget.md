@@ -286,3 +286,99 @@ save data); Phase 2 (#339) can reuse the impostor infrastructure, and a
 low-end-profile baseline can be recorded separately without changing this
 workstation baseline.
 
+## Frame-time budget — system scale/population Phase 2 (issue #339)
+
+Issue #339 ships population tiering: deterministic cast growth to 25–50
+abstract records/system, a mid-tier instanced proxy layer, AI tick LOD for
+far live hulls, abstract-tick LOD and explicit coupling caps. It adds no
+persistent record field, no save-format change, no HUD key and no aim-glass
+digit.
+
+### What is added
+
+- Cast growth: content-only `crowd` counts in authored/generated systems, with
+  crowd records appended by `world.js` from a per-system/per-role RNG that
+  consumes zero global `Math.random` draws (the seeded boot stream and #201
+  route fixture stay intact). Banks hold 25–47 records/system (galaxy 3,210 vs
+  the 549 baseline); names are unique and deterministic, crowd pirates carry
+  bounty 0 (board cap stays 2), and crowd ids use a separate namespace so
+  legacy `rec-N` ids do not shift.
+- `src/game/traffic-tiers.js` owns the derived tier constants: near ≤900 u,
+  mid 900–2,500 u, far >2,500 u; near cap 10, mid cap 40, far cap 256.
+- `src/systems/mid-traffic.js` renders the mid band as ONE 40-capacity
+  instanced 8-triangle proxy layer at 8 Hz (per-instance faction colour, coarse
+  heading to the next waypoint, `reducedMotion` parity), hides live/terminal
+  and out-of-band records, re-hides promoted records every frame, and
+  rebuilds/disposes on `systemLoaded`. Presentation-only: no AI, collision,
+  combat, FX or persistent field.
+- `src/systems/far-traffic.js` keeps the Phase 1 256-capacity impostor layer
+  but starts it beyond 2,500 u so the mid and far layers never draw the same
+  record.
+- `src/systems/npc.js` adds AI tick LOD: near hulls (≤900 u) keep full-frame
+  AI/physics/combat; live hulls beyond the bubble step at 8 Hz with a
+  session-only accumulator, a dead-reckoned pose, an immediate boundary step,
+  per-frame mesh animation and reduced-rate escape; combat, collision and hail
+  stay near-only. `MAX_LIVE` remains 10.
+- `src/game/world.js` adds abstract tick LOD: current-system bank 1 Hz, other
+  visited banks 0.2 Hz with a session-only throttle; migration, transit
+  registry, same-system restore and gate-linger paths are untouched.
+- `src/systems/perf.js` publishes near/mid/far caps plus mid-proxy and
+  far-impostor visible/capacity counters in the `?perf=1` overlay and
+  `snapshot()`.
+- Coupling caps reviewed and pinned, not raised: pirate bounty board 2, contact
+  rows 24 (16 MK1), nearby rows 12, market walk 30 s, hangar 8, single-card
+  hail. Ambient crowd traffic stays out of contact lists.
+
+### Measured after (2026-11-20, same machine/build/harness as the Phase-0/1 baselines)
+
+The after run used the same probe (`npm run test:perf-live`, production
+`dist/`, `?agent=1&perf=1`, 60 one-second samples, fixed Greenhand → Veridian
+route), the same named machine and the same headless Chrome/ANGLE RTX 4090
+configuration. Evidence is in the untracked
+`out/issue-337-live/perf-baseline/` (same probe path; Phase 2 overwrote the
+Phase 1 artifact in this worktree).
+
+| Measure | Phase 1 artifact | Phase 2 measured | Delta |
+|---|---:|---:|---:|
+| Frame p50 | 32.5 ms | 32.5 ms | 0.0 ms |
+| Frame p95 | 33.35 ms | 33.3 ms | −0.05 ms |
+| Frame p99 | 33.7 ms | 33.75 ms | +0.05 ms |
+| Draw calls | 65 median / 109 max | 58 median / 115 max | −7 / +6 |
+| Triangles | 147,834 median | 134,080 median / 214,412 max | −13,754 |
+| Points | 8,254 median | 8,239 median | −15 |
+| Asteroid matrix writes | 113 median / 163 max | 113 median / 163 max | 0 / 0 |
+| CPU per subsystem total | 1.10 ms | ~1.05 ms (top-10 sum; ship 0.447, npc 0.169) | −0.05 ms |
+| Subsystems observed | 37 | 38 | +1 |
+| Console errors / exceptions | 0 / 0 | 0 / 0 | 0 |
+| Production JS | 2,061,710 bytes minified / 625,430 gzip | 2,076,553 bytes minified / 628,119 gzip | +14,843 / +2,689 |
+
+All Phase 2 budgets pass: frame p50/p95 regression is far under the 2 ms limit,
+draw-call growth is under +≤25 (median actually fell because far impostors start
+beyond 2,500 u), triangles are below the Phase 1 median, asteroid matrix writes
+did not grow, CPU did not grow, and bundle growth (+14.8 kB minified / +2.7 kB
+gzip) is under the ≤50 KB per-phase budget. The probe verdict was PASS with zero
+console errors or exceptions and a stable runtime source hash. Tier observability
+was live: live hulls max 10, near max 10/10, mid proxies max 4/40, far impostors
+max 0/256, current bank max 47 records, galaxy bank total 89; the fixed route
+produced 18 Freehold / 42 Veridian samples. The 60-second window ended on the
+Veridian corridor approach (73 u) at simT 99.7 rather than docked, because the
+heavier crowd traffic lengthened the dock leg past the probe window; the 600 s
+sustained-flight probe on the same artifact completed all eight dockings, so the
+dock lane is exercised rather than bypassed.
+
+### Save-size delta (measured and accepted)
+
+The coupling audit measured the persisted record-bank JSON with the real save
+path: 289,322 bytes / 549 records before Phase 2, and 1,694,277 bytes / 3,210
+records after (+1,404,955 bytes, +485.6%). The legacy 549-record subset is
+byte-identical (crowd ids do not shift `rec-N`), and only visited systems
+persist: a visited bank is 25–47 records / ~12–24 KB. This is accepted because
+the abstract records are the population data the phase exists to add, no save
+format or schema changed, and a normal playthrough visits a handful of systems
+(2 visited banks / 89 records in the fixed probe route). A bank-compaction pass
+is parked for a later phase if a full-galaxy save becomes a concern.
+
+No CI frame-time gate is added yet (same Phase-0 decision: baseline first,
+enforce later). Phase 3 (#340, extent + in-system chart) should reuse these
+derived tiers and attach the same before/after probe evidence.
+
