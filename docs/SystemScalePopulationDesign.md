@@ -289,3 +289,74 @@ No gameplay contract changes, no save changes, no new persistent fields.
 Expected outcome: the system reads as many times larger and busier, measured
 against the Phase 0 baseline, with the population tiering (P3) as the next
 issue.
+
+## 10. Phase 2 status (issue #339)
+
+Phase 2 (P3 population tiers + abstract growth + coupling caps) is implemented
+on `dsh/issue-339-ai-population-tiering-abstract-growth-mi`. The issue's
+acceptance criteria supersede the placeholder numbers above where they differ
+(records 25–50/system, not 40–80; far impostors begin at 2,500 u so the mid
+band has room).
+
+- **Cast growth** is content-only and deterministic: authored/generated systems
+  carry a `crowd` count and `world.js` appends crowd records after the
+  featured cast using a per-system/per-role deterministic RNG (zero global
+  `Math.random` draws, so the boot harness's seeded stream and the #201 route
+  fixture stay intact). Banks now hold 25–47 records/system (galaxy 3,210 vs
+  the 549 baseline); names are unique and deterministic, crowd pirates carry
+  bounty 0 so the explicit bounty-board cap stays 2, and crowd ids live in a
+  separate namespace so legacy `rec-N` ids do not shift. No save-format
+  change: the same record schema persists; only the record count grows.
+- **Tiers** are derived from distance and never persisted:
+  near ≤900 u (full hull, combat/collision/hail, cap 10), mid 900–2,500 u
+  (one 40-capacity instanced 8-triangle proxy layer at 8 Hz, presentation
+  only), far >2,500 u (the Phase 1 256-capacity impostor layer). The mid layer
+  hides a record while it is live or terminal and re-hides promoted records
+  every frame, so the near/mid/far handoff has no duplicate hull.
+- **AI tick LOD**: near hulls keep full-frame AI/physics/combat; live hulls in
+  the 900–1,400 u hysteresis band step at 8 Hz with a session-only accumulator,
+  a dead-reckoned pose and an immediate boundary step, while mesh animation
+  stays per-frame; combat, collision and hail remain near-only. No persisted
+  field.
+- **Abstract tick LOD**: the current system bank ticks at 1 Hz as before; every
+  other visited bank ticks at 0.2 Hz (1/5 real time) with a session-only
+  throttle. Migration/transit/restore paths are untouched.
+- **Coupling caps** were reviewed and pinned, not raised: pirate bounty board 2,
+  contact rows 24 (16 MK1), nearby rows 12, market walk 30 s, hangar 8,
+  single-card hail. Ambient traffic stays out of contact lists; only featured
+  and nearest hulls enter them.
+- **Dock-lane blockage control**: sustained live traffic can push the dock
+  helm inside the sun's heat keep (a crowd traffic sidestep cut the tangent at
+  cruise speed). The shared planner's inside-tangent waypoint then points
+  inward, so the hull rings the keep until the 10 s blocked watch cancels the
+  leg. A private cruise correction (`dockCruiseKeepExitAim` in
+  `src/game/dock-cruise.js`, called only by the dock helm) keeps the planner's
+  lateral side but originates a 45-degree outward course from a static keep
+  sphere (sun/station/planet); it vetoes every other keep sphere and leaves
+  gates, traffic and the stage corridor to their existing policies. The shared
+  tangent planner and `dockCruiseExitAim` are untouched, and there is no
+  persisted field. Pinned by `scripts/issue-339-dock-escape-test.mjs` (26
+  cases) in `npm run test:boot`.
+- **Save-size delta** measured: the persisted record-bank JSON grows from
+  289,322 B (549 records) to 1,694,277 B (3,210 records), +485.6%; the legacy
+  549-record subset is byte-identical and only visited systems persist
+  (~12–24 KB per visited system). Accepted because abstract records are the
+  population data and no save format changed; a bank-compaction pass is parked
+  for a later phase if a full-galaxy save becomes a concern.
+
+Verification on the final artifact: `npm run build` and `npm run test:boot`
+pass (including the six focused #339 tests and the 26-case dock-escape pin).
+The 600 s production live probe passed with 8 completed dockings over 8 legs
+(3 blocked cancels, one retry each on three legs), authored cast 42–47 and first
+observed bank equal to it, live bank 34–52, mid proxies 0–36/40, far 0/256, no
+duplicate hull/proxy/impostor, zero hails, clean console and a stable source
+hash. The perf probe passed with frame p50 32.5 / p95 33.3 / p99 33.75 ms, draw
+calls 58 median / 115 max, triangles 134,080 median (below Phase 1), matrix
+writes unchanged 113/163 and CPU ~1.05 ms top-10 sum; its 60 s window ended on
+the Veridian corridor approach, and the sustained-flight probe proves the dock
+lane still completes. Measured evidence lives in the untracked
+`out/issue-339-live/` and `out/issue-337-live/` directories.
+
+Phase 2 leaves Phase 3 (P5 extent + P6 in-system chart) as the next planned
+phase; it needs the save-migration decision and should reuse these derived
+tiers.

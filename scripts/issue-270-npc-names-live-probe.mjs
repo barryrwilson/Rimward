@@ -29,10 +29,12 @@ await runLive('npc-names', async ({ c, result, checkpoint }) => {
     const out = {};
     for (const [sysId, def] of Object.entries(SYSTEMS)) {
       const cast = def.cast || {};
+      const crowd = def.crowd || {};
       const expected = (cast.traders | 0) + (cast.pirates | 0) + (cast.patrols | 0)
-        + minerCountForCast(cast) + (cast.ace ? 1 : 0);
+        + minerCountForCast(cast) + (cast.ace ? 1 : 0)
+        + (crowd.traders | 0) + (crowd.pirates | 0) + (crowd.patrols | 0) + (crowd.miners | 0);
       const bank = ensureBank(window.__ctx, sysId);
-      out[sysId] = { expected, records: bank.map((r) => ({ name: r.name, role: r.role, cover: r.coverName ?? null, qship: !!r.qship })) };
+      out[sysId] = { expected, records: bank.map((r) => ({ name: r.name, role: r.role, cover: r.coverName ?? null, qship: !!r.qship, bounty: r.bounty ?? 0 })) };
     }
     return out;
   })()`);
@@ -43,7 +45,8 @@ await runLive('npc-names', async ({ c, result, checkpoint }) => {
   let checked = 0;
   let covers = 0;
   for (const [sysId, entry] of Object.entries(result.systems)) {
-    assert.equal(entry.records.length, entry.expected, `${sysId}: bank covers every cast slot`);
+    assert.equal(entry.records.length, entry.expected, `${sysId}: bank covers every cast + crowd slot`);
+    assert.ok(entry.expected >= 25 && entry.expected <= 50, `${sysId}: record total in 25-50`);
     const seen = new Set();
     for (const rec of entry.records) {
       assert.equal(typeof rec.name, 'string', `${sysId}: name string`);
@@ -51,6 +54,7 @@ await runLive('npc-names', async ({ c, result, checkpoint }) => {
       assert.ok(!seen.has(rec.name), `${sysId}: "${rec.name}" unique`);
       seen.add(rec.name);
       checked++;
+      if (rec.role === 'pirate' && rec.bounty === 0) assert.ok(!rec.qship, `${sysId}: bounty-0 crowd pirate stays classic`);
       if (rec.qship) {
         assert.equal(typeof rec.cover, 'string', `${sysId}: Q-ship cover present`);
         assert.ok(!FALLBACK.test(rec.cover), `${sysId}: cover "${rec.cover}" is readable`);

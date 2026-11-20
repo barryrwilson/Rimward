@@ -52,6 +52,11 @@ export const AUTHORED_SYSTEMS = {
       emberglass: 1.20, voidPlatinum: 1.35, wakeglass: 1.40,
     },
     cast: { traders: 8, pirates: 4, patrols: 2, ace: true },
+    // Issue #339 (system scale/population Phase 2): ambient crowd records are
+    // content-only data appended after the featured cast. Total records/system
+    // must stay in the 25-50 band; crowd pirates carry bounty 0 so the explicit
+    // PIRATE_BOUNTY_CAP 2 board stays stable.
+    crowd: { traders: 16, pirates: 8, patrols: 3, miners: 3 },
     band: 0,
     landmarks: [
       { id: 'fh_shepherd', name: 'The Shepherd', kind: 'beacon', position: [750, 90, -100], line: 'A navigation beacon, older than the charts that cite it. Still broadcasting a lane nobody flies.' },
@@ -81,6 +86,7 @@ export const AUTHORED_SYSTEMS = {
       emberglass: 0.95, voidPlatinum: 1.15, wakeglass: 0.85,
     },
     cast: { traders: 7, pirates: 3, patrols: 3, ace: false },
+    crowd: { traders: 15, pirates: 8, patrols: 3, miners: 2 },
     tradesRestricted: true,
     band: 0,
     landmarks: [
@@ -113,6 +119,7 @@ export const AUTHORED_SYSTEMS = {
       emberglass: 1.10, voidPlatinum: 1.20, wakeglass: 0.90,
     },
     cast: { traders: 5, pirates: 7, patrols: 1, ace: false },
+    crowd: { traders: 12, pirates: 10, patrols: 2, miners: 2 },
     tradesRestricted: true,
     band: 1,
     landmarks: [
@@ -145,6 +152,7 @@ export const AUTHORED_SYSTEMS = {
       emberglass: 0.85, voidPlatinum: 0.95, wakeglass: 1.00,
     },
     cast: { traders: 2, pirates: 3, patrols: 0, ace: false },
+    crowd: { traders: 12, pirates: 7, patrols: 1, miners: 3 },
     tradesRestricted: true,
     band: 2,
     landmarks: [
@@ -181,6 +189,7 @@ export const AUTHORED_SYSTEMS = {
       emberglass: 1.15, voidPlatinum: 0.80, wakeglass: 0.85,
     },
     cast: { traders: 1, pirates: 2, patrols: 0, ace: false },
+    crowd: { traders: 11, pirates: 7, patrols: 1, miners: 3 },
     tradesRestricted: true,
     band: 3,
     landmarks: [
@@ -215,6 +224,8 @@ export const AUTHORED_SYSTEMS = {
       emberglass: 1.05, voidPlatinum: 0.70, wakeglass: 0.70,
     },
     cast: { traders: 0, pirates: 1, patrols: 0, ace: false },
+    // Hermit economy: crowd traders stay at 0, so no trader ever comes.
+    crowd: { traders: 0, pirates: 12, patrols: 2, miners: 10 },
     tradesRestricted: true,
     // Wave 9: hermit economy — no traders ever come; see HERMIT.
     hermit: true,
@@ -249,6 +260,7 @@ export const AUTHORED_SYSTEMS = {
       emberglass: 1.15, voidPlatinum: 0.80, wakeglass: 0.85,
     },
     cast: { traders: 0, pirates: 0, patrols: 0, ace: false },
+    crowd: { traders: 14, pirates: 8, patrols: 1, miners: 2 },
     band: 3,
     landmarks: [],
     clues: [],

@@ -450,8 +450,11 @@ export async function runAgentParityWave141(deps) {
         const cur = s && s.targets && s.targets.current;
         const aim = s && s.targets && s.targets.aim;
         lastCur = cur && typeof cur.kind === 'string' ? cur.kind : 'none';
-        if (!cur || cur.kind !== 'ship') { breakWhy = `lock-lost cur=${lastCur}`; break; } // lock lost: destroyed or despawned
-        if (!aim || !Array.isArray(aim.bearing)) { tick(1, `w141 ${suffix} aim wait`); continue; } // the HUD publishes the digest the frame after a new lock
+        // Scan the observation ring BEFORE the lock-lost break: the killing
+        // blow clears the lock on the same frame its npcDestroyed/npcDisabled
+        // row reaches the ring, so breaking on cur=none first would discard
+        // the terminal evidence this scenario exists to prove. Evidence stays
+        // strict: same ring rows, same foe identity match, same flags.
         const evs = s.events || [];
         for (const e of evs) {
           if (!e) continue;
@@ -464,6 +467,8 @@ export async function runAgentParityWave141(deps) {
           }
         }
         if (foeDown) { breakWhy = 'foe-down'; done = true; break; }
+        if (!cur || cur.kind !== 'ship') { breakWhy = `lock-lost cur=${lastCur}`; break; } // lock lost: destroyed or despawned
+        if (!aim || !Array.isArray(aim.bearing)) { tick(1, `w141 ${suffix} aim wait`); continue; } // the HUD publishes the digest the frame after a new lock
         const aimPt = (aim.lead && Array.isArray(aim.lead.bearing)) ? aim.lead.bearing : aim.bearing;
         const sx = Math.max(-1, Math.min(1, aimPt[0] * 2.5));
         const sy = Math.max(-1, Math.min(1, -aimPt[1] * 2.5));
