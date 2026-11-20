@@ -5,6 +5,7 @@ import { createCtx } from './core/ctx.js';
 import { initTitle } from './systems/title.js';
 import { initStarfield } from './systems/starfield.js';
 import { initSolarSystem } from './systems/solarsystem.js';
+import { initDeepField } from './systems/deepfield.js';
 import { initAsteroids } from './systems/asteroids.js';
 import { initStation } from './systems/station.js';
 import { initLandmarks } from './systems/landmarks.js';
@@ -28,6 +29,7 @@ import { initContacts } from './game/contacts.js';
 import { initMystery } from './game/mystery.js';
 import { initEpics } from './game/epics.js';
 import { initTraffic } from './game/traffic.js';
+import { initFarTraffic } from './systems/far-traffic.js';
 import { initNpc } from './systems/npc.js';
 import { initCombat } from './systems/combat.js';
 import { initPods } from './game/pods.js';
@@ -108,13 +110,17 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // queue. wakes after npc + pods (reads ctx.ships flee modes, spawns discovery
 // pods), before HUD (consumes its events); title runs FIRST so its capture-phase
 // keydown listener registers before controls.js and origins.js, and it
-// pauses the sim until the player chooses Continue or New Game. perf runs
+// pauses the sim until the player chooses Continue or New Game. deepfield sits
+// right after solarSystem (distant scenery, rebuilt on the same systemLoaded
+// consume); farTraffic sits after npc so it reads the frame's live-record flags
+// (a record promoted to a real hull must hide its impostor). perf runs
 // LAST after HUD as the dev-only ?perf=1 sampler (no event consumption; absent
 // by default, so a normal session keeps the original unwrapped update path).
 const systemDefs = [
   ['title', initTitle],
   ['starfield', initStarfield],
   ['solarSystem', initSolarSystem],
+  ['deepfield', initDeepField],
   ['asteroids', initAsteroids],
   ['station', initStation],
   ['landmarks', initLandmarks],
@@ -134,6 +140,7 @@ const systemDefs = [
   ['nav', initNav],
   ['traffic', initTraffic],
   ['npc', initNpc],
+  ['farTraffic', initFarTraffic],
   ['combat', initCombat],
   ['pods', initPods],
   ['wakes', initWakes],

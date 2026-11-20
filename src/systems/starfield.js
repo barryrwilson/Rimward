@@ -15,10 +15,66 @@ import * as THREE from 'three';
  *   sparseness (§15 designed silence): star opacity scales with the current
  *   system's band — 0 full, 1 ×0.8, 2 ×0.55 — via material opacity on band
  *   change, no rebuilds.
+ * - Issue #338: the shell radius is tied to the current system's authored
+ *   physical extent (starfieldScaleFor) instead of a fixed 8,000–16,000 u. The
+ *   scale is applied once at init and again on 'systemLoaded' (never a layer
+ *   rebuild). Stars are sizeAttenuation:false, so pixel size is unchanged;
+ *   reducedMotion keeps the shells centered exactly as before.
  * - update() writes layer positions/opacity in place; zero allocations.
  */
 
 const DRIFT_SPEED = 0.0005; // rad/s around Y — barely-there parallax life
+
+// Issue #338: tie the starfield shell radius to the system's authored physical
+// extent. "Extent" is the furthest authored content radius in the SYSTEM def
+// (station, gates, hub, field edge, landmarks, clues) — the same physical
+// bubble the galaxy generator validates (1,000 u) and the Phase-0 baseline
+// measured at ~1,100 u average. Planet orbit slots are deliberately excluded:
+// they are a fixed 250–1,400 u table, so including them would pin every system
+// to the same clamp and make the tie meaningless.
+//
+// The 0.9–1.15 clamp keeps the backdrop stable: the inner shell never drops
+// below 7,200 u (still far beyond the ~1,400 u content edge) and the outer
+// shell never exceeds 18,400 u (inside the 20,000 u camera far plane).
+//
+// Overlap decision: at the 0.9 clamp the inner shell (7,200 u) sits inside the
+// deep-field band (1,800–8,000 u). That is intentional and harmless — the
+// stars are additive, sizeAttenuation:false specks whose pixel size does not
+// change with the scale; deep-field silhouettes are opaque and depth-write, so
+// a star behind one is occluded, and a star in front reads as a faint mote.
+// Starfield positions are never read by gameplay, collision, or save code.
+const EXTENT_REFERENCE = 1100;
+const SCALE_MIN = 0.9;
+const SCALE_MAX = 1.15;
+
+function radialLength(position) {
+  if (!Array.isArray(position)) return 0;
+  return Math.hypot(position[0] ?? 0, position[1] ?? 0, position[2] ?? 0);
+}
+
+/**
+ * Furthest authored content radius in a SYSTEM def. Pure data read: no THREE,
+ * no allocation beyond the transient Math.hypot numbers.
+ */
+export function systemExtent(def) {
+  if (!def) return 0;
+  let extent = radialLength(def.station?.position);
+  for (const gate of def.gates ?? []) extent = Math.max(extent, radialLength(gate.position));
+  extent = Math.max(extent, radialLength(def.hub?.position));
+  if (def.field?.center) {
+    extent = Math.max(extent, radialLength(def.field.center) + (def.field.radius ?? 0));
+  }
+  for (const landmark of def.landmarks ?? []) extent = Math.max(extent, radialLength(landmark.position));
+  for (const clue of def.clues ?? []) extent = Math.max(extent, radialLength(clue.position));
+  return extent;
+}
+
+/** Uniform starfield shell scale for a SYSTEM def; clamped to 0.9–1.15. */
+export function starfieldScaleFor(def) {
+  const extent = systemExtent(def);
+  if (!(extent > 0)) return 1;
+  return Math.min(SCALE_MAX, Math.max(SCALE_MIN, extent / EXTENT_REFERENCE));
+}
 
 /** Soft circular sprite, generated once on a canvas (no external assets). */
 function createStarSprite() {
@@ -97,6 +153,8 @@ export function initStarfield(ctx) {
 
   const group = new THREE.Group();
   group.name = 'starfield';
+  // Issue #338: shell radius follows the current system's authored extent.
+  group.scale.setScalar(starfieldScaleFor(ctx.systems?.[ctx.world.currentSystem]));
 
   // Depth layers with per-layer parallax response (wave-6): the nearer
   // shell counters ship velocity more strongly. Layer positions are
@@ -145,6 +203,8 @@ export function initStarfield(ctx) {
         if (ctx.lastEvents[i].type === 'systemLoaded') {
           for (let j = 0; j < layers.length; j++) layers[j].points.position.set(0, 0, 0);
           bandApplied = -1;
+          // Issue #338: retune the shells to the destination system's extent.
+          group.scale.setScalar(starfieldScaleFor(ctx.systems?.[ctx.lastEvents[i].to]));
           break;
         }
       }
