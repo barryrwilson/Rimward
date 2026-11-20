@@ -6,6 +6,8 @@ import { cylinderOverlap, torusOverlap } from '../game/collision.js';
 import { applyRockSurface } from './rock-surface.js';
 import { PLANET_SLOT_COUNT } from './solarsystem.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { withoutGlobalRandom } from '../game/random-scope.js';
+import { asteroidSceneryLayout } from '../game/asteroid-fields.js';
 
 /**
  * Asteroid field — one InstancedMesh PER ORE TYPE of tumbling rocks, built
@@ -1610,6 +1612,8 @@ export function initAsteroids(ctx) {
   // contexts against this one module, and a shared list would let one ctx's
   // rebuild dispose another ctx's live geometry while it is still rendering.
   const fieldMeshes = [];
+  // Issue #338: one presentation-only Points layer for the far belt.
+  let farLayer = null;
 
   function writeFieldOre(sys, index, remaining, seeded) {
     if (typeof sys !== 'string' || !Object.hasOwn(SYSTEMS, sys)) return;
@@ -1959,7 +1963,75 @@ export function initAsteroids(ctx) {
     lastRespawnRef = ctx.world.fieldRespawn;
   }
 
+  function disposeFarLayer() {
+    if (!farLayer) return;
+    ctx.scene.remove(farLayer.points);
+    farLayer.geometry.dispose();
+    farLayer.material.dispose();
+    farLayer = null;
+  }
+
+  /**
+   * Issue #338 far belt: deterministic 2–3 scenery fields rendered as ONE
+   * Points layer (1 draw call, 0 triangles, no matrix writes, no save data).
+   * The primary def.field rocks remain the minable instanced belt.
+   */
+  function buildFarLayer(def, band) {
+    const layout = asteroidSceneryLayout(def);
+    const total = layout.reduce((n, f) => n + f.count, 0);
+    if (total <= 0) return;
+    // Scene construction consumes global Math.random via THREE UUIDs; keep the
+    // harness's seeded content stream byte-identical.
+    withoutGlobalRandom(() => {
+      const rng = makeRng(0xb3e000 + ((def.worldSeed | 0) >>> 0));
+      const oreKeys = oreKeysForBand(band);
+      const positions = new Float32Array(total * 3);
+      const colors = new Float32Array(total * 3);
+      const color = new THREE.Color();
+      let i = 0;
+      for (let f = 0; f < layout.length; f++) {
+        const field = layout[f];
+        const [cx, cy, cz] = field.center;
+        for (let k = 0; k < field.count; k++) {
+          const a = rng() * Math.PI * 2;
+          const r = Math.sqrt(rng()) * field.radius;
+          positions[i * 3 + 0] = cx + Math.cos(a) * r;
+          positions[i * 3 + 1] = cy + (rng() - 0.5) * field.radius * 0.25;
+          positions[i * 3 + 2] = cz + Math.sin(a) * r;
+          const oreKey = oreKeys[(i * 7 + f) % oreKeys.length] ?? 'rawOre';
+          const profile = ORE_TYPES[oreKey].rock;
+          color.setHSL(
+            profile.hue[0] + rng() * profile.hue[1],
+            profile.sat[0] + rng() * profile.sat[1],
+            profile.light[0] + rng() * profile.light[1],
+          );
+          colors[i * 3 + 0] = color.r;
+          colors[i * 3 + 1] = color.g;
+          colors[i * 3 + 2] = color.b;
+          i += 1;
+        }
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const material = new THREE.PointsMaterial({
+        size: 2.6,
+        sizeAttenuation: true,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      });
+      const points = new THREE.Points(geometry, material);
+      points.name = 'asteroid-belt-far'; // test/probe contract
+      points.userData = { count: total, fields: layout.length, band };
+      ctx.scene.add(points);
+      farLayer = { points, geometry, material };
+    });
+  }
+
   function build(def) {
+    disposeFarLayer();
     const field = def.field;
     const count = Math.min(Math.max(0, field.count | 0), 160);
     const [cx, cy, cz] = field.center;
@@ -2262,6 +2334,8 @@ export function initAsteroids(ctx) {
       if (bundles[b].mesh.instanceColor) bundles[b].mesh.instanceColor.needsUpdate = true;
     }
 
+    buildFarLayer(def, band);
+
     // Replace (never mutate) so combat.js drops stale entries immediately.
     ctx.asteroids = { list };
     builtSys = def.id ?? ctx.world.currentSystem;
@@ -2284,6 +2358,7 @@ export function initAsteroids(ctx) {
   }
 
   function rebuild(to) {
+    disposeFarLayer();
     // Wave 51 teardown rule: remove AND dispose every per-ore mesh
     // (geometry + material) before building the new field — leaking a mesh
     // across a jump is a hard failure.
@@ -2398,6 +2473,8 @@ export function initAsteroids(ctx) {
       const tOrbit = Number.isFinite(tWorld) ? tWorld : 0;
 
       // Closed-form orbit for every rock. Mutate the live Vector3.
+      const pObj = ctx.ship && ctx.ship.object;
+      const pPos = pObj && pObj.position;
       for (let i = 0; i < n; i++) {
         const rock = rocks[i];
         writeOrbitPose(
@@ -2410,6 +2487,15 @@ export function initAsteroids(ctx) {
           rock.y0,
           tOrbit,
         );
+        // Issue #338 range gate: keep the pose current, but skip the instance
+        // matrix write beyond 1,200 u. A denser field therefore cannot raise
+        // the per-frame matrix-write cost; distant rocks render static.
+        if (pPos) {
+          const dx = rock.position.x - pPos.x;
+          const dy = rock.position.y - pPos.y;
+          const dz = rock.position.z - pPos.z;
+          if (dx * dx + dy * dy + dz * dz > TUMBLE_RANGE2) continue;
+        }
         _quat.setFromAxisAngle(rock.axis, rock.angle).multiply(rock.tilt);
         _scale.copy(rock.scaleVec).multiplyScalar(rock.radius);
         _mat4.compose(rock.position, _quat, _scale);
@@ -2419,8 +2505,6 @@ export function initAsteroids(ctx) {
       }
 
       // Slow tumble, round-robin ~1/4. Skip far rocks. Orbit already posed.
-      const pObj = ctx.ship && ctx.ship.object;
-      const pPos = pObj && pObj.position;
       const end = Math.min(cursor + chunk, n);
       for (let i = cursor; i < end; i++) {
         const rock = rocks[i];

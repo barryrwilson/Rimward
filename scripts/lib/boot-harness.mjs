@@ -196,6 +196,7 @@ export function installDomStubs() {
 export async function bootGameSystems() {
   const { initStarfield } = await import('../../src/systems/starfield.js');
   const { initSolarSystem } = await import('../../src/systems/solarsystem.js');
+  const { initDeepField } = await import('../../src/systems/deepfield.js');
   const { initAsteroids } = await import('../../src/systems/asteroids.js');
   const { initStation } = await import('../../src/systems/station.js');
   const { initLandmarks } = await import('../../src/systems/landmarks.js');
@@ -218,6 +219,7 @@ export async function bootGameSystems() {
   const { initAutomine } = await import('../../src/game/automine.js'); // same slot as main.js: after autopilot, before flee
   const { initAgentFlee } = await import('../../src/game/agent-flee.js');
   const { initTraffic } = await import('../../src/game/traffic.js');
+  const { initFarTraffic } = await import('../../src/systems/far-traffic.js');
   const {
     NPC_FACTIONS, NPC_CLASSES, configureShipAssetFileReader, primeShipAsset, buildShipAsset,
     releaseShipAsset,
@@ -255,10 +257,10 @@ export async function bootGameSystems() {
 
   const inits = [
     ['title', initTitle],
-    ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['asteroids', initAsteroids],
+    ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['deepfield', initDeepField], ['asteroids', initAsteroids],
     ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['automine', initAutomine], ['flee', initAgentFlee], ['settings', initSettings], ['bio', initBio],
     ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['nav', initNav], ['traffic', initTraffic],
-    ['npc', initNpc], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
+    ['npc', initNpc], ['farTraffic', initFarTraffic], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
     ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['agentapi', initAgentApi], ['hud', initHud],
   ];
   const systems = [];

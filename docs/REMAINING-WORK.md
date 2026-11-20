@@ -1,3 +1,58 @@
+## Deep-field scale layer, far-traffic impostors, and asteroid density — #338
+
+Implemented on `dsh/issue-338-world-deep-field-scale-layer-far-traffic`
+(base master `2c9fe41`). Phase 1 of the system scale/population plan (#337 is
+the Phase 0 measurement gate; #339–#341 are later phases). Ships no persistent
+field, no save-format change, no player keybinding and no aim-glass digit.
+
+- `src/systems/deepfield.js` builds a deterministic per-system deep field at
+  1,800–8,000 u: 2–4 planet silhouettes, an optional companion star, 1–2
+  ring/megastructure silhouettes, one beacon-chain + 6–12 station-light Points
+  layer, and 3–6 nebula sprites. Measured across all 101 systems: max 15 draw
+  calls / 2,574 triangles (issue budget ≤20 / ≤30k). Rebuilt and disposed on
+  `systemLoaded`; `reducedMotion` freezes rotation; no collision/AI/save.
+- `src/systems/starfield.js` ties the starfield shell scale to system extent
+  (clamped 0.9–1.15) and preserves the band-opacity/parallax/reducedMotion
+  behavior; layers are not rebuilt per jump.
+- `src/systems/far-traffic.js` renders abstract records outside the
+  instantiation bubble as ONE 256-capacity instanced proxy layer at 1 Hz with
+  per-instance faction colour. An impostor is hidden while its record is live
+  or within the 900 u instantiation range, so there is no duplicate hull at the
+  handoff. Presentation-only: no AI/collision/combat/persistent fields.
+- `src/game/asteroid-fields.js` + `src/systems/asteroids.js` raise the
+  system-wide asteroid density to 600–800 objects through 2–3 deterministic far
+  fields rendered as ONE Points layer (1 draw call, 0 triangles, no matrix
+  writes). The minable instanced belt keeps its 9-ore structure, 160 cap, tumble
+  determinism, `#149` respawn and save caps; instance matrix writes are
+  range-gated at 1,200 u (writes 113 median / 163 max vs the Phase-0 113/191).
+- `src/game/random-scope.js` wraps new scene construction so THREE's
+  UUID-driven `Math.random` draws do not shift the boot harness's seeded
+  content stream (this was required to keep the issue-201 route fixture and the
+  agent-API playtest deterministic).
+- `scripts/issue-338-scale-layer-test.mjs` pins determinism, budgets,
+  teardown/resource disposal, the 900 u handoff helper, the 600–800 density and
+  the range-gated matrix writes; it is wired into `npm run test:boot`.
+  `scripts/issue-338-live-visual-probe.mjs` is the live production visual
+  probe (screenshots + scene checks).
+
+Verification: `npm run build` passes (2,061,710 bytes minified / 625,430 gzip;
++11,988 / +4,130 vs the Phase-0 artifact, within the ≤50 KB phase budget).
+`npm run test:boot` exits 0, including the focused #338 pins and the existing
+wave51/wave69/#149 asteroid checks. The production perf probe (same machine and
+harness as #337) passed with zero console errors/exceptions: frame p50 32.5 ms
+/ p95 33.35 ms (+1.2 / +1.55 ms, under the 2 ms limit), draw calls 65 median /
+109 max (+2 / +15, under +≤25), triangles 147,834 median (below baseline),
+matrix writes 113 / 163 (no growth), CPU total 1.10 ms, bundle +11.7 KiB. The
+live visual probe passed with screenshots at the station, lane, gate and route
+end: deep field 12 draw calls / 1,644 triangles at Freehold, 256-capacity
+impostors with no duplicate of a live hull, and 481–639 far-belt points per
+system. Evidence is untracked under `out/issue-338-live/`.
+
+Parked: no CI frame-time gate yet (same Phase-0 decision); the far belt is
+presentation-only by design (not minable, no save data); Phase 2 (#339) reuses
+the impostor infrastructure; a low-end hardware profile can be baselined
+separately without changing this workstation baseline.
+
 ## Frame-time instrumentation and a live perf baseline — #337
 
 Implemented on `dsh/issue-337-perf-add-frame-time-instrumentation-and` (base

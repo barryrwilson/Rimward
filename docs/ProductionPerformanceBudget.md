@@ -209,3 +209,80 @@ enforce later). Each Phase 1–4 PR must attach before/after evidence from
 `npm run test:perf-live` on the same named machine/build; a later CI gate can
 pin these budgets. A low-end-profile baseline can be recorded separately
 without changing this workstation baseline.
+
+## Frame-time budget — system scale/population Phase 1 (issue #338)
+
+Issue #338 ships the Phase 1 scale/population layer: a deterministic deep-field
+backdrop, far-traffic impostors and a denser asteroid system. It adds no
+persistent field, no save-format change, no HUD key and no aim-glass digit.
+
+### What is added
+
+- `src/systems/deepfield.js` builds 2–4 planet silhouettes, an optional
+  companion star, 1–2 ring/megastructure silhouettes, one beacon/lights Points
+  layer and 3–6 nebula sprites at 1,800–8,000 u. Measured across all 101
+  systems: max 15 draw calls / 2,574 triangles (issue budget ≤20 / ≤30k).
+  Rebuilt and disposed on `systemLoaded`; `reducedMotion` freezes rotation.
+- `src/systems/far-traffic.js` renders abstract records outside the
+  instantiation bubble as ONE 256-capacity instanced proxy layer, refreshed at
+  1 Hz with per-instance faction colour; an impostor is hidden while its record
+  is live or within the 900 u instantiation range, so the handoff never shows
+  a duplicate hull.
+- `src/game/asteroid-fields.js` + `src/systems/asteroids.js` raise the
+  system-wide asteroid density to 600–800 objects: 2–3 deterministic far fields
+  rendered as ONE Points layer (1 draw call, 0 triangles, no matrix writes),
+  while the minable instanced belt keeps its 9-ore structure, 160 cap and save
+  caps. Instance matrix writes are range-gated at 1,200 u.
+- `src/systems/starfield.js` ties the shell scale to system extent (clamped
+  0.9–1.15); `src/game/random-scope.js` keeps THREE's UUID-driven
+  `Math.random` draws from shifting the harness's seeded content stream.
+
+### Measured after (2026-11-19, same machine/build/harness as the Phase-0 baseline)
+
+The after run used the same probe (`npm run test:perf-live`, production
+`dist/`, `?agent=1&perf=1`, 60 one-second samples, fixed Greenhand → Veridian
+route), the same named machine and the same headless Chrome/ANGLE RTX 4090
+configuration. Evidence is in the untracked
+`out/issue-338-live/perf-baseline/`. The same-probe Phase-0 artifact
+(`result.json`) recorded draw calls 63 median / 94 max, triangles 158,628
+median and asteroid matrix writes 113 median / 191 max; the contract table's
+earlier 48.5/106 draw-call line came from a different first run, so deltas below
+are against the artifact.
+
+| Measure | Phase-0 artifact | Phase 1 measured | Delta |
+|---|---:|---:|---:|
+| Frame p50 | 31.3 ms | 32.5 ms | +1.2 ms |
+| Frame p95 | 31.8 ms | 33.35 ms | +1.55 ms |
+| Frame p99 | 32.1 ms | 33.7 ms | +1.6 ms |
+| Draw calls | 63 median / 94 max | 65 median / 109 max | +2 / +15 |
+| Triangles | 158,628 median | 147,834 median | −10,794 |
+| Points | 7,600 median | 8,254 median | +654 (far belt) |
+| Asteroid matrix writes | 113 median / 191 max | 113 median / 163 max | 0 / −28 |
+| CPU per subsystem total | 1.13 ms | 1.10 ms | −0.03 ms |
+| Asteroids CPU | 0.051 ms | 0.034 ms | −0.017 ms |
+| Subsystems observed | 35 | 37 | +2 |
+| Console errors / exceptions | 0 / 0 | 0 / 0 | 0 |
+| Production JS | 2,049,722 bytes minified / 621,300 gzip | 2,061,710 bytes minified / 625,430 gzip | +11,988 / +4,130 |
+
+All Phase 1 budgets pass: frame p50/p95 regression is under the 2 ms limit,
+draw-call growth (+2 median / +15 max) is under +≤25, triangles are below the
+Phase-0 median, asteroid matrix writes did not grow (range gating lowers the
+max), CPU did not grow, and bundle growth (+11.7 KiB minified) is under the
+≤50 KB per-phase budget. The probe verdict was PASS with zero console errors or
+exceptions; the route produced 18 Freehold / 42 Veridian samples.
+
+One first-use spike of 715.5 ms appears in the frame max (the new Points/Line
+materials compile their shaders on the first jump frame); p50/p95/p99 are
+unaffected. A live production visual probe
+(`scripts/issue-338-live-visual-probe.mjs`, untracked evidence in
+`out/issue-338-live/scale-visual/`) also passed with screenshots at the
+station, lane, gate and route end: deep field 12 draw calls / 1,644 triangles
+at Freehold, 256-capacity impostors with no duplicate of a live hull, and
+481–639 far-belt points per system.
+
+No CI frame-time gate is added yet (same Phase-0 decision: baseline first,
+enforce later). The far belt is presentation-only by design (not minable, no
+save data); Phase 2 (#339) can reuse the impostor infrastructure, and a
+low-end-profile baseline can be recorded separately without changing this
+workstation baseline.
+
