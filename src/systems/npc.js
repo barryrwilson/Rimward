@@ -147,6 +147,14 @@ const ACE_FURY_INTERVAL = NPC_FIRE_INTERVAL * 0.65;
 const LAW_ZONE_RADIUS = 300; // station law zone: no hostile intent develops
 const HOSTILE_STANDING = -10; // patrols hunt the player at or below this standing
 const RESOLVE_INTERVAL = 1; // s between resolve recomputes
+// Issue #339 Phase 2: AI tick LOD for a live hull beyond the spawn bubble. The
+// only live hulls out there sit inside the 900–1400 u despawn hysteresis band or
+// are the selected escapee the player is chasing. Their AI/physics/state step
+// runs on this interval from a session-only accumulator (ai.lodAccum); the
+// boundary frame and the mesh animation still run every frame, dead-reckoned
+// motion keeps the far hull's pose continuous between ticks, and combat stays
+// near-only.
+const LOD_FAR_TICK_INTERVAL = 1 / 8; // 8 Hz
 const THREAT_MEMORY = 12; // s a ship stays wary after last combat
 const TRADER_FLEE_HIT = 10; // s a graze keeps a trader in flee after lastHitAt
 const FIRE_FACE_DOT = 0.92; // must roughly face target to fire
@@ -365,6 +373,11 @@ function makeAi(ctx, record, startPos) {
     disabledInit: false,
     driftVel: new THREE.Vector3(),
     weaveSeed: Math.random() * Math.PI * 2,
+    // Issue #339 Phase 2: AI tick LOD accumulator. Session-only — ai is built on
+    // instantiation and dies with the hull, so nothing here is ever persisted.
+    // -1 = not accumulating (near, or first far frame not yet stepped); >= 0 is
+    // the elapsed debt toward the next 8 Hz far-band step.
+    lodAccum: -1,
   };
   if ((mode === 'route' || mode === 'mine') && Array.isArray(record.route) && record.route.length > 0) {
     ai.waypoints = record.route;
@@ -4175,8 +4188,59 @@ export function initNpc(ctx) {
         // Missing ai or velocity: skip this hull this frame.
         if (!ai || !ai.velocity || typeof ai.velocity.length !== 'function') continue;
         if (!live.object) continue;
-        tickShipState(st, now, dt);
-        animateShipMesh(live.object, ctx.elapsed, reducedMotion, ctx.camera, st.disabled ? 0 : ai.velocity.length());
+        // Issue #339 Phase 2 — AI tick LOD. Near (<= U.INSTANTIATE_RANGE, the
+        // bubble traffic.js spawns hulls in) keeps the original full-frame path
+        // byte-for-byte. A live hull beyond it is only possible inside the
+        // 900–1400 u despawn hysteresis band or as the selected escapee the
+        // player is chasing; its AI/physics/state step then runs at 8 Hz from a
+        // session-only accumulator. The boundary frame steps immediately (no
+        // 1/8 s freeze at the tier edge), the mesh animation advances every
+        // frame, and skipped frames only dead-reckon the last commanded velocity
+        // so the far pose stays continuous without running AI or collision.
+        // Combat stays near-only (see the ctx.flags.combat gate below).
+        const playerDist = playerObj ? live.object.position.distanceTo(playerObj.position) : 0;
+        const nearPlayer = !(playerDist > U.INSTANTIATE_RANGE);
+        let stepDt = dt;
+        if (!nearPlayer) {
+          // Mesh animation every frame; the sim step is deferred to the tick.
+          animateShipMesh(live.object, ctx.elapsed, reducedMotion, ctx.camera, st.disabled ? 0 : ai.velocity.length());
+          // reducedMotion freezes every glow waver at its amplitude-0 base
+          // (exactly 1; a disabled hull's glow goes dark). That is a visual
+          // contract, not an AI decision, so a far-band hull must not wait for
+          // the 8 Hz tick to settle it.
+          const glow = live.object.userData.glow;
+          if (reducedMotion && glow) {
+            glow.scale.setScalar(1);
+            if (st.disabled) glow.visible = false;
+          }
+          if (ai.lodAccum < 0) {
+            // First far frame: the hull was fully simulated until now, so take
+            // one immediate step rather than freezing it for up to 1/8 s. The
+            // 8 Hz cadence starts after this boundary step.
+            ai.lodAccum = 0;
+            tickShipState(st, now, dt);
+          } else {
+            // Visual continuity between AI ticks: advance the far hull along its
+            // last commanded velocity only (no AI, collision, combat or state).
+            // The tick rewinds exactly this dead-reckoned debt before stepping,
+            // so the hull still advances only stepDt per interval — never twice.
+            const vel = st.disabled || ai.mode === 'drift' ? ai.driftVel : ai.velocity;
+            const debt = ai.lodAccum;
+            ai.lodAccum = debt + dt;
+            if (ai.lodAccum < LOD_FAR_TICK_INTERVAL) {
+              if (vel) live.object.position.addScaledVector(vel, dt);
+              continue;
+            }
+            if (vel) live.object.position.addScaledVector(vel, -debt);
+            stepDt = ai.lodAccum;
+            ai.lodAccum = 0;
+            tickShipState(st, now, stepDt);
+          }
+        } else {
+          ai.lodAccum = -1; // not accumulating: the next far frame steps immediately
+          tickShipState(st, now, dt);
+          animateShipMesh(live.object, ctx.elapsed, reducedMotion, ctx.camera, st.disabled ? 0 : ai.velocity.length());
+        }
         // Wave 30 demand-hail upkeep: the parley dies with the hail target
         // (disabled here; destroyed/despawned discard the ai outright, and
         // hail.js's own timeout closes the card on those same conditions),
@@ -4200,8 +4264,8 @@ export function initNpc(ctx) {
         }
         if (st.disabled) {
           ai.resolveBoost = 0; // stand-down: a disabled hull drops the bluff sting (updateResolve never runs here)
-          updateDisabled(live, dt, now, reducedMotion);
-          if (_phyOn) bounceLive(live, dt);
+          updateDisabled(live, stepDt, now, reducedMotion);
+          if (_phyOn) bounceLive(live, stepDt);
           // Issue #68: a disabled runner keeps its plan, its damage and its
           // place in the world — it simply cannot navigate or charge. The
           // charge is cleared here, so it can never finish on a timer it
@@ -4213,7 +4277,7 @@ export function initNpc(ctx) {
           }
           continue;
         }
-        ai.t += dt;
+        ai.t += stepDt;
         if (now >= ai.resolveAt) {
           ai.resolveAt = now + RESOLVE_INTERVAL;
           updateResolve(ctx, live, now);
@@ -4224,47 +4288,50 @@ export function initNpc(ctx) {
         // Issue #105: a standing station-security order owns this hull's motion
         // for its window, in place of the ordinary mode. Everything after it —
         // the bounce, the escape sync, the combat flag — still runs.
-        const underOrders = laneClearStep(ctx, live, dt, now);
+        const underOrders = laneClearStep(ctx, live, stepDt, now);
         if (!underOrders) switch (ai.mode) {
           case 'hunt':
-            updateHunt(ctx, live, dt, now, reducedMotion);
+            updateHunt(ctx, live, stepDt, now, reducedMotion);
             break;
           case 'duel':
-            updateDuel(ctx, live, dt, now, reducedMotion);
+            updateDuel(ctx, live, stepDt, now, reducedMotion);
             break;
           case 'flee':
-            updateFlee(ctx, live, dt);
+            updateFlee(ctx, live, stepDt);
             break;
           case 'drift':
-            updateDrift(live, dt, reducedMotion);
+            updateDrift(live, stepDt, reducedMotion);
             // Issue #148: a derelict bleeds its coast off and keeps its record true.
-            if (live.record && live.record.state === 'derelict') tickDerelictLive(live, dt);
+            if (live.record && live.record.state === 'derelict') tickDerelictLive(live, stepDt);
             // Issue #147: a heaved-to trader whose boarder is gone runs.
             if (ai.heldBy) tickHeld(ctx, live, now);
             break;
           case 'route':
-            updateRoute(ctx, live, dt, now, reducedMotion);
+            updateRoute(ctx, live, stepDt, now, reducedMotion);
             break;
           case 'mine':
-            updateMine(ctx, live, dt, now, reducedMotion);
+            updateMine(ctx, live, stepDt, now, reducedMotion);
             break;
           default:
-            updateLoiter(live, dt);
+            updateLoiter(live, stepDt);
         }
-        if (_phyOn) bounceLive(live, dt);
+        if (_phyOn) bounceLive(live, stepDt);
         // Issue #68: the escape phase machine runs HERE — after steering and
         // after the physical bounce — so arrival, the gate charge and the
         // terminal departure are decided on the hull's real end-of-frame
         // position. Cheap: one distance for ships actually fleeing.
-        if (live.ai.mode === 'flee') tickEscapePhase(ctx, live, dt);
+        if (live.ai.mode === 'flee') tickEscapePhase(ctx, live, stepDt);
         // Issue #68: keep the record's escape snapshot equal to the live hull
-        // every frame it is fleeing — a mid-flight save, a cull, or the
+        // every frame it is fleeing (for a far-band hull, on each 8 Hz LOD tick —
+        // the hull itself only moves then) — a mid-flight save, a cull, or the
         // player's own jump then folds the TRUE position and condition back,
         // never a stale one. Runs only for ships that carry a plan (≤ MAX_LIVE
         // of them), writes in place, and allocates nothing. syncEscapeLive is
         // itself the plan guard — a hull with no plan returns immediately.
         syncEscapeLive(ctx, live);
-        if (ai.intent && playerObj && live.object.position.distanceTo(playerObj.position) < U.ENCOUNTER_BUBBLE) {
+        // Combat contribution stays near-only: the mid/far presentation tiers
+        // never fly, and a live hull in the hysteresis band is not a fight.
+        if (nearPlayer && ai.intent && playerObj && live.object.position.distanceTo(playerObj.position) < U.ENCOUNTER_BUBBLE) {
           combat = true;
         }
       }

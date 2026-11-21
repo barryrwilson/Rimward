@@ -30,6 +30,7 @@ import { initMystery } from './game/mystery.js';
 import { initEpics } from './game/epics.js';
 import { initTraffic } from './game/traffic.js';
 import { initFarTraffic } from './systems/far-traffic.js';
+import { initMidTraffic } from './systems/mid-traffic.js';
 import { initNpc } from './systems/npc.js';
 import { initCombat } from './systems/combat.js';
 import { initPods } from './game/pods.js';
@@ -112,8 +113,9 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // keydown listener registers before controls.js and origins.js, and it
 // pauses the sim until the player chooses Continue or New Game. deepfield sits
 // right after solarSystem (distant scenery, rebuilt on the same systemLoaded
-// consume); farTraffic sits after npc so it reads the frame's live-record flags
-// (a record promoted to a real hull must hide its impostor). perf runs
+// consume); midTraffic and farTraffic sit after npc so they read the frame's
+// live-record flags (a record promoted to a real hull must hide its proxy, and
+// mid/far split the >900 u band so no record is drawn twice). perf runs
 // LAST after HUD as the dev-only ?perf=1 sampler (no event consumption; absent
 // by default, so a normal session keeps the original unwrapped update path).
 const systemDefs = [
@@ -140,6 +142,7 @@ const systemDefs = [
   ['nav', initNav],
   ['traffic', initTraffic],
   ['npc', initNpc],
+  ['midTraffic', initMidTraffic],
   ['farTraffic', initFarTraffic],
   ['combat', initCombat],
   ['pods', initPods],

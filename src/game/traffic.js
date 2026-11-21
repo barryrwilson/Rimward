@@ -5,6 +5,7 @@ import { escapeActive, readEscape } from './npc-escape.js';
 import { spawnLiveShip, removeLiveShip, findHunterOf } from '../systems/npc.js';
 import { isShipAssetReady, primeShipAsset } from '../systems/ship-assets.js';
 import { spawnBlocked, pirateLiveCap, visualClassFor, closeSpawn } from './traffic-feel.js';
+import { NEAR_CAP } from './traffic-tiers.js';
 
 /**
  * Traffic — the instantiation bubble (doc §8.6).
@@ -48,7 +49,7 @@ import { spawnBlocked, pirateLiveCap, visualClassFor, closeSpawn } from './traff
  * on the destination gate waypoint, so they materialize at the gate.
  */
 
-const MAX_LIVE = 10;
+const MAX_LIVE = NEAR_CAP; // issue #339: one shared source for the near full-sim cap
 const BLOCKADE_PIRATE_RANGE_MULT = 1.3;
 const BLOCKADE_PIRATE_PRIORITY = 0.5; // score multiplier: pirates spawn sooner
 

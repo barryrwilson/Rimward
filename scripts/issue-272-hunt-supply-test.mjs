@@ -44,7 +44,12 @@ const hunts = () => ctx.world.jobs.filter((j) => j && j.kind === 'hunt' && j.ori
 const huntOffers = () => offers().filter((o) => o.kind === 'hunt');
 const huntRows = () => hunts().filter((j) => j.state === 'offered');
 const pirateRecords = (sysId) => (ctx.world.recordBanks?.[sysId] ?? []).filter((r) => r && r.role === 'pirate');
+// Issue #339: ambient crowd pirates carry bounty 0 and never post a hunt. The
+// #272 supply contract counts only board-bearing pirates, matching world.js
+// tickReaverReplenish.
+const boardPirates = (sysId) => pirateRecords(sysId).filter((r) => r.bounty > 0);
 const livingPirates = (sysId) => pirateRecords(sysId).filter((r) => r.state !== 'dead' && r.state !== 'captured' && r.state !== 'derelict');
+const livingBoardPirates = (sysId) => boardPirates(sysId).filter((r) => r.state !== 'dead' && r.state !== 'captured' && r.state !== 'derelict');
 
 function step(seconds = 1) {
   const frames = Math.round(seconds * 60);
@@ -118,7 +123,7 @@ check('A2 every hunt pay scales from the record bounty', () => {
 // B. Kill the local supply: the board empties and says why.
 // ---------------------------------------------------------------------------
 check('B1 killing every local reaver empties the hunt board', () => {
-  for (const rec of livingPirates('freehold')) rec.state = 'dead';
+  for (const rec of livingBoardPirates('freehold')) rec.state = 'dead';
   openBoard();
   assert.equal(huntOffers().length, 0, 'no hunt cards without a quarry');
   const note = byClass('screen-note').map((n) => String(n.textContent)).join(' ');
@@ -130,13 +135,13 @@ check('B1 killing every local reaver empties the hunt board', () => {
 // C. The world refills the visited system.
 // ---------------------------------------------------------------------------
 check('C1 the replenish pick drifts a new reaver into the visited bank', () => {
-  const livingBefore = livingPirates('freehold').length;
+  const livingBefore = livingBoardPirates('freehold').length;
   const castWant = SYSTEMS.freehold.cast.pirates;
   assert.ok(livingBefore < castWant, 'the cast has room: ' + livingBefore + '/' + castWant + ' living');
   // Step past the first pick (firstDelay 90s) on the real loop.
   step(100);
   const recs = pirateRecords('freehold');
-  assert.ok(recs.length > 4, 'a new record joined the original four: ' + recs.length);
+  assert.ok(livingBoardPirates('freehold').length > livingBefore, 'a new board-bearing record joined: ' + livingBoardPirates('freehold').length);
   const fresh = recs[recs.length - 1];
   assert.equal(fresh.role, 'pirate');
   assert.equal(fresh.classKey, 'cutter');
@@ -178,31 +183,46 @@ check('D1 unvisited systems stay ungenerated', () => {
 check('D2 the cast cap holds after many picks', () => {
   for (const rec of livingPirates('freehold')) rec.state = 'dead';
   step(400); // several picks
-  const living = livingPirates('freehold').length;
-  assert.ok(living <= SYSTEMS.freehold.cast.pirates, 'living pirates within cast: ' + living);
+  const living = livingBoardPirates('freehold').length;
+  assert.ok(living <= SYSTEMS.freehold.cast.pirates, 'living board-bearing pirates within cast: ' + living);
 });
 
 // ---------------------------------------------------------------------------
 // E. Tiers: veteran reavers fly resolve 70 at a doubled bounty.
 // ---------------------------------------------------------------------------
 check('E1 veteran reaver stamp prices and hardens the hull', () => {
-  // Force the tier roll deterministically: cycle the harness RNG so name
-  // attempts stay varied (0.1) while the tier roll lands in the veteran band
-  // (0.95 >= 0.7 weight boundary). The harness owns the generator, so this is
-  // the same override discipline the boot suite uses.
+  // Earlier picks (C1, D2) already set reaverTier from the seeded stream, so
+  // the old "wait until any tiered reaver exists" loop never stepped under the
+  // override: it only asserted whatever the seeded rolls produced. Issue #339
+  // shifted that stream (more records, more tick draws), so the fixture now
+  // waits for a NEW pick under the forced band instead of relying on the seed.
+  //
+  // Force the tier roll deterministically. The pick draws lane jitter before
+  // the name loop, and #339 grew every visited bank with crowd records that
+  // share the generated-name space, so a two-value 0.1/0.95 alternation no
+  // longer guarantees the tier draw lands above the 0.7 standard/veteran
+  // boundary. A rotating high sequence keeps name candidates varied and
+  // distinct (a free name is always found within the 40 attempts) while every
+  // draw, including the tier roll, sits in the veteran band. The harness owns
+  // the generator, so this is the same override discipline the boot suite uses.
+  const existing = new Set(pirateRecords('freehold').filter((r) => r.reaverTier));
   const realRandom = Math.random;
-  let flip = false;
-  Math.random = () => { flip = !flip; return flip ? 0.1 : 0.95; };
+  let spin = 0;
+  Math.random = () => {
+    spin = (spin + 1) % 97;
+    return 0.7 + (spin / 97) * 0.29;
+  };
   try {
     for (const rec of livingPirates('freehold')) rec.state = 'dead';
     // Picks land on the module cadence (interval × band × jitter); step in
     // slices until the pick lands rather than guessing one window.
-    for (let i = 0; i < 20 && pirateRecords('freehold').filter((x) => x.reaverTier).length === 0; i++) step(25);
+    for (let i = 0; i < 20 && !pirateRecords('freehold')
+      .some((r) => r.reaverTier && !existing.has(r)); i++) step(25);
   } finally {
     Math.random = realRandom;
   }
-  const recs = pirateRecords('freehold').filter((r) => r.reaverTier);
-  assert.ok(recs.length >= 1, 'a tiered reaver arrived');
+  const recs = pirateRecords('freehold').filter((r) => r.reaverTier && !existing.has(r));
+  assert.ok(recs.length >= 1, 'a new tiered reaver arrived under the forced band');
   const vet = recs.find((r) => r.reaverTier === 'veteran');
   assert.ok(vet, 'the veteran tier exists in the roll band');
   assert.equal(vet.resolve, 70, 'veteran resolve seed');

@@ -220,6 +220,7 @@ export async function bootGameSystems() {
   const { initAgentFlee } = await import('../../src/game/agent-flee.js');
   const { initTraffic } = await import('../../src/game/traffic.js');
   const { initFarTraffic } = await import('../../src/systems/far-traffic.js');
+  const { initMidTraffic } = await import('../../src/systems/mid-traffic.js');
   const {
     NPC_FACTIONS, NPC_CLASSES, configureShipAssetFileReader, primeShipAsset, buildShipAsset,
     releaseShipAsset,
@@ -260,7 +261,7 @@ export async function bootGameSystems() {
     ['starfield', initStarfield], ['solarsystem', initSolarSystem], ['deepfield', initDeepField], ['asteroids', initAsteroids],
     ['station', initStation], ['landmarks', initLandmarks], ['gate', initGate], ['controls', initControls], ['autopilot', initAutopilot], ['automine', initAutomine], ['flee', initAgentFlee], ['settings', initSettings], ['bio', initBio],
     ['ship', initShip], ['world', initWorld], ['contacts', initContacts], ['mystery', initMystery], ['epics', initEpics], ['jump', initJump], ['nav', initNav], ['traffic', initTraffic],
-    ['npc', initNpc], ['farTraffic', initFarTraffic], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
+    ['npc', initNpc], ['midTraffic', initMidTraffic], ['farTraffic', initFarTraffic], ['combat', initCombat], ['pods', initPods], ['wakes', initWakes], ['hail', initHail],
     ['song', initSong], ['save', initSave], ['origins', initOrigins], ['onboarding', initOnboarding], ['galaxychart', initGalaxyChart], ['agentapi', initAgentApi], ['hud', initHud],
   ];
   const systems = [];

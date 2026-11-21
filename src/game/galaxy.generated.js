@@ -87,6 +87,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 2,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.02,
       "refinedMetals": 1.15,
@@ -178,6 +184,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.02,
       "refinedMetals": 1.14,
@@ -260,6 +272,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 4,
       "patrols": 1,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 0.98,
@@ -352,6 +370,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.22,
       "refinedMetals": 1.1,
@@ -443,6 +467,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.14,
       "refinedMetals": 1.07,
@@ -518,6 +548,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.19,
       "refinedMetals": 1.04,
@@ -592,6 +628,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 0,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.23,
@@ -684,6 +726,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": true
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.16,
       "refinedMetals": 1.04,
@@ -766,6 +814,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.27,
@@ -858,6 +912,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.13,
       "refinedMetals": 1.1,
@@ -933,6 +993,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.32,
       "refinedMetals": 1.05,
@@ -1007,6 +1073,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 0,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.32,
@@ -1090,6 +1162,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 0,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.29,
@@ -1182,6 +1260,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.35,
       "refinedMetals": 1.06,
@@ -1272,6 +1356,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.21,
@@ -1364,6 +1454,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.08,
       "refinedMetals": 1.18,
@@ -1455,6 +1551,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.24,
       "refinedMetals": 1.09,
@@ -1537,6 +1639,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 1,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.34,
@@ -1629,6 +1737,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.26,
       "refinedMetals": 1.16,
@@ -1720,6 +1834,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 2,
       "ace": true
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.38,
       "refinedMetals": 0.74,
@@ -1802,6 +1922,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 1,
       "ace": true
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.34,
@@ -1894,6 +2020,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.35,
       "refinedMetals": 0.7,
@@ -1976,6 +2108,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 2,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.56,
@@ -2068,6 +2206,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.66,
       "refinedMetals": 0.72,
@@ -2151,6 +2295,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.67,
       "refinedMetals": 0.73,
@@ -2225,6 +2375,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 1,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.5,
@@ -2308,6 +2464,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 1,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.55,
@@ -2400,6 +2562,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.54,
       "refinedMetals": 0.8,
@@ -2491,6 +2659,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.58,
       "refinedMetals": 0.75,
@@ -2565,6 +2739,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 1,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.64,
@@ -2657,6 +2837,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.46,
       "refinedMetals": 0.8,
@@ -2747,6 +2933,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 5,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.45,
@@ -2839,6 +3031,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.67,
       "refinedMetals": 0.81,
@@ -2922,6 +3120,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.56,
       "refinedMetals": 0.82,
@@ -3004,6 +3208,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 4,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.43,
@@ -3096,6 +3306,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.64,
       "refinedMetals": 0.7,
@@ -3180,6 +3396,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 2,
       "ace": true
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.37,
@@ -3284,6 +3506,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.57,
       "refinedMetals": 0.97,
@@ -3374,6 +3602,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.62,
@@ -3466,6 +3700,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.52,
       "refinedMetals": 0.97,
@@ -3557,6 +3797,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.62,
       "refinedMetals": 0.85,
@@ -3632,6 +3878,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.62,
       "refinedMetals": 0.91,
@@ -3706,6 +3958,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 2,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.62,
@@ -3798,6 +4056,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.69,
       "refinedMetals": 0.83,
@@ -3889,6 +4153,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.55,
       "refinedMetals": 0.91,
@@ -3963,6 +4233,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.59,
@@ -4055,6 +4331,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.55,
       "refinedMetals": 0.85,
@@ -4146,6 +4428,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.47,
       "refinedMetals": 0.87,
@@ -4228,6 +4516,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 0,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.73,
@@ -4320,6 +4614,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.6,
       "refinedMetals": 0.88,
@@ -4410,6 +4710,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.5,
@@ -4502,6 +4808,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.58,
       "refinedMetals": 0.94,
@@ -4592,6 +4904,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.44,
@@ -4684,6 +5002,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.47,
       "refinedMetals": 0.96,
@@ -4767,6 +5091,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 4,
       "patrols": 1,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.45,
@@ -4860,6 +5190,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.46,
       "refinedMetals": 1.01,
@@ -4935,6 +5271,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 1,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.64,
@@ -5028,6 +5370,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.62,
       "refinedMetals": 0.92,
@@ -5119,6 +5467,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.59,
@@ -5212,6 +5566,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.62,
       "refinedMetals": 0.87,
@@ -5295,6 +5655,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.47,
@@ -5388,6 +5754,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.57,
       "refinedMetals": 0.91,
@@ -5480,6 +5852,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.63,
       "refinedMetals": 0.88,
@@ -5555,6 +5933,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 0,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.68,
@@ -5641,6 +6025,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 4,
       "patrols": 1,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.62,
@@ -5746,6 +6136,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.77,
       "refinedMetals": 1.15,
@@ -5838,6 +6234,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.73,
       "refinedMetals": 1.14,
@@ -5922,6 +6324,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.76,
       "refinedMetals": 1.23,
@@ -6005,6 +6413,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 0,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.75,
@@ -6098,6 +6512,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.81,
       "refinedMetals": 1.22,
@@ -6181,6 +6601,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 2,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.73,
@@ -6274,6 +6700,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.83,
       "refinedMetals": 1.15,
@@ -6358,6 +6790,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 2,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.25,
       "refinedMetals": 1.3,
@@ -6441,6 +6879,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.42,
       "refinedMetals": 1.3,
@@ -6515,6 +6959,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 2,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.48,
@@ -6599,6 +7049,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.8,
       "refinedMetals": 1.19,
@@ -6682,6 +7138,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.88,
       "refinedMetals": 1.13,
@@ -6756,6 +7218,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 1,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.92,
@@ -6840,6 +7308,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.78,
       "refinedMetals": 1.12,
@@ -6914,6 +7388,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 0,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 14,
+      "pirates": 7,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.89,
@@ -6999,6 +7479,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 2,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.74,
@@ -7105,6 +7591,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.67,
       "refinedMetals": 1.2,
@@ -7196,6 +7688,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 4,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.62,
@@ -7289,6 +7787,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.75,
       "refinedMetals": 1.18,
@@ -7380,6 +7884,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.77,
@@ -7473,6 +7983,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.77,
       "refinedMetals": 1.13,
@@ -7488,8 +8004,8 @@ export const GENERATED_SYSTEMS = {
     "faction": "independent",
     "band": 2,
     "chart": [
-      892,
-      650
+      1035,
+      711
     ],
     "landmarks": [
       {
@@ -7564,6 +8080,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 5,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.69,
@@ -7657,6 +8179,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.74,
       "refinedMetals": 1.14,
@@ -7749,6 +8277,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.67,
       "refinedMetals": 1.16,
@@ -7832,6 +8366,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 3,
       "patrols": 1,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.67,
@@ -7925,6 +8465,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 1,
       "ace": true
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.72,
       "refinedMetals": 1.25,
@@ -8008,6 +8554,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 5,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 8,
+      "patrols": 2,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.69,
@@ -8101,6 +8653,12 @@ export const GENERATED_SYSTEMS = {
       "patrols": 0,
       "ace": false
     },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
+    },
     "priceBase": {
       "provisions": 1.66,
       "refinedMetals": 1.24,
@@ -8192,6 +8750,12 @@ export const GENERATED_SYSTEMS = {
       "pirates": 2,
       "patrols": 0,
       "ace": false
+    },
+    "crowd": {
+      "traders": 16,
+      "pirates": 7,
+      "patrols": 1,
+      "miners": 2
     },
     "priceBase": {
       "provisions": 1.99,

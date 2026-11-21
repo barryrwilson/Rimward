@@ -104,7 +104,10 @@ export function runCommsPins(ctx) {
   pin('in-flight repeated telegraphs print exactly once', lines().length === 1);
   ctx.world.time += COMM_REPEAT_SECONDS;
   arm();
-  npc.update(1 / 60);
+  // Issue #339 Phase 2: a live hull beyond the 900 u instantiation bubble runs
+  // its AI on the 8 Hz tick-LOD cadence, so one 1/60 frame can fall between
+  // ticks. Advance to the next far-band AI tick; the comm still resumes once.
+  for (let i = 0; i < 8; i++) npc.update(1 / 60);
   pin('in-flight NPC comm resumes after cooldown', lines().length === 2);
   arm('player');
   ctx.ship.object.position.copy(pirate.object.position).add(new THREE.Vector3(0, 0, 100));

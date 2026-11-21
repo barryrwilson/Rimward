@@ -114,6 +114,55 @@ export function dockCruiseExitAim(position, target, bodies, out) {
   return 'none';
 }
 
+// A static keep sphere that the shared planner treats as an inside obstacle
+// (the sun's heat keep, or a station's own body) hands back the same inward
+// inside-tangent waypoint the parked-ship correction above handles: from past
+// R/sqrt(2) the 45-degree lateral point sits closer to the body than the hull,
+// so cruise holds a stable ring just inside keep until the blocked watchdog
+// cancels it. Keep the planner's lateral direction but originate the course
+// outward. Gates are excluded: the arrival gate holds the hull at its centre
+// and owns a separate bore policy.
+export function dockCruiseKeepExitAim(position, target, bodies, out) {
+  if (!finite3(position) || !finite3(target) || !bodies?.items || !out) return 'blocked';
+  for (let i = 0; i < bodies.count; i++) {
+    const body = bodies.items[i];
+    if (body.kind !== 'sun' && body.kind !== 'station' && body.kind !== 'planet') continue;
+    const keep = keepRadius(body, PHY.PLAYER_RADIUS);
+    if (!(keep > 0)) continue;
+    let rx = position.x - body.x, ry = position.y - body.y, rz = position.z - body.z;
+    const distance = Math.hypot(rx, ry, rz);
+    // Match the shared inside-tangent interval, including the one-unit
+    // clearance annulus where the planner falls back to the lateral point.
+    if (!(distance > 0) || distance > keep + TANGENT_CLEAR) continue;
+    rx /= distance; ry /= distance; rz /= distance;
+    let tx = target.x - position.x, ty = target.y - position.y, tz = target.z - position.z;
+    const radial = tx * rx + ty * ry + tz * rz;
+    if (!(radial < 0)) continue;
+    tx -= radial * rx; ty -= radial * ry; tz -= radial * rz;
+    const lateral = Math.hypot(tx, ty, tz);
+    // Equal radial/lateral travel gives a 45-degree outward course: the
+    // smallest turn off a ring tangent that still adds outward travel. Its
+    // radial extent clears the keep plus one player radius, and the lateral
+    // extent never exceeds this obstacle's own keep radius.
+    const extent = Math.max(keep - distance + PHY.PLAYER_RADIUS, Math.min(keep, lateral));
+    const scale = lateral > 0 ? extent / lateral : 0;
+    const x = position.x + rx * extent + tx * scale;
+    const y = position.y + ry * extent + ty * scale;
+    const z = position.z + rz * extent + tz * scale;
+    if (![x, y, z].every(Number.isFinite)) return 'blocked';
+    for (let j = 0; j < bodies.count; j++) {
+      const other = bodies.items[j];
+      if (other === body) continue;
+      const radius = keepRadius(other, PHY.PLAYER_RADIUS);
+      if (radius > 0 && sphereChordHit(position.x, position.y, position.z,
+        x, y, z, other.x, other.y, other.z, radius).hit) return 'blocked';
+    }
+    out.x = x; out.y = y; out.z = z;
+    return 'clear';
+  }
+  return 'none';
+}
+
 export function dockCruiseShouldBrake(position, velocity, acceleration, bodies) {
   if (!finite3(position) || !finite3(velocity) || !(acceleration > 0)) return true;
   const speed = Math.hypot(velocity.x, velocity.y, velocity.z);

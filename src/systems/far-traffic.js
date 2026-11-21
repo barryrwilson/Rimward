@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { U } from '../game/state.js';
 import { recordPosition } from '../game/world.js';
 import { styleFor } from '../game/faction-style.js';
 import { withoutGlobalRandom } from '../game/random-scope.js';
+import { MID_RANGE, FAR_CAP } from '../game/traffic-tiers.js';
 
 /**
  * Far-traffic impostors — issue #338, system scale/population Phase 1.
@@ -19,9 +19,11 @@ import { withoutGlobalRandom } from '../game/random-scope.js';
  *   - refreshes from ctx.world.records (the CURRENT bank; world.js swaps on
  *     'systemLoaded') once per second via recordPosition.
  *   - a visible impostor is hidden while its record is live (a real hull
- *     exists) and while its abstract position is inside U.INSTANTIATE_RANGE
- *     (900 u), so there is never a duplicate at the 900 u handoff. Records
- *     that can no longer promote (dead/captured/inTransit) are hidden too.
+ *     exists), inside the mid band (<= MID_RANGE 2500 u, where mid-traffic's
+ *     instanced proxy owns it) and while terminal (dead/captured/inTransit).
+ *     Phase 2 (#339) moved this handoff from 900 u to 2500 u so a record is
+ *     never drawn by two layers at once: near hull <=900 u, mid proxy
+ *     (900, 2500], far impostor >2500 u.
  *   - per-instance faction colour from game/faction-style.js; the per-system
  *     seed makes proxy variation deterministic for a given system.
  *   - rebuilds/refreshes on a 'systemLoaded' event and on a record-bank swap;
@@ -35,7 +37,7 @@ import { withoutGlobalRandom } from '../game/random-scope.js';
  * is written back to a record, so saves and the agent API cannot observe it.
  */
 
-const CAPACITY = 256; // issue #338: 150–300 impostors, one draw call
+const CAPACITY = FAR_CAP; // issue #338: 150–300 impostors, one draw call
 const REFRESH_SECONDS = 1; // issue #338: 1 Hz from abstract records
 const MESH_NAME = 'far-traffic-impostors';
 const BASE_SCALE = 30; // world units; far lights, not true hull scale
@@ -107,19 +109,20 @@ function buildProxyGeometry() {
 
 /**
  * Pure handoff predicate, exported so a test can pin the exact boundaries:
- *   899 u  -> false (inside the instantiation bubble)
- *   900 u  -> false (the real hull may spawn this frame; hide to avoid a duplicate)
- *   1400 u -> true when not live (the live hull has folded back; show the impostor)
- * A record flagged live is always hidden, even while its abstract position is
- * still beyond 900 u (the live hull can be culled only past
- * U.DEINSTANTIATE_RANGE = 1400 u).
+ *   900 u    -> false (mid-traffic owns the proxy band)
+ *   2499 u   -> false (still mid band)
+ *   2500 u   -> false (the mid proxy owns the last mid-band frame)
+ *   2500.01  -> true (far impostor band starts beyond MID_RANGE)
+ * A record flagged live is always hidden, and terminal records never draw.
+ * Phase 2 (#339): the 900 u handoff moved to MID_RANGE so the mid instanced
+ * proxy and the far impostor never draw the same record.
  */
 export function shouldShowImpostor(rec, distance) {
   if (!rec || rec.live === true) return false;
   // A record that can no longer promote to a real hull must not leave a ghost.
   if (rec.state === 'dead' || rec.state === 'captured' || rec.state === 'inTransit') return false;
   if (!Number.isFinite(distance)) return false;
-  return distance > U.INSTANTIATE_RANGE;
+  return distance > MID_RANGE;
 }
 
 /**
@@ -146,7 +149,8 @@ export function initFarTraffic(ctx) {
   /**
    * 1 Hz refresh. Slots are the record bank indexes: hidden slots keep the
    * zero matrix, visible slots get a deterministic pose and faction colour.
-   * No record is mutated.
+   * Only records beyond MID_RANGE are drawn here (mid-traffic owns the band
+   * below). No record is mutated.
    */
   function refresh() {
     if (!mesh) return;

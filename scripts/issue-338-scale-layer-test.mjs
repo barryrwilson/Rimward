@@ -187,7 +187,7 @@ const check = (name, fn) => {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Far-traffic impostors: one instanced layer, 1 Hz, faction colour, handoff.
+// 3. Far-traffic impostors: one instanced layer, 1 Hz, faction colour, >2500 handoff.
 // ---------------------------------------------------------------------------
 {
   const ctx = scopedCtx('freehold', { player: [0, 0, 0] });
@@ -197,9 +197,9 @@ const check = (name, fn) => {
     route: [{ x, y: 0, z: 0 }, { x: x + 200, y: 0, z: 0 }], leg: 0, legT: 0.5, ...extra,
   });
   ctx.world.records = [
-    mkRec('far', 2400),
+    mkRec('far', 2600),
     mkRec('near', 500),
-    mkRec('live', 2600, { live: true }),
+    mkRec('live', 2700, { live: true }),
     mkRec('dead', 2800, { state: 'dead' }),
   ];
   const inst = initFarTraffic(ctx);
@@ -211,14 +211,15 @@ const check = (name, fn) => {
     const tris = mesh.geometry.index ? mesh.geometry.index.count / 3 : 0;
     assert.ok(tris > 0 && tris <= 200);
   });
-  check('impostor: handoff helper pins 899/900/1400/live', () => {
+  check('impostor: handoff helper pins the Phase-2 2500 boundary', () => {
     const rec = { state: 'enroute' };
-    assert.equal(shouldShowImpostor(rec, 899), false);
     assert.equal(shouldShowImpostor(rec, 900), false);
-    assert.equal(shouldShowImpostor(rec, 900.01), true);
-    assert.equal(shouldShowImpostor(rec, 1400), true);
-    assert.equal(shouldShowImpostor({ state: 'enroute', live: true }, 1400), false);
-    assert.equal(shouldShowImpostor({ state: 'dead' }, 1400), false);
+    assert.equal(shouldShowImpostor(rec, 900.01), false);
+    assert.equal(shouldShowImpostor(rec, 2499), false);
+    assert.equal(shouldShowImpostor(rec, 2500), false);
+    assert.equal(shouldShowImpostor(rec, 2500.01), true);
+    assert.equal(shouldShowImpostor({ state: 'enroute', live: true }, 2500.01), false);
+    assert.equal(shouldShowImpostor({ state: 'dead' }, 2500.01), false);
   });
   check('impostor: visible set excludes near/live/dead', () => {
     assert.equal(mesh.userData.visibleCount, 1);
@@ -250,7 +251,7 @@ const check = (name, fn) => {
   check('impostor: systemLoaded rebuild disposes the old layer', () => {
     const { captured, disposed } = captureDisposals(mesh);
     ctx.world.currentSystem = 'veridian';
-    ctx.world.records = [mkRec('v1', 2400, { system: 'veridian' })];
+    ctx.world.records = [mkRec('v1', 2600, { system: 'veridian' })];
     ctx.lastEvents = [{ type: 'systemLoaded', to: 'veridian' }];
     inst.update(0.016);
     assert.equal(mesh.parent, null);

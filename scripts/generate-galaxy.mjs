@@ -112,6 +112,20 @@ const CAST_BY_BAND = [
   { t: [0, 1], p: [0, 1], pa: [0, 0], ace: 0 },
 ];
 
+// Issue #339 (system scale/population Phase 2): ambient crowd records are a
+// content-only fixed add-on appended after the featured cast. They are FIXED
+// literals so they consume no rng() draws and every pre-existing generated
+// field stays byte-identical. cast + crowd must total 25-50 records/system
+// (band0 max cast 18 + 31 = 49; band4 min cast 0 + 25 = 25). Crowd pirates
+// carry bounty 0, so the explicit PIRATE_BOUNTY_CAP 2 board stays stable.
+const CROWD_BY_BAND = [
+  { traders: 18, pirates: 8, patrols: 3, miners: 2 }, // band 0: 31
+  { traders: 16, pirates: 8, patrols: 2, miners: 2 }, // band 1: 28
+  { traders: 16, pirates: 8, patrols: 2, miners: 2 }, // band 2: 28
+  { traders: 16, pirates: 7, patrols: 1, miners: 2 }, // band 3: 26
+  { traders: 14, pirates: 7, patrols: 2, miners: 2 }, // band 4: 25
+];
+
 // ---------------------------------------------------------------- authored
 // Stubs of the 6 authored systems — DERIVED from src/game/authored-systems.js
 // (the same records state.js merges into SYSTEMS), so there is no
@@ -304,11 +318,30 @@ if (GENERATED_IDS.length !== 94) fail(`expected 94 generated systems, got ${GENE
 
 // ------------------------------------------------------------- chart placing
 const chartOf = new Map(); // id -> [x, y]
-for (const id of AUTHORED_IDS) chartOf.set(id, AUTHORED[id].chart.slice());
+// Issue #339: the committed generated file predates the authored veil system.
+// Veil's chart is placed AFTER the generated chart pass so the chart-placement
+// rejection loop consumes the same rng() draws as the pre-veil generator; that
+// keeps every committed generated field byte-identical when the file is
+// regenerated for the additive crowd field. Veil is still validated for chart
+// separation below (it is added to chartOf before validate()).
+for (const id of AUTHORED_IDS) {
+  if (id === 'veil') continue;
+  chartOf.set(id, AUTHORED[id].chart.slice());
+}
 // pinned chart positions reserve their spots first
+const pinnedChartIds = new Set();
 for (const id of GENERATED_IDS) {
   const s = systems.get(id);
-  if (s.pinnedChart) chartOf.set(id, s.pinnedChart.slice());
+  if (s.pinnedChart) {
+    chartOf.set(id, s.pinnedChart.slice());
+    pinnedChartIds.add(id);
+  }
+}
+
+// Issue #339: cluster lookup for the veil chart re-placement below.
+const specById = new Map();
+for (const cluster of CLUSTERS) {
+  for (const spec of cluster.systems) specById.set(spec.id, { spec, region: cluster.region });
 }
 
 function minChartDist(x, y) {
@@ -336,6 +369,37 @@ for (const cluster of CLUSTERS) {
       if (placed) break;
     }
     if (!placed) fail(`could not place ${spec.id} in ${cluster.key} region with chart separation`);
+  }
+}
+
+// Issue #339: authored veil chart joins AFTER generated placement (see above).
+chartOf.set('veil', AUTHORED.veil.chart.slice());
+// The committed generated file predates veil, so one generated chart (uc_faint)
+// sits 10.2 units from veil's chart and would fail the 36-unit separation gate.
+// Re-place only the conflicting non-pinned generated charts with a separate
+// deterministic stream (SEED + 7), leaving every other generated chart and the
+// main rng() stream untouched.
+{
+  const veilChart = chartOf.get('veil');
+  const reRng = mulberry32(SEED + 7);
+  for (const id of GENERATED_IDS) {
+    if (pinnedChartIds.has(id)) continue;
+    const c = chartOf.get(id);
+    if (!c) continue;
+    if (Math.hypot(c[0] - veilChart[0], c[1] - veilChart[1]) >= 36) continue;
+    const entry = specById.get(id);
+    if (!entry) { fail(`no cluster spec for chart re-placement ${id}`); continue; }
+    const [x0, y0, x1, y1] = entry.region;
+    let placed = false;
+    for (let attempt = 0; attempt < 400 && !placed; attempt++) {
+      const x = x0 + Math.floor(reRng() * (x1 - x0 + 1));
+      const y = y0 + Math.floor(reRng() * (y1 - y0 + 1));
+      if (minChartDist(x, y) >= 36) {
+        chartOf.set(id, [x, y]);
+        placed = true;
+      }
+    }
+    if (!placed) fail(`could not re-place ${id} away from veil chart`);
   }
 }
 
@@ -597,6 +661,7 @@ for (const cluster of CLUSTERS) {
       },
       gates,
       cast,
+      crowd: CROWD_BY_BAND[band],
       priceBase,
     };
     if (s.isHub) {
@@ -1187,9 +1252,15 @@ function validate() {
 
   // per-system shape
   for (const sys of Object.values(out)) {
-    for (const key of ['id', 'name', 'faction', 'band', 'chart', 'sunColor', 'sunRadius', 'planetCount', 'worldSeed', 'station', 'field', 'gates', 'cast', 'priceBase']) {
+    for (const key of ['id', 'name', 'faction', 'band', 'chart', 'sunColor', 'sunRadius', 'planetCount', 'worldSeed', 'station', 'field', 'gates', 'cast', 'crowd', 'priceBase']) {
       if (!(key in sys)) fail(`${sys.id} missing key ${key}`);
     }
+    // Issue #339: every system carries 25-50 abstract records (cast + crowd).
+    const crowdTotal = (sys.crowd.traders | 0) + (sys.crowd.pirates | 0) + (sys.crowd.patrols | 0) + (sys.crowd.miners | 0);
+    const castTotal = (sys.cast.traders | 0) + (sys.cast.pirates | 0) + (sys.cast.patrols | 0) + (sys.cast.ace ? 1 : 0);
+    const miners = Math.min(2, Math.max(0, (sys.cast.traders / 4) | 0));
+    const total = castTotal + miners + crowdTotal;
+    if (total < 25 || total > 50) fail(`${sys.id} record total ${total} outside 25-50`);
     if (!Array.isArray(sys.landmarks) || sys.landmarks.length !== 1) fail(`${sys.id} must have exactly one landmark`);
     if ('clues' in sys) fail(`${sys.id} must omit clues`);
     if (!(sys.band >= 0 && sys.band <= 4)) fail(`${sys.id} band out of bounds: ${sys.band}`);
@@ -1326,9 +1397,12 @@ function validate() {
 
   // full connectivity from freehold (physical gates + hub routes traversable)
   const reached = bfsFrom(['freehold']);
-  if (reached.size !== 100) {
+  // Issue #339: use the actual authored+generated id count. The old literal 100
+  // predates the authored veil system (wave 94), so the generator could no
+  // longer be rerun even though the committed file was fine.
+  if (reached.size !== ALL_IDS.length) {
     const missing = ALL_IDS.filter((id) => !reached.has(id));
-    fail(`connectivity: reached ${reached.size}/100 from freehold; missing: ${missing.join(', ')}`);
+    fail(`connectivity: reached ${reached.size}/${ALL_IDS.length} from freehold; missing: ${missing.join(', ')}`);
   }
 
   // chart bounds + separation
@@ -1336,15 +1410,17 @@ function validate() {
     if (x < 0 || x > 2000 || y < 0 || y > 1400) fail(`${id} chart out of bounds [${x},${y}]`);
   }
   let minSep = Infinity;
+  let minPair = null;
   const ids = [...chartOf.keys()];
   for (let i = 0; i < ids.length; i++) {
     for (let j = i + 1; j < ids.length; j++) {
       const [ax, ay] = chartOf.get(ids[i]);
       const [bx, by] = chartOf.get(ids[j]);
-      minSep = Math.min(minSep, Math.hypot(ax - bx, ay - by));
+      const d = Math.hypot(ax - bx, ay - by);
+      if (d < minSep) { minSep = d; minPair = [ids[i], ids[j]]; }
     }
   }
-  if (minSep < 36) fail(`chart min separation ${minSep.toFixed(1)} < 36`);
+  if (minSep < 36) fail(`chart min separation ${minSep.toFixed(1)} < 36 (${minPair.join(' / ')}: ${JSON.stringify(chartOf.get(minPair[0]))} vs ${JSON.stringify(chartOf.get(minPair[1]))})`);
   return minSep;
 }
 
@@ -1370,7 +1446,7 @@ const bandHist = [0, 0, 0, 0, 0];
 for (const sys of Object.values(out)) bandHist[sys.band]++;
 const routeEdgeCount = [...routes.values()].reduce((n, l) => n + l.length, 0);
 console.log('generate-galaxy: OK (seed ' + SEED + ')');
-console.log('  systems: 94 generated + 6 authored = 100');
+console.log(`  systems: ${GENERATED_IDS.length} generated + ${AUTHORED_IDS.length} authored = ${ALL_IDS.length}`);
 console.log('  generated per faction:', JSON.stringify(totals));
 console.log('  NOTE: contract faction totals sum to 101; ferrous trimmed 18 -> 17 to hit 100.');
 console.log(`  physical gate pairs: ${edges.size}, hub route edges: ${routeEdgeCount}`);

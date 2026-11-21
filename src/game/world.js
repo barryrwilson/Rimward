@@ -259,7 +259,12 @@ const GEN_NAME_NOUNS = [
   'Cart', 'Tithe', 'Reckoning', 'Lantern', 'Reed', 'Sparrow', 'Gale', 'Frost',
 ];
 const GEN_NAME_SPACE = GEN_NAME_ADJECTIVES.length * GEN_NAME_NOUNS.length;
-const GEN_ROLE_OFFSET = { Freighter: 0, Reaver: 40, Patrol: 80, Miner: 120, Hauler: 240 };
+const GEN_ROLE_OFFSET = {
+  Freighter: 0, Reaver: 40, Patrol: 80, Miner: 120, Hauler: 240,
+  // Issue #339: crowd roles use offsets beyond the legacy 0-240 range so an
+  // ambient name can never collide with a featured cast or Q-ship cover.
+  CrowdFreighter: 300, CrowdReaver: 340, CrowdPatrol: 380, CrowdMiner: 420,
+};
 
 function nameHash(text) {
   let h = 2166136261;
@@ -274,6 +279,57 @@ function generatedName(sysId, role, i) {
   const offset = GEN_ROLE_OFFSET[role] ?? 300;
   const k = (nameHash(sysId) + offset + i) % GEN_NAME_SPACE;
   return `${GEN_NAME_ADJECTIVES[k % GEN_NAME_ADJECTIVES.length]} ${GEN_NAME_NOUNS[(k / GEN_NAME_ADJECTIVES.length) | 0]}`;
+}
+
+// ---------- Issue #339: deterministic ambient crowd records ----------
+// Crowd records are appended AFTER the featured cast so the legacy
+// createRecords loops keep their exact Math.random draw order (the boot
+// harness seeds Math.random, and the issue-201 route fixture depends on that
+// stream). Every crowd value below comes from a per-system hash/xorshift, so
+// generating the crowd consumes ZERO global Math.random draws.
+function crowdUnit(sysId, role, slot, salt) {
+  let x = nameHash('crowd:' + sysId + ':' + role + ':' + slot + ':' + salt) >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 2246822507) >>> 0;
+  x ^= x >>> 13;
+  x = Math.imul(x, 3266489909) >>> 0;
+  x ^= x >>> 16;
+  return (x >>> 0) / 4294967296;
+}
+
+function crowdJitter(v, amount, sysId, role, slot, salt) {
+  v.x += (crowdUnit(sysId, role, slot, salt + ':x') - 0.5) * 2 * amount;
+  v.y += (crowdUnit(sysId, role, slot, salt + ':y') - 0.5) * 2 * amount * 0.4;
+  v.z += (crowdUnit(sysId, role, slot, salt + ':z') - 0.5) * 2 * amount;
+  return v;
+}
+
+/** Deterministic 1-2 commodity manifest, mirroring traderCargo without draws. */
+function crowdCargo(sysId, slot) {
+  const n = 1 + ((crowdUnit(sysId, 'trader', slot, 'cargoN') * 2) | 0);
+  const manifest = [];
+  const used = new Set();
+  for (let i = 0; i < n; i++) {
+    let idx = (crowdUnit(sysId, 'trader', slot, 'cargoKey:' + i) * LEGAL_KEYS.length) | 0;
+    let guard = 0;
+    while (used.has(LEGAL_KEYS[idx]) && guard++ < LEGAL_KEYS.length) idx = (idx + 1) % LEGAL_KEYS.length;
+    const key = LEGAL_KEYS[idx];
+    used.add(key);
+    manifest.push({ commodity: key, units: 3 + ((crowdUnit(sysId, 'trader', slot, 'cargoUnits:' + i) * 10) | 0) });
+  }
+  return manifest;
+}
+
+/** Deterministic crowd name, probed past any legacy/crowd collision. */
+function crowdName(sysId, role, slot, seen) {
+  for (let attempt = 0; attempt < GEN_NAME_SPACE; attempt++) {
+    const name = generatedName(sysId, role, slot + attempt);
+    if (!seen.has(name)) {
+      seen.add(name);
+      return name;
+    }
+  }
+  return generatedName(sysId, role, slot);
 }
 
 const TRADER_NAMES = {
@@ -346,7 +402,7 @@ function poolName(pool, sysId, i, role) {
   return (names && names[i]) ?? generatedName(sysId, role, i);
 }
 
-function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty = 0, system, outboundTo = null, id = null }) {
+function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty = 0, system, outboundTo = null, id = null, legT = null, personality = null, resolveSeed = null }) {
   const plain = plainRoute(route);
   return {
     // Issue #236: a mission-owned hull carries its own namespaced id so the
@@ -359,12 +415,14 @@ function makeRecord(ctx, { name, classKey, faction, role, route, cargo, bounty =
     route: plain,
     legLens: computeLegLens(plain),
     leg: 0,
-    legT: Math.random(), // scatter records along their first leg at boot
+    // Issue #339: crowd records pass explicit deterministic values; legacy
+    // callers omit them and keep the original seeded Math.random draws.
+    legT: Number.isFinite(legT) ? legT : Math.random(), // scatter along first leg at boot
     dir: 1,
     dwellUntil: 0,
     role, // trader | pirate | patrol | ace | miner
-    personality: Math.random() * 20 - 10, // ±10 resolve nudge §7.2
-    resolveSeed: Math.random(), // npc.js derives base resolve from this
+    personality: Number.isFinite(personality) ? personality : Math.random() * 20 - 10, // ±10 resolve nudge §7.2
+    resolveSeed: Number.isFinite(resolveSeed) ? resolveSeed : Math.random(), // npc.js derives base resolve from this
     bounty,
     system, // owning star system id (bank membership)
     anchor: systemAnchor(system), // ring-mode orbit center for npc.js
@@ -495,6 +553,114 @@ function createRecords(ctx, sysId) {
         system: sysId,
       }),
     );
+  }
+
+  // Issue #339 (system scale/population Phase 2): append the deterministic
+  // ambient crowd AFTER the featured cast. These records are content-only data
+  // and consume no global Math.random draws (see crowdUnit above), so the boot
+  // harness's seeded stream and every legacy record stay byte-identical. Crowd
+  // pirates carry bounty 0: ambient traffic is not job-bearing, so the explicit
+  // PIRATE_BOUNTY_CAP 2 board and the #272 reaver replenish keep their featured
+  // supply. Names are deterministic and probed past every legacy/crowd name.
+  const crowd = def.crowd;
+  if (crowd && typeof crowd === 'object') {
+    const seen = new Set();
+    for (const r of records) {
+      if (typeof r.name === 'string') seen.add(r.name);
+      if (typeof r.coverName === 'string') seen.add(r.coverName);
+    }
+    const traderCrowd = crowd.traders | 0;
+    for (let i = 0; i < traderCrowd; i++) {
+      const planned = traderRouteWaypoints(def, i);
+      const destWp = (planned.waypoints[1] ?? planned.waypoints[0]).clone();
+      records.push(
+        makeRecord(ctx, {
+          // Crowd ids use their own namespace so every legacy 'rec-N' id is
+          // unchanged across systems (fixtures, old saves and job bindings).
+          id: `crowd-${sysId}-trader-${i}`,
+          name: crowdName(sysId, 'CrowdFreighter', i, seen),
+          classKey: 'freighter',
+          faction: traderFactions[i % traderFactions.length],
+          role: 'trader',
+          route: [planned.waypoints[0].clone(), crowdJitter(destWp, 60, sysId, 'CrowdFreighter', i, 'dest')],
+          cargo: crowdCargo(sysId, i),
+          system: sysId,
+          outboundTo: planned.outboundTo,
+          legT: crowdUnit(sysId, 'CrowdFreighter', i, 'legT'),
+          personality: crowdUnit(sysId, 'CrowdFreighter', i, 'personality') * 20 - 10,
+          resolveSeed: crowdUnit(sysId, 'CrowdFreighter', i, 'resolve'),
+        }),
+      );
+    }
+    const pirateCrowd = crowd.pirates | 0;
+    for (let i = 0; i < pirateCrowd; i++) {
+      const laneMid = new THREE.Vector3().lerpVectors(station, gate, 0.5);
+      crowdJitter(laneMid, 90, sysId, 'CrowdReaver', i, 'lane');
+      records.push(
+        makeRecord(ctx, {
+          id: `crowd-${sysId}-pirate-${i}`,
+          name: crowdName(sysId, 'CrowdReaver', i, seen),
+          classKey: 'cutter',
+          faction: i % 2 === 0 ? 'redledger' : 'independent',
+          role: 'pirate',
+          route: [
+            crowdJitter(gate.clone(), 90, sysId, 'CrowdReaver', i, 'gateA'),
+            laneMid,
+            crowdJitter(gate.clone(), 120, sysId, 'CrowdReaver', i, 'gateB'),
+          ],
+          cargo: [],
+          bounty: 0,
+          system: sysId,
+          legT: crowdUnit(sysId, 'CrowdReaver', i, 'legT'),
+          personality: crowdUnit(sysId, 'CrowdReaver', i, 'personality') * 20 - 10,
+          resolveSeed: crowdUnit(sysId, 'CrowdReaver', i, 'resolve'),
+        }),
+      );
+    }
+    const patrolCrowd = crowd.patrols | 0;
+    for (let i = 0; i < patrolCrowd; i++) {
+      records.push(
+        makeRecord(ctx, {
+          id: `crowd-${sysId}-patrol-${i}`,
+          name: crowdName(sysId, 'CrowdPatrol', i, seen),
+          classKey: 'heavy',
+          faction: def.faction,
+          role: 'patrol',
+          route: [
+            writeStationHold(new THREE.Vector3(), station, 'heavy', gate),
+            crowdJitter(gate.clone(), 50, sysId, 'CrowdPatrol', i, 'gate'),
+            crowdJitter(planet.clone(), 60, sysId, 'CrowdPatrol', i, 'planet'),
+          ],
+          cargo: [],
+          system: sysId,
+          legT: crowdUnit(sysId, 'CrowdPatrol', i, 'legT'),
+          personality: crowdUnit(sysId, 'CrowdPatrol', i, 'personality') * 20 - 10,
+          resolveSeed: crowdUnit(sysId, 'CrowdPatrol', i, 'resolve'),
+        }),
+      );
+    }
+    const minerCrowd = crowd.miners | 0;
+    for (let i = 0; i < minerCrowd; i++) {
+      const classKey = i % 2 === 0 ? 'light' : 'cutter';
+      records.push(
+        makeRecord(ctx, {
+          id: `crowd-${sysId}-miner-${i}`,
+          name: crowdName(sysId, 'CrowdMiner', i, seen),
+          classKey,
+          faction: minerFactions[i % minerFactions.length],
+          role: 'miner',
+          route: [
+            writeStationHold(new THREE.Vector3(), station, classKey, field),
+            crowdJitter(field.clone(), 50, sysId, 'CrowdMiner', i, 'field'),
+          ],
+          cargo: [],
+          system: sysId,
+          legT: crowdUnit(sysId, 'CrowdMiner', i, 'legT'),
+          personality: crowdUnit(sysId, 'CrowdMiner', i, 'personality') * 20 - 10,
+          resolveSeed: crowdUnit(sysId, 'CrowdMiner', i, 'resolve'),
+        }),
+      );
+    }
   }
   return records;
 }
@@ -1269,6 +1435,10 @@ const MAX_INCIDENTS = 40;
 
 // ---------- Update cadence ----------
 const GALAXY_TICK = 1; // s between abstract route advances
+// Issue #339 Phase 2 — abstract tick LOD: the player's CURRENT system keeps the
+// 1 Hz cadence above; every other visited bank is ticked only on every Nth
+// galaxy tick (0.2 Hz). See galaxyTick for the fidelity tradeoff.
+const OTHER_BANK_TICK_EVERY = 5; // galaxy ticks between off-screen bank ticks (5 s)
 
 /**
  * Off-screen escape progress (issue #68). Scalars and one vector per record,
@@ -2006,6 +2176,13 @@ export function initWorld(ctx) {
   let nextReaverAt = REAVER_REPLENISH.firstDelay; // issue #272: first hunt-supply pick
   let lastBlockadeKillAt = 0;
   let tickAccum = 0;
+  // Issue #339 Phase 2 — abstract tick LOD. Session-only counters (inside this
+  // closure, never on ctx.world): the CURRENT system's bank keeps tickAccum's
+  // 1 Hz cadence, while every other bank advances only every
+  // OTHER_BANK_TICK_EVERY galaxy ticks. otherTickCount resets on a real system
+  // change (consumeSystemLoaded) so a newly-current bank is not delayed by the
+  // previous system's off-screen phase. No persistent field, no save change.
+  let otherTickCount = 0;
   // ship.id → world time of last player-caused hit (causer attribution).
   const playerHitAt = new Map();
 
@@ -2037,6 +2214,10 @@ export function initWorld(ctx) {
       if (ev.type !== 'systemLoaded') continue;
       const changed = ev.to !== activeSystemId; // boot restore into the live system re-emits same-system
       swapToSystem(ctx, ev.to);
+      // Issue #339 Phase 2: the outgoing system is now an off-screen bank. Reset
+      // its throttle phase so the new CURRENT bank starts on the ordinary 1 Hz
+      // tickAccum cadence immediately (and no off-screen bank ticks early).
+      if (changed) otherTickCount = 0;
       teardownWreckMeshes(ctx);
       // Cross-system restores (and jumps) reach the new banks through this
       // event — re-derive the in-transit registry from the banks themselves.
@@ -2131,7 +2312,11 @@ export function initWorld(ctx) {
       if (want <= 0) continue;
       let living = 0;
       for (const r of bank) {
-        if (r && r.role === 'pirate' && r.state !== 'dead' && r.state !== 'captured' && r.state !== 'derelict') living++;
+        // Issue #339: only board-bearing pirates count against the authored
+        // supply. Bounty-0 ambient crowd pirates are background traffic and
+        // must not starve the #272 reaver replenish.
+        if (r && r.role === 'pirate' && (r.bounty > 0)
+          && r.state !== 'dead' && r.state !== 'captured' && r.state !== 'derelict') living++;
       }
       if (living >= want) continue;
       const rec = makeReaverRecord(ctx, sysId);
@@ -2488,8 +2673,25 @@ export function initWorld(ctx) {
     // dest banks: tickBank runs gateLinger; this loop never beginTransit
     const banks = ctx.world.recordBanks;
     if (!banks) return;
+    // Issue #339 Phase 2 — abstract tick LOD. The bank sitting in
+    // ctx.world.records (the player's current system) keeps the original 1 Hz
+    // galaxy cadence; every other visited bank advances only every
+    // OTHER_BANK_TICK_EVERY galaxy ticks (0.2 Hz). tickBank's per-tick progress
+    // semantics stay GALAXY_TICK=1 with no dt compensation: an off-screen bank
+    // therefore advances at 1/5 real-time rate. That is the documented fidelity
+    // tradeoff — off-screen traffic is background texture (docked dwells, gate
+    // linger and lane progress resolve up to 5 s later) while the system the
+    // player is actually in is never throttled. Every visited bank still
+    // advances; nothing is frozen forever, and migration/arrivals ride the
+    // separate per-frame registry below, untouched.
+    const currentBank = banks[activeSystemId] ?? ctx.world.records;
+    if (currentBank) tickBank(currentBank, activeSystemId, ctx);
+    otherTickCount += 1;
+    if (otherTickCount < OTHER_BANK_TICK_EVERY) return;
+    otherTickCount = 0;
     for (const sysId in banks) {
       if (!Object.hasOwn(banks, sysId)) continue;
+      if (sysId === activeSystemId) continue;
       tickBank(banks[sysId], sysId, ctx);
     }
   }
