@@ -23,6 +23,7 @@ import {
   finishEscape,
   escapePublicIdentity,
 } from './npc-escape.js';
+import { initDistantChatter } from './distant-chatter.js';
 
 /**
  * World — the persistent layer (doc §8 Living World), multi-system.
@@ -942,6 +943,12 @@ export function recordPosition(rec, out) {
   return out.set(a.x + (b.x - a.x) * rec.legT, a.y + (b.y - a.y) * rec.legT, a.z + (b.z - a.z) * rec.legT);
 }
 
+/** Issue #341: plain-pose callback for distant-chatter (writes a scratch vector). */
+const _chatterPos = new THREE.Vector3();
+function chatterPosition(rec) {
+  return recordPosition(rec, _chatterPos);
+}
+
 // ---------- Dynamic events §8.5 ----------
 const EVENT_KINDS = ['pirateBlockade', 'strikeRush', 'laborStrike', 'commodityGlut', 'convoySurge', 'oreRush'];
 const EVENT_GAP = [180, 360]; // 3–6 min between events
@@ -956,6 +963,54 @@ const BLOCKADE_KILL_INTERVAL = 45; // abstract lane casualties during blockade
 function rollEventGap(ctx) {
   const mult = BANDS[ctx.systems[ctx.world.currentSystem].band ?? 0].eventGapMult;
   return (EVENT_GAP[0] + Math.random() * (EVENT_GAP[1] - EVENT_GAP[0])) * mult;
+}
+
+// ---------- Issue #341: far-lane convoy variant (Phase 4 ambient life) ----------
+// The existing convoySurge dynamic event gains a far-lane variant that names a
+// gate destination system beyond the player's bubble. Selection is a stable
+// hash of the system id — no extra Math.random draw, so the seeded boot stream
+// is untouched. The persisted activeEvent object stays exactly
+// {kind, startedAt, endsAt, system}; the variant/line ride only the
+// session-only worldEvent payload and the HUD toast (no new saved field).
+function convoyHashUnit(sysId, salt) {
+  let x = (2166136261 ^ nameHash('convoy:' + (sysId ?? '') + ':' + salt)) >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 2246822507) >>> 0;
+  x ^= x >>> 13;
+  x = Math.imul(x, 3266489909) >>> 0;
+  x ^= x >>> 16;
+  return (x >>> 0) / 4294967296;
+}
+
+/**
+ * Which convoy variant a system's event takes. The rim's convoys always come
+ * in from beyond (farLane); core systems roll a stable per-system variant.
+ * Exported for the focused #341 regression.
+ */
+export function convoyVariantFor(ctx) {
+  const sysId = ctx?.world?.currentSystem ?? null;
+  const band = Number(ctx?.systems?.[sysId]?.band);
+  if (Number.isFinite(band) && band >= 1) return 'farLane';
+  return convoyHashUnit(sysId, 'variant') < 0.5 ? 'farLane' : 'standard';
+}
+
+/**
+ * Player-facing start line naming a real distant place: the current station
+ * plus a gate destination system (or the system itself when it has no gate).
+ * Exported for the focused #341 regression.
+ */
+export function convoyStartLine(ctx, variant) {
+  const sysId = ctx?.world?.currentSystem ?? null;
+  const def = ctx?.systems?.[sysId];
+  const station = typeof def?.station?.name === 'string' && def.station.name ? def.station.name : (def?.name ?? 'the station');
+  const gates = Array.isArray(def?.gates) ? def.gates : [];
+  const idx = gates.length > 0 ? Math.min(gates.length - 1, Math.floor(convoyHashUnit(sysId, 'gate') * gates.length)) : -1;
+  const destId = idx >= 0 ? gates[idx]?.to : null;
+  const neighbor = destId && ctx?.systems?.[destId]?.name ? ctx.systems[destId].name : (def?.name ?? 'the outer lane');
+  if (variant === 'farLane') {
+    return 'Convoy inbound from ' + neighbor + ' — ' + station + ' approach stacked.';
+  }
+  return 'Convoy surge on the ' + station + ' lane — holds inbound from ' + neighbor + '.';
 }
 
 // ---------- Inter-system migration §8.2 destinations ----------
@@ -2172,9 +2227,16 @@ export function initWorld(ctx) {
   };
 
   let nextEventAt = rollEventGap(ctx);
+  // Issue #341: each newly loaded system's first scheduled dynamic event is a
+  // convoy (variant by band) so the ambient-life outcome is observable in a
+  // normal flight window. Session-only; later events stay random.
+  let convoyFirstPending = true;
   let nextMigrationAt = MIGRATION_INTERVAL * (0.5 + Math.random() * 0.5); // first pick ~45–90s in
   let nextReaverAt = REAVER_REPLENISH.firstDelay; // issue #272: first hunt-supply pick
   let lastBlockadeKillAt = 0;
+  // Issue #341 distant-traffic comms: session-only timer/counter in this
+  // closure; no ctx field, no record mutation, no persisted state.
+  const distantChatter = initDistantChatter(ctx);
   let tickAccum = 0;
   // Issue #339 Phase 2 — abstract tick LOD. Session-only counters (inside this
   // closure, never on ctx.world): the CURRENT system's bank keeps tickAccum's
@@ -2218,6 +2280,7 @@ export function initWorld(ctx) {
       // its throttle phase so the new CURRENT bank starts on the ordinary 1 Hz
       // tickAccum cadence immediately (and no off-screen bank ticks early).
       if (changed) otherTickCount = 0;
+      if (changed) convoyFirstPending = true;
       teardownWreckMeshes(ctx);
       // Cross-system restores (and jumps) reach the new banks through this
       // event — re-derive the in-transit registry from the banks themselves.
@@ -2447,12 +2510,20 @@ export function initWorld(ctx) {
     destBank.push(rec);
   }
 
-  function startEvent(ctx, kind) {
+  function startEvent(ctx, kind, forcedConvoyVariant = null) {
     const now = ctx.world.time;
     const dur = EVENT_DURATION[0] + Math.random() * (EVENT_DURATION[1] - EVENT_DURATION[0]);
     ctx.world.activeEvent = { kind, startedAt: now, endsAt: now + dur, system: ctx.world.currentSystem };
     applyEventPressure(ctx, kind);
-    ctx.emit('worldEvent', { kind, phase: 'start' });
+    // Issue #341: the persisted activeEvent object is unchanged (no new saved
+    // field); the far-lane variant and its place-referencing line ride only the
+    // session-only worldEvent payload consumed by the HUD toast.
+    if (kind === 'convoySurge') {
+      const variant = forcedConvoyVariant ?? convoyVariantFor(ctx);
+      ctx.emit('worldEvent', { kind, phase: 'start', variant, line: convoyStartLine(ctx, variant) });
+    } else {
+      ctx.emit('worldEvent', { kind, phase: 'start' });
+    }
     if (kind === 'strikeRush') {
       fireMilestone(ctx, 'firstStrikeRush', 'Strike rush. Word spreads.');
     }
@@ -2725,7 +2796,23 @@ export function initWorld(ctx) {
           blockadeCasualty(ctx);
         }
       } else if (now >= nextEventAt) {
-        startEvent(ctx, EVENT_KINDS[(Math.random() * EVENT_KINDS.length) | 0]);
+        // The guaranteed first event of each visited system is a far-lane
+        // convoy: its place-referencing line is the issue's observable outcome.
+        // Always consume the pre-#341 scheduler's single Math.random draw (then
+        // override the kind) so the boot harness's seeded stream is unchanged.
+        const rolled = EVENT_KINDS[(Math.random() * EVENT_KINDS.length) | 0];
+        const first = convoyFirstPending;
+        convoyFirstPending = false;
+        if (first) {
+          // Seeded-stream parity: base's rolled kind would consume one more
+          // Math.random draw only when it is commodityGlut (applyEventPressure
+          // picks a commodity). Mimic that draw so the boot harness's stream is
+          // byte-identical while the guaranteed first event is a far-lane convoy.
+          if (rolled === 'commodityGlut') Math.random();
+          startEvent(ctx, 'convoySurge', 'farLane');
+        } else {
+          startEvent(ctx, rolled, null);
+        }
       }
 
       // Galaxy tick: abstract route progress.
@@ -2761,6 +2848,11 @@ export function initWorld(ctx) {
         rebuildTransitRegistry(ctx);
       }
       arriveMigrants(ctx);
+
+      // Issue #341: distant-traffic comms on the existing comms/toast channel
+      // (rate-limited, band-scaled; suppressed while an overlay/jump owns the
+      // screen). Presentation-only: no record mutation, no save field.
+      distantChatter.update(dt, chatterPosition);
 
       // Witness Rule: incidents → aftermath, only from real events.
       consumeIncidents(ctx);

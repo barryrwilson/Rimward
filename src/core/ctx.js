@@ -365,7 +365,9 @@ export function createCtx({ scene, camera, renderer }) {
     // 'hailOpened' {ship,intents[]}              'hailClosed' {ship?}
     // 'hailMiss' { name, verb, reason, dist }    // hail.js KeyH/KeyJ miss; primitives only; no ship
     // 'docked' {}            'undocked' {}       'saveBlocked' {reason}
-    // 'worldEvent' {kind}    'milestone' {id, line, cause?, targetId?, targetName?}
+    // 'worldEvent' {kind, phase?, variant?, line?}  // issue #341: convoy start carries
+    //   a session-only far-lane variant + place line; activeEvent stays persisted-shape.
+    // 'milestone' {id, line, cause?, targetId?, targetName?}
     // firstScare: cause='player-damage', visible target identity; no resolve/AI.
     // 'marketShift' {}
     // 'moodChanged' {mood}   'fearChanged' {fear}     'commLine' {text, from}

@@ -6,15 +6,23 @@ import { withoutGlobalRandom } from '../game/random-scope.js';
 import { NEAR_RANGE, MID_RANGE, MID_CAP } from '../game/traffic-tiers.js';
 
 /**
- * Mid-traffic instanced proxies — issue #339, system scale/population Phase 2.
+ * Mid-traffic instanced proxies — issues #339/#341, system scale/population
+ * Phases 2 and 4.
  *
- * Abstract world records in the (NEAR_RANGE, MID_RANGE] band are drawn as ONE
- * instanced low-poly proxy at 8 Hz. This is a presentation layer only: no AI,
- * no collision, no combat, no FX, no per-frame simulation and no persistent
- * fields on records or world state. The full simulation stays near-only; a
- * record promoted to a real hull inside NEAR_RANGE hides its proxy, and a
- * record beyond MID_RANGE is handed to far-traffic's impostor layer, so no
- * record is ever drawn twice.
+ * Abstract world records inside MID_RANGE are drawn as ONE instanced low-poly
+ * proxy at 8 Hz. Phase 4 (#341) extends the band inward: an uninstantiated,
+ * non-terminal record INSIDE NEAR_RANGE (<=900 u) also draws here. traffic.js
+ * caps live hulls at NEAR_CAP (10) and only instantiates state 'enroute', so
+ * queued/docked station-hold traders (~150 u from the station) and over-cap
+ * lane records would otherwise vanish inside the 900 u bubble and station
+ * approach lanes would read empty. Drawing them in this existing proxy layer
+ * makes the approach lane read as traffic with no simulation and no duplicate
+ * hulls. This is a presentation layer only: no AI, no collision, no combat,
+ * no FX, no per-frame simulation and no persistent fields on records or world
+ * state. The full simulation stays near-only; a record promoted to a real hull
+ * (live === true) hides its proxy on the next update, terminal records never
+ * draw, and a record beyond MID_RANGE is handed to far-traffic's impostor
+ * layer, so no record is ever drawn twice.
  *
  * Contract:
  *   initMidTraffic(ctx) -> { update(dt) }
@@ -23,9 +31,9 @@ import { NEAR_RANGE, MID_RANGE, MID_CAP } from '../game/traffic-tiers.js';
  *   - refreshes from ctx.world.records (the CURRENT bank; world.js swaps on
  *     'systemLoaded') at 8 Hz via recordPosition, nearest records first so the
  *     visible set is the most relevant one when more than MID_CAP qualify.
- *   - a visible proxy is hidden while its record is live (a real hull exists),
- *     inside NEAR_RANGE (900 u), beyond MID_RANGE (2500 u), or terminal
- *     (dead/captured/inTransit).
+ *   - shouldShowMidProxy draws when the distance is finite, <= MID_RANGE
+ *     (including <= NEAR_RANGE), and the record is neither live nor terminal
+ *     (dead/captured/inTransit). Far-traffic keeps the > MID_RANGE band.
  *   - coarse steering: the proxy nose points at the record's next route
  *     waypoint; scale follows the class scale charter so the handoff at 900 u
  *     reads as the same hull. Per-instance faction colour from
@@ -36,8 +44,10 @@ import { NEAR_RANGE, MID_RANGE, MID_CAP } from '../game/traffic-tiers.js';
  *     8 Hz abstract-position refresh, which reducedMotion must not freeze.
  *
  * Session-only bookkeeping for tests lives on mesh.userData (capacity,
- * visibleCount, per-instance record ids, system, seed, lastRefreshAt). Nothing
- * is written back to a record, so saves and the agent API cannot observe it.
+ * visibleCount, per-instance record ids, system, seed, lastRefreshAt, plus the
+ * Phase 4 evidence nearProxyCount/nearProxyIds for visible slots whose record
+ * distance is <= NEAR_RANGE). Nothing is written back to a record, so saves
+ * and the agent API cannot observe it.
  */
 
 const REFRESH_SECONDS = 1 / 8; // issue #339: mid band 5-10 Hz
@@ -111,18 +121,24 @@ function buildProxyGeometry() {
 }
 
 /**
- * Pure handoff predicate, exported so a test can pin the exact boundaries:
- *   900 u    -> false (a real hull may spawn this frame; hide to avoid a duplicate)
+ * Pure handoff predicate, exported so a test can pin the exact boundaries.
+ * Phase 4 (#341) contract: a non-live, non-terminal record draws here while
+ * its distance is finite and <= MID_RANGE, INCLUDING the near bubble
+ * (<= NEAR_RANGE 900 u) where traffic.js may not have instantiated it:
+ *   0 u      -> true (docked station-hold trader; live cap/queued state)
+ *   900 u    -> true (near proxy for an uninstantiated record)
  *   900.01 u -> true
  *   2500 u   -> true (last mid-band frame)
  *   2500.01  -> false (far-traffic owns the impostor beyond MID_RANGE)
- * A record flagged live is always hidden; terminal records never draw.
+ * A record flagged live is always hidden (a real hull exists, so a proxy would
+ * duplicate it); terminal records never draw. Far-traffic keeps its
+ * > MID_RANGE band, so no record is drawn by both layers.
  */
 export function shouldShowMidProxy(rec, distance) {
   if (!rec || rec.live === true) return false;
   if (rec.state === 'dead' || rec.state === 'captured' || rec.state === 'inTransit') return false;
   if (!Number.isFinite(distance)) return false;
-  return distance > NEAR_RANGE && distance <= MID_RANGE;
+  return distance <= MID_RANGE;
 }
 
 /** Class scale charter target length, with a light fallback. */
@@ -192,7 +208,10 @@ export function initMidTraffic(ctx) {
 
     const ids = new Array(MID_CAP).fill(null);
     const slotRecords = new Array(MID_CAP).fill(null);
+    const distances = new Array(MID_CAP).fill(Infinity);
     const visibleIds = [];
+    const nearIds = [];
+    let nearCount = 0;
     for (let slot = 0; slot < MID_CAP; slot++) {
       const c = candidates[slot];
       if (!c) {
@@ -226,15 +245,23 @@ export function initMidTraffic(ctx) {
       const id = typeof rec.id === 'string' ? rec.id : null;
       ids[slot] = id;
       slotRecords[slot] = rec;
+      distances[slot] = c.distance;
       if (id) visibleIds.push(id);
+      if (c.distance <= NEAR_RANGE) {
+        nearCount++;
+        if (id) nearIds.push(id);
+      }
     }
 
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     userData.instanceRecordIds = ids;
     userData.instanceRecords = slotRecords;
+    userData.instanceDistances = distances;
     userData.visibleRecordIds = visibleIds;
     userData.visibleCount = visibleIds.length;
+    userData.nearProxyCount = nearCount;
+    userData.nearProxyIds = nearIds;
     userData.lastRefreshAt = ctx.world?.time ?? 0;
   }
 
@@ -265,6 +292,24 @@ export function initMidTraffic(ctx) {
       mesh.instanceMatrix.needsUpdate = true;
       userData.visibleRecordIds = userData.instanceRecordIds.filter((id) => id !== null);
       userData.visibleCount = userData.visibleRecordIds.length;
+      // Keep the Phase 4 evidence coherent with the hidden slot: a promoted
+      // near record must leave nearProxyIds on the same frame its proxy hides.
+      const distances = Array.isArray(userData.instanceDistances) ? userData.instanceDistances : [];
+      const nearIds = [];
+      let nearCount = 0;
+      for (let slot = 0; slot < records.length; slot++) {
+        // A hidden slot has records[slot] === null; count only slots that are
+        // still drawn (id-less records still count, they just have no id row).
+        if (records[slot] === null) continue;
+        const d = distances[slot];
+        if (Number.isFinite(d) && d <= NEAR_RANGE) {
+          nearCount++;
+          const id = userData.instanceRecordIds[slot];
+          if (id !== null) nearIds.push(id);
+        }
+      }
+      userData.nearProxyCount = nearCount;
+      userData.nearProxyIds = nearIds;
     }
   }
 
@@ -307,7 +352,10 @@ export function initMidTraffic(ctx) {
         visibleCount: 0,
         instanceRecordIds: new Array(MID_CAP).fill(null),
         instanceRecords: new Array(MID_CAP).fill(null),
+        instanceDistances: new Array(MID_CAP).fill(Infinity),
         visibleRecordIds: [],
+        nearProxyCount: 0,
+        nearProxyIds: [],
         lastRefreshAt: 0,
       };
       for (let slot = 0; slot < MID_CAP; slot++) mesh.setMatrixAt(slot, _hidden);

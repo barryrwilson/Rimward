@@ -7,7 +7,14 @@
  *    perf tier readout;
  *  - mid-traffic is ONE instanced layer at 8 Hz, capacity 30-40, nearest-first
  *    capped, per-instance faction colour, coarse heading, hidden while the
- *    record is live/terminal or outside the mid band;
+ *    record is live/terminal or beyond MID_RANGE;
+ *  - Phase 4 (#341) contract extension: an uninstantiated, non-terminal record
+ *    inside NEAR_RANGE (<=900 u) is now drawn by that same mid layer, so station
+ *    approach lanes read as traffic with no new layer and no simulation. This
+ *    is a deliberate bounded pin update, not a weakened test: the live/terminal
+ *    exclusions and the >2500 u far split below are unchanged, and the near
+ *    record is expected in the mid visible set only because it is uninstantiated
+ *    (traffic.js caps live hulls at 10 and only instantiates state 'enroute');
  *  - far-traffic only draws beyond MID_RANGE so mid and far never draw the
  *    same record, and both layers dispose/rebuild on 'systemLoaded';
  *  - no persistent field is added to ctx or ctx.world; the live near cap and
@@ -112,26 +119,38 @@ check('tiers: far capacity 150-300', () => assert.ok(tiers.FAR_CAP >= 150 && tie
     const c = mesh.instanceColor.array;
     assert.ok(c[0] + c[1] + c[2] > 0);
   });
-  check('mid: handoff helper pins 900/2500 boundaries', () => {
+  check('mid: handoff helper pins the Phase 4 near/mid/far boundaries', () => {
     const rec = { state: 'enroute' };
-    assert.equal(shouldShowMidProxy(rec, 900), false);
+    // Phase 4 (#341): uninstantiated near records draw in this layer too.
+    assert.equal(shouldShowMidProxy(rec, 0), true);
+    assert.equal(shouldShowMidProxy(rec, 150), true);
+    assert.equal(shouldShowMidProxy(rec, 900), true);
     assert.equal(shouldShowMidProxy(rec, 900.01), true);
     assert.equal(shouldShowMidProxy(rec, 2499), true);
     assert.equal(shouldShowMidProxy(rec, 2500), true);
     assert.equal(shouldShowMidProxy(rec, 2500.01), false);
+    assert.equal(shouldShowMidProxy(rec, Infinity), false);
+    // Live/terminal exclusions are unchanged: no duplicate hull, no ghost.
+    assert.equal(shouldShowMidProxy({ state: 'enroute', live: true }, 150), false);
     assert.equal(shouldShowMidProxy({ state: 'enroute', live: true }, 1500), false);
+    assert.equal(shouldShowMidProxy({ state: 'dead' }, 150), false);
     assert.equal(shouldShowMidProxy({ state: 'dead' }, 1500), false);
     assert.equal(shouldShowMidProxy({ state: 'captured' }, 1500), false);
     assert.equal(shouldShowMidProxy({ state: 'inTransit' }, 1500), false);
   });
-  check('mid: visible set is only the mid-band record', () => {
-    assert.equal(mesh.userData.visibleCount, 1);
-    assert.deepEqual(mesh.userData.visibleRecordIds, ['mid']);
-    assert.equal(mesh.userData.instanceRecordIds[0], 'mid');
+  check('mid: visible set is the near + mid records, nearest first', () => {
+    // Phase 4 (#341): 'near' (500 u) is uninstantiated in this scoped ctx, so
+    // the approach-lane proxy now draws; 'mid' (1500 u) still draws.
+    assert.equal(mesh.userData.visibleCount, 2);
+    assert.deepEqual(mesh.userData.visibleRecordIds, ['near', 'mid']);
+    assert.equal(mesh.userData.instanceRecordIds[0], 'near');
+    assert.equal(mesh.userData.instanceRecordIds[1], 'mid');
+    assert.equal(mesh.userData.nearProxyCount, 1);
+    assert.deepEqual(mesh.userData.nearProxyIds, ['near']);
   });
   check('mid: hidden slots are zero-scaled', () => {
     const m = new THREE.Matrix4();
-    mesh.getMatrixAt(1, m);
+    mesh.getMatrixAt(2, m); // slot 2 is the far record; only near/mid draw
     assert.equal(m.elements[0], 0);
     assert.equal(m.elements[5], 0);
     assert.equal(m.elements[10], 0);
@@ -144,8 +163,9 @@ check('tiers: far capacity 150-300', () => assert.ok(tiers.FAR_CAP >= 150 && tie
     assert.notEqual(mesh.userData.instanceRecordIds, before);
   });
   check('mid: coarse heading points at the next waypoint', () => {
-    // Route runs +X; the proxy nose (+Z local) must point +X, i.e. a yaw of
-    // +pi/2. Read the composed matrix and verify its local +Z maps to +X.
+    // Slot 0 is the nearest visible proxy (the Phase 4 near record). Route runs
+    // +X; the proxy nose (+Z local) must point +X, i.e. a yaw of +pi/2. Read
+    // the composed matrix and verify its local +Z maps to +X.
     const m = new THREE.Matrix4();
     mesh.getMatrixAt(0, m);
     const dir = new THREE.Vector3(0, 0, 1).applyMatrix4(new THREE.Matrix4().extractRotation(m));
@@ -169,8 +189,12 @@ check('tiers: far capacity 150-300', () => assert.ok(tiers.FAR_CAP >= 150 && tie
   const far = initFarTraffic(ctx);
   const midMesh = ctx.scene.children.find((o) => o.name === 'mid-traffic-proxies');
   const farMesh = ctx.scene.children.find((o) => o.name === 'far-traffic-impostors');
-  check('split: mid visible ids are exactly the mid record', () => {
-    assert.deepEqual(midMesh.userData.visibleRecordIds, ['mid']);
+  check('split: mid visible ids are the uninstantiated near + mid records', () => {
+    // Phase 4 (#341): the near record is uninstantiated in this scoped ctx, so
+    // it draws in the existing mid layer; live/terminal records still do not.
+    assert.deepEqual(midMesh.userData.visibleRecordIds, ['near', 'mid']);
+    assert.equal(midMesh.userData.nearProxyCount, 1);
+    assert.deepEqual(midMesh.userData.nearProxyIds, ['near']);
   });
   check('split: far visible ids are exactly the far record', () => {
     assert.deepEqual(farMesh.userData.visibleRecordIds, ['far']);
@@ -179,8 +203,12 @@ check('tiers: far capacity 150-300', () => assert.ok(tiers.FAR_CAP >= 150 && tie
     const midIds = new Set(midMesh.userData.visibleRecordIds);
     for (const id of farMesh.userData.visibleRecordIds) assert.ok(!midIds.has(id), id + ' duplicated');
   });
-  check('split: live/terminal/near records are hidden by both', () => {
-    for (const id of ['near', 'liveMid', 'deadMid']) {
+  check('split: near record is drawn by mid only (far keeps >2500 u)', () => {
+    assert.ok(midMesh.userData.visibleRecordIds.includes('near'));
+    assert.ok(!farMesh.userData.visibleRecordIds.includes('near'));
+  });
+  check('split: live/terminal records are hidden by both', () => {
+    for (const id of ['liveMid', 'deadMid']) {
       assert.ok(!midMesh.userData.visibleRecordIds.includes(id));
       assert.ok(!farMesh.userData.visibleRecordIds.includes(id));
     }
@@ -189,7 +217,7 @@ check('tiers: far capacity 150-300', () => assert.ok(tiers.FAR_CAP >= 150 && tie
     const tiersOut = tierLayerStats(ctx);
     assert.deepEqual(tiersOut.caps, { near: tiers.NEAR_CAP, mid: tiers.MID_CAP, far: tiers.FAR_CAP });
     assert.equal(tiersOut.midProxies.capacity, tiers.MID_CAP);
-    assert.equal(tiersOut.midProxies.visible, 1);
+    assert.equal(tiersOut.midProxies.visible, 2);
     assert.equal(tiersOut.farImpostors.capacity, tiers.FAR_CAP);
     assert.equal(tiersOut.farImpostors.visible, 1);
   });

@@ -733,11 +733,20 @@ function toastForEvent(e, ctx, mem) {
     case 'undocked':
       return { text: '› Undocked.', cls: 'comm' };
     case 'worldEvent': {
+      // Issue #341: a convoy start carries a place-referencing line (the
+      // session-only variant payload); the persisted activeEvent is unchanged.
+      if (e.phase === 'start' && typeof e.line === 'string' && e.line) {
+        return { text: e.line, cls: 'comm' };
+      }
+      if (e.phase === 'end' && e.kind === 'convoySurge') {
+        return { text: '› The convoy clears.', cls: 'comm' };
+      }
       const known = {
         strikeRush: '› Word spreads — a strike rush.',
         pirateBlockade: '▲ Blockade on the lane.',
         laborStrike: '› The docks are striking.',
         commodityGlut: '› Glut on the market.',
+        convoySurge: '› A convoy works the lane.',
       };
       return { text: known[e.kind] ?? '› Word travels — ' + String(e.kind ?? 'something'), cls: 'comm' };
     }
