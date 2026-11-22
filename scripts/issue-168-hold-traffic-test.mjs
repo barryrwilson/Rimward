@@ -74,7 +74,10 @@ const unclearing = process.env.HOLD_CASE === 'moving-blocked';
 const exhaustion = process.env.HOLD_CASE === 'yield-budget-clock';
 const impossible = staticBlocked || unclearing || exhaustion;
 const station = new THREE.Vector3(...binds.SYSTEMS.veridian.station.position);
-ctx.ship.object.position.copy(impossible ? station.clone().add(new THREE.Vector3(exhaustion?300:220,0,0))
+// The recorded hold offsets are pre-#340 station-relative distances: the
+// playable x/z extent and DOCK_STAGE_RANGE (135 -> 270) doubled, so the hold
+// point and its blocker are scaled x2 to keep the same stage-chord geometry.
+ctx.ship.object.position.copy(impossible ? station.clone().add(new THREE.Vector3(exhaustion?600:440,0,0))
   : blocked ? station.clone().add(new THREE.Vector3(70,0,0)) : new THREE.Vector3(-180,33,100));
 ctx.ship.object.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),new THREE.Vector3(-1,0,0));
 ctx.ship.velocity.set(0,0,0); ctx.ship.speed=0;
@@ -83,7 +86,7 @@ const position=ctx.ship.object.position.clone();
 const velocity=impossible ? new THREE.Vector3(0,unclearing?1:exhaustion?20:0,0) : new THREE.Vector3(11.15,-3.39,-49.13);
 // Start one second before the observed incoming offset so the ordinary
 // 1.5s safety prediction can validate a complete slow forward escape.
-const npcPosition=impossible ? station.clone().add(new THREE.Vector3(exhaustion?215:135,0,0))
+const npcPosition=impossible ? station.clone().add(new THREE.Vector3(exhaustion?430:270,0,0))
   : position.clone().add(new THREE.Vector3(12,-17,51)).addScaledVector(velocity,-1);
 const record={id:'stage-hold-incoming',name:'Incoming route freighter',role:'trader',classKey:'freighter',faction:'freehold',
   system:'veridian',state:'enroute',live:true,resolve:90,cargo:[],

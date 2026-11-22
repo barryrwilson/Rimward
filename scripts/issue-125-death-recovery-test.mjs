@@ -90,7 +90,12 @@ pin('fixture: Marked origin in Freehold', ctx.world.origin === 'marked' && ctx.w
 // ---- 1. patrol law is local ------------------------------------------------
 {
   const bank = ctx.world.recordBanks.freehold;
-  const patrols = bank.filter((r) => r.role === 'patrol');
+  // Issue #339 appended deterministic ambient crowd records to every bank
+  // (crowd ids use the `crowd-...` namespace, featured cast keeps `rec-N`).
+  // This pin is about the featured patrol cast the standing-law contract was
+  // built on, so count only legacy records; crowd patrols are ambient traffic
+  // and are covered by the #339 coupling suite.
+  const patrols = bank.filter((r) => r.role === 'patrol' && typeof r.id === 'string' && r.id.startsWith('rec-'));
   pin('Freehold fields two patrol records', patrols.length === 2, patrols.map((r) => [r.name, r.faction]));
   pin('every Freehold patrol flies the Freehold flag', patrols.every((r) => r.faction === 'freehold'),
     patrols.map((r) => [r.name, r.faction]));

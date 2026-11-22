@@ -1,9 +1,11 @@
 # Making solar systems feel larger with more NPCs — a performance-bounded brainstorm
 
-Status: **proposal / brainstorm** for Phases 1–4, filed as #338–#341. Phase 0
-(measurement, issue #337), Phase 1 (#338), Phase 2 (#339) and Phase 4 (#341)
-are implemented; Phase 3 (#340, P5 extent + P6 in-system chart) remains and
-still needs the owner save-migration decision. Phase 0 shipped the dev-only
+Status: **implemented** for Phases 1–4, filed as #338–#341. Phase 0
+(measurement, issue #337), Phase 1 (#338), Phase 2 (#339), Phase 4 (#341) and
+Phase 3 (#340, P5a extent + P6 in-system chart) are implemented. The Phase 3
+owner decisions are recorded in §7.1: P5a uniform ×2 extent with a speed/pacing
+pass, transform-based v1→v2 save migration, and the in-system chart in the same
+PR. Phase 0 shipped the dev-only
 `?perf=1` overlay plus an unattended production-build probe, with the measured
 baseline and budgets in
 [ProductionPerformanceBudget.md](ProductionPerformanceBudget.md). Neither the
@@ -28,14 +30,14 @@ bought cheaply and measured before the next one lands.
 | Fact | Value | Evidence |
 |---|---|---|
 | Systems | 101 (7 authored + 94 generated) | `src/game/authored-systems.js:30-255`, `src/game/galaxy.generated.js:2`, merged `src/game/state.js:775` |
-| Authored content bound | generated landmarks validated **inside 1000 u of origin** | `scripts/generate-galaxy.mjs:998,1245` |
-| Extent radius | min 901 u, avg **1100.7 u**, max 1400 u | computed over all 101 system defs |
-| Station / gates / field | station ±650 u; gates 850–1250 u; field radius 85–160 u | `scripts/generate-galaxy.mjs:571-596` |
-| Planet orbit slots | 250/420/640/920/1400 u, radii 9/14/16/12/30 | `src/systems/solarsystem.js:170-205` |
-| Player speed | cruise 120 u/s, burn 240 u/s | `src/game/state.js:38` |
-| Crossing time | ~11.7 s at burn / ~23 s at cruise across the full diameter | derived |
-| Scale | 1 u = 3.64 m, so the playable disc is ~4 km radius | `src/game/ship-scale.js:42` |
-| Empty fraction | a handful of point objects in a 6.2 M u² disc; >98% has nothing | derived |
+| Authored content bound | generated landmarks validated **inside 2,000 u of origin** (Phase 3 bubble) | `scripts/generate-galaxy.mjs` |
+| Extent radius | min 1,802 u, avg **2,201.4 u**, max 2,800 u (Phase 3 ×2) | computed over all 101 system defs |
+| Station / gates / field | station ±1,300 u; gates 1,700–2,400 u; field radius 170–320 u | `scripts/generate-galaxy.mjs` |
+| Planet orbit slots | 500/840/1,280/1,840/2,800 u, radii 9/14/16/12/30 | `src/systems/solarsystem.js` |
+| Player speed | cruise 240 u/s, burn 480 u/s (Phase 3 speed pass) | `src/game/state.js` |
+| Crossing time | ~11.7 s at burn / ~23.3 s at cruise across the full diameter (unchanged: ×2 distance, ×2 speed) | derived |
+| Scale | 1 u = 3.64 m, so the playable disc is ~8 km radius | `src/game/ship-scale.js:42` |
+| Empty fraction | a handful of point objects in a 24.7 M u² disc; >98% has nothing | derived |
 
 ### 1.2 Population
 
@@ -186,11 +188,12 @@ Two options:
 
 - **P5a, ×2 playable extent** (radius ~2,500–3,000 u): scale orbit slots, gate
   radius, station spread, field distance. Raise cruise/burn proportionally
-  (e.g. light cruise 120→200, burn 240→480) to keep 20–30 s crossings. Needs a
+  (implemented: light cruise 240, burn 480) to keep 20–30 s crossings. Needs a
   tuning pass on dock approach, autopilot arrival tolerance, collision damage
   (`IMPACT_SCREEN_PER_U`), agent-API steering gains, job distance pay, launch
   clearance, and the three duplicated planet-slot tables
-  (`solarsystem.js:170`, `asteroids.js:96`, `courier-shadow.js:39`).
+  (`solarsystem.js`, `asteroids.js`, `courier-shadow.js`). **Implemented in
+  #340** (owner decision: P5a, not P5b).
 - **P5b, sub-regions**: multiple content clusters separated by 3,000–8,000 u,
   connected by a fast in-system transit lane. Biggest structural change;
   touches nav/jump/save. Only if P5a still feels small.
@@ -263,13 +266,46 @@ disable asteroid tumble. Never degrade near gameplay or combat readability.
    (1–2 issues). Biggest perceived-size gain at near-zero sim cost. Measure.
 3. **Phase 2** — P3 population tiers + abstract growth + coupling caps
    (1–2 issues). Measure; tune job/market/contact limits.
-4. **Phase 3** — P5 extent ×2 + P6 in-system chart (only if Phases 1–2 prove
-   headroom). Highest risk; needs a save-migration decision.
+4. **Phase 3** — P5a extent ×2 + P6 in-system chart (implemented in #340 after
+   Phases 1–2 proved headroom; owner chose the transform-migration policy).
 5. **Phase 4** — P7 ambient life.
 
 Each phase ends with: `npm run build`, `npm run test:boot`, a live browser
 flow (station → lane → gate → jump), the perf probe numbers, and a written
 before/after. Park any follow-up as its own issue rather than expanding scope.
+
+### 7.1 Phase 3 implementation record (#340)
+
+Delivered after Phase 4 (#341) because the owner save-migration decision was the
+gate. Recorded owner decisions: **P5a** uniform ×2 playable extent plus the
+speed/pacing pass (not P5b sub-regions); **v1→v2 save migration by transforming
+persisted positions ×2 at load** (envelope v2 accepts v1, no bank
+regeneration); and the **in-system chart in the same PR**.
+
+- Extent/data: authored + generated x/z ×2 (y unchanged), generator validation
+  and separation invariants scaled, three planet-slot tables agree at
+  500/840/1,280/1,840/2,800 u with ORBIT_K 1500, deep-field/starfield/asteroid
+  far scenery scaled. One 1/94 landmark fallback is re-solved off-stream; gate
+  radial rounding may exceed 2,400 u by <1 u.
+- Pacing: cruise/burn ×2; dock approach, JUMP zone/arrival offset, gate-scale,
+  discovery radii and collision damage parity scaled; combat projectile
+  speed/range ×2 with damage/rof/heat unchanged; hop-based pay/deadlines
+  unchanged. Measured station→gate 0.97–6.78 s, station→outer POI 3.90–12.87 s,
+  full diameter 11.67 s burn / 23.33 s cruise.
+- Save: pure `src/game/save-migrate.js` (v2, x/z only, legLens recomputed,
+  y/velocity/quaternion untouched, fail-safe) and `src/game/save.js` accepting
+  v1 at load. Raw `restore()` fixtures are intentionally not migrated.
+- Chart: `src/systems/systemchart.js` adds a Galaxy|System switch inside the
+  existing overlay; existing KeyM/Escape bindings, DOM/SVG only, no THREE, 0.5 s
+  refresh, near/mid/far tiers; renderer counts unchanged.
+- Verification: `npm run build` and the full `npm run test:boot` chain pass
+  (the four focused #340 suites contribute 3,924 + 75 + 79 + 15 checks). The
+  production live probe measured station→gate 15.0 s, arrival→dock 37.0 s and
+  undock→dock 53.0 s, zero chart render-cost delta with the sim frozen, manual
+  flight at the 240 u/s cruise that docks, and a v1→v2 restore scaled exactly
+  once (116.5→233, re-saved v2, second load unchanged). Perf numbers are in
+  [ProductionPerformanceBudget.md](ProductionPerformanceBudget.md).
+
 
 ## 8. What not to do
 

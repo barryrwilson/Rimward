@@ -94,10 +94,11 @@ export function createCtx({ scene, camera, renderer }) {
     // --- tuning / static data (see src/game/state.js for gameplay data) ---
     config: {
       ship: {
-        // Flight (design doc §5, scaled ×1.5). Light-fighter baseline.
-        maxSpeed: 120, // cruise u/s
+        // Flight (design doc §5, scaled ×1.5; issue #340 doubles cruise/burn
+        // for the ×2 extent). Light-fighter baseline.
+        maxSpeed: 240, // cruise u/s
         creep: 30, // minimum forward drift when throttle ~ 0 but moving
-        acceleration: 90,
+        acceleration: 180,
         damping: 0.5,
         rotationSpeed: 0.85, // light TURN_MAX; live rate is turnRateFor() in flight-feel.js
         afterburner: { multiplier: 2, burnTime: 6, cooldown: 8 }, // §5.2
@@ -108,9 +109,12 @@ export function createCtx({ scene, camera, renderer }) {
       world: {
         sunPosition: new THREE.Vector3(0, 0, 0),
         sunRadius: 0, // solarsystem.js writes the live star; 0 = no heat
-        shipSpawn: new THREE.Vector3(0, 30, 800),
-        stationPosition: new THREE.Vector3(120, 20, 620), // near spawn
-        asteroidField: { center: new THREE.Vector3(-450, -30, -250), radius: 160, count: 130 },
+        // Issue #340: defaults mirror the ×2 authored Freehold data so a ctx
+        // built without applyFlightEnvelope/system load still points at the
+        // real station/field rather than the pre-Phase-3 layout.
+        shipSpawn: new THREE.Vector3(0, 30, 1600),
+        stationPosition: new THREE.Vector3(240, 20, 1240), // near spawn
+        asteroidField: { center: new THREE.Vector3(-900, -30, -500), radius: 320, count: 130 },
       },
       controls: [], // filled by controls.js, read by hud.js
     },

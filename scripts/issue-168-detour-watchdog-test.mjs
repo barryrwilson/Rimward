@@ -47,7 +47,11 @@ function fixture() {
 
 function run(name, trajectory, { limit=30, beforeStart, existing }={}) {
   const f=existing||fixture(), {ctx,owner,goal}=f;
-  const radius=300;
+  // The synthetic detour is authored in pre-#340 units: the stage goal moved
+  // from station+135 to station+DOCK_STAGE_RANGE (270), so the pose circle
+  // radius scales x2 (600). The station keep radius did not scale, so the
+  // authored chord angles halve to keep the same clearance/keep ratio.
+  const radius=600;
   const pose=(angle) => ctx.ship.object.position.set(goal.x-radius*Math.cos(angle),0,goal.z+radius*Math.sin(angle));
   pose(0);beforeStart?.(f);
   assert.equal(tryApproachDock(ctx),'');
@@ -79,34 +83,37 @@ function run(name, trajectory, { limit=30, beforeStart, existing }={}) {
   return result;
 }
 
+// Authored chord angles halve with the doubled goal distance to keep the same
+// clearance/keep ratio against the unchanged station keep radius.
+const arc=0.175, clearArc=0.3;
 try {
   const frozen=run('frozen',()=>{});
   assert.ok(frozen.elapsed>=10&&frozen.elapsed<=10+2*DT,'stationary detour gets the original ten-second bound');
-  const slowArc=({t,pose})=>pose(Math.min(t/8,1)*0.35);
+  const slowArc=({t,pose})=>pose(Math.min(t/8,1)*arc);
   let sameOwner;
   const credit=run('one-slow-arc-then-frozen',slowArc,{beforeStart:f=>{sameOwner=f;}});
   assert.ok(credit.elapsed>frozen.elapsed+0.2,'actual geometric progress receives a measurable allowance');
   assert.ok(credit.elapsed<=20+2*DT,'one engagement cannot buy more than ten additional seconds');
   const fresh=run('new-engagement-same-owner',slowArc,{existing:sameOwner});
   assert.ok(Math.abs(fresh.elapsed-credit.elapsed)<=2*DT,'new accepted dock engagement receives a fresh bounded allowance');
-  const once=run('one-arc-then-frozen',({t,pose})=>pose(Math.min(t/2,1)*0.35));
-  const backtrack=run('repeated-backtracking',({t,pose})=>pose((1-Math.abs((t%4)/2-1))*0.35));
+  const once=run('one-arc-then-frozen',({t,pose})=>pose(Math.min(t/2,1)*arc));
+  const backtrack=run('repeated-backtracking',({t,pose})=>pose((1-Math.abs((t%4)/2-1))*arc));
   assert.ok(backtrack.totalTravel>once.totalTravel*4,'negative control actually repeats the traveled arc');
   assert.ok(backtrack.elapsed<=once.elapsed+2*DT,'revisiting the same geometric interval cannot refill credit');
-  const clear=run('clear-once',({t,pose})=>pose(Math.min(t/2,1)*0.6));
-  const reentry=run('clear-and-reenter-repeatedly',({t,pose})=>pose((1-Math.abs((t%4)/2-1))*0.6));
+  const clear=run('clear-once',({t,pose})=>pose(Math.min(t/2,1)*clearArc));
+  const reentry=run('clear-and-reenter-repeatedly',({t,pose})=>pose((1-Math.abs((t%4)/2-1))*clearArc));
   assert.ok(reentry.totalTravel>clear.totalTravel*4,'clear/reentry control traverses multiple complete arcs');
   assert.ok(reentry.clearTransitions>=2&&reentry.reentries>=2,'the protected stage chord actually clears and becomes blocked repeatedly');
   assert.ok(reentry.elapsed<=clear.elapsed+2*DT,'clearing and re-entering the station chord cannot refill credit');
   const churn=run('alternating-sides-and-identities',({ctx,t,frame,pose})=>{
-    pose(Math.sin(t*Math.PI/2)*0.6);
+    pose(Math.sin(t*Math.PI/2)*clearArc);
     // Replace the stationary body's public object without moving its geometry.
     ctx.station.position=new THREE.Vector3();ctx.station.id=`station-${frame}`;
     ctx.asteroids.list=[{id:frame,position:new THREE.Vector3(5000,5000,5000),radius:10}];
   });
   assert.ok(churn.elapsed<=20+2*DT,'side/identity churn remains inside the per-engagement bound');
-  const phaseOnce=({ctx,t,frame,pose})=>{pose(Math.min(t/2,1)*0.6);if(frame===60)ctx.autopilot.phase='cruise';};
-  const phaseLoop=({ctx,t,frame,pose})=>{pose((1-Math.abs((t%4)/2-1))*0.6);if(frame===60)ctx.autopilot.phase='cruise';};
+  const phaseOnce=({ctx,t,frame,pose})=>{pose(Math.min(t/2,1)*clearArc);if(frame===60)ctx.autopilot.phase='cruise';};
+  const phaseLoop=({ctx,t,frame,pose})=>{pose((1-Math.abs((t%4)/2-1))*clearArc);if(frame===60)ctx.autopilot.phase='cruise';};
   // One explicit owner-state transition exercises scratch lifetime. Perpetual
   // forced phase resets are outside the watchdog's normal caller contract.
   const phase=run('one-phase-transition',phaseOnce);

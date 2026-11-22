@@ -29,11 +29,11 @@ export const GATE_DIAMETER = BORE_RADIUS * 2;
 /** One silhouette-breaker must reach at least 15% of diameter. */
 export const OUTLINE_BREAKER_MIN = GATE_DIAMETER * 0.15; // 9
 
-/** Must match JUMP.zone in state.js. */
-export const ZONE = 60;
+/** Must match JUMP.zone in state.js (issue #340: ×2 travel-trigger geometry). */
+export const ZONE = 120;
 
-/** Must match JUMP.arrivalOffset in state.js. */
-export const ARRIVAL_OFFSET = 50;
+/** Must match JUMP.arrivalOffset in state.js (issue #340: ×2). */
+export const ARRIVAL_OFFSET = 100;
 
 export const MERGE_GEO_MAX = 6;
 export const MERGE_MAT_MAX = 6;

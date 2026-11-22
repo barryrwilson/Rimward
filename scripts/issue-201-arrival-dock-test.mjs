@@ -1,6 +1,7 @@
 /** Issue #201: real route/queued dock with optional disclosed bore-edge arrival pose. */
 import assert from 'node:assert/strict';
 import { installDomStubs, bootGameSystems, makeNavHelpers } from './lib/boot-harness.mjs';
+import { DOCK_CRUISE_START_RANGE, DOCK_STAGE_RANGE } from '../src/game/dock-approach.js';
 
 let seed = 7;
 Math.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
@@ -100,7 +101,12 @@ flyUntil(() => ctx.autopilot.mode === 'dock' && ctx.autopilot.engaged, 5);
 assert.equal(ctx.autopilot.phase, 'stage');
 assert.equal(act('cancelAutopilot').ok, true);
 const station = ctx.station.position;
-ctx.ship.object.position.set(station.x + 700, station.y, station.z);
+// Issue #340: a fresh ordinary approach begins in cruise beyond the doubled
+// cruise-start range; park just outside it so this pin still tests the
+// gate-clear scratch cleanup, not the cruise/stage phase boundary.
+ctx.ship.object.position.set(
+  station.x + DOCK_CRUISE_START_RANGE + DOCK_STAGE_RANGE + 100, station.y, station.z,
+);
 ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
 assert.equal(act('approachDock').ok, true);
 tick(1);

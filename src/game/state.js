@@ -2,7 +2,11 @@
  * RIMWARD web — shared simulation core. Pure data + math, no three.js, no DOM.
  * Every gameplay constant traces to docs/rimward-game-elements-omp.md (noted
  * as §). Numbers scaled ×1.5 from doc m/s to our world units (player cruise
- * 120 u/s = doc 80 m/s).
+ * 120 u/s = doc 80 m/s). Issue #340 (system scale/population Phase 3): the
+ * playable system extent is ×2 on x/z, so cruise/burn are doubled here to keep
+ * crossing times at their pre-Phase-3 values (player cruise 240 u/s = doc
+ * 160 m/s); creep, turn and stop time stay authored so docking precision and
+ * the turn-rate caps are unchanged.
  *
  * This file is READ-ONLY for feature workers: import, don't modify. If a
  * worker needs a change here, it must report back instead.
@@ -35,12 +39,16 @@ export const U = {
 
 // ---------- Ship classes (§5.3, ×1.5) ----------
 export const SHIP_CLASSES = {
-  light: { cruise: 120, burn: 240, creep: 30, stopTime: 2.0, turn: 1.6, hull: 100, shield: 100, engine: 100, cargo: 20, role: 'player' },
-  heavy: { cruise: 90, burn: 180, creep: 22, stopTime: 2.5, turn: 1.1, hull: 160, shield: 140, engine: 120, cargo: 48, role: 'combat' },
-  freighter: { cruise: 60, burn: 120, creep: 15, stopTime: 3.5, turn: 0.7, hull: 220, shield: 120, engine: 140, cargo: 160, role: 'trade' },
-  ace: { cruise: 135, burn: 270, creep: 30, stopTime: 1.8, turn: 2.0, hull: 140, shield: 160, engine: 120, cargo: 20, role: 'ace' },
-  cutter: { cruise: 105, burn: 210, creep: 25, stopTime: 2.2, turn: 1.5, hull: 80, shield: 80, engine: 90, cargo: 32, role: 'pirate' },
-  frigate: { cruise: 22, burn: 45, creep: 8, stopTime: 5.0, turn: 0.35, hull: 900, shield: 600, engine: 300, cargo: 80, role: 'capital' },
+  // Issue #340: cruise/burn ×2 for the ×2 extent. creep/turn/stopTime stay
+  // authored (maneuvering precision and the turn-rate caps are unchanged);
+  // acceleration is derived from cruise in hangar.js, so braking distance
+  // scales with the layout instead of collapsing.
+  light: { cruise: 240, burn: 480, creep: 30, stopTime: 2.0, turn: 1.6, hull: 100, shield: 100, engine: 100, cargo: 20, role: 'player' },
+  heavy: { cruise: 180, burn: 360, creep: 22, stopTime: 2.5, turn: 1.1, hull: 160, shield: 140, engine: 120, cargo: 48, role: 'combat' },
+  freighter: { cruise: 120, burn: 240, creep: 15, stopTime: 3.5, turn: 0.7, hull: 220, shield: 120, engine: 140, cargo: 160, role: 'trade' },
+  ace: { cruise: 270, burn: 540, creep: 30, stopTime: 1.8, turn: 2.0, hull: 140, shield: 160, engine: 120, cargo: 20, role: 'ace' },
+  cutter: { cruise: 210, burn: 420, creep: 25, stopTime: 2.2, turn: 1.5, hull: 80, shield: 80, engine: 90, cargo: 32, role: 'pirate' },
+  frigate: { cruise: 44, burn: 90, creep: 8, stopTime: 5.0, turn: 0.35, hull: 900, shield: 600, engine: 300, cargo: 80, role: 'capital' },
 };
 
 /** Outfitter hold racks. Extra on top of class cargo. Not persisted as a count. */
@@ -140,10 +148,13 @@ export function miningLaserFor(tier) {
   return MINING_LASERS[i] ?? MINING_LASERS[0];
 }
 
-// ---------- Weapons (§6.3, ×1.5 on speeds/ranges) ----------
+// ---------- Weapons (§6.3; ×1.5 pre-Phase-3, ×2 again for issue #340) ----------
+// Issue #340 (system scale/population Phase 3, P5a): the playable extent and
+// ship speeds are uniformly x2. Combat projectile speed and range scale with
+// them so the relative dogfight envelope is unchanged; damage/rof/heat stay.
 export const WEAPONS = {
-  cannon: { name: 'Energy cannon', damage: 8, rof: 6, speed: 900, range: 500, heatPerShot: 4, family: 'energy' },
-  disruptor: { name: 'Disruptor', damage: 10, rof: 2.5, speed: 700, range: 350, heatPerShot: 6, family: 'disruptor', shieldMult: 2, engineMult: 2, hullMult: 0.25 },
+  cannon: { name: 'Energy cannon', damage: 8, rof: 6, speed: 1800, range: 1000, heatPerShot: 4, family: 'energy' },
+  disruptor: { name: 'Disruptor', damage: 10, rof: 2.5, speed: 1400, range: 700, heatPerShot: 6, family: 'disruptor', shieldMult: 2, engineMult: 2, hullMult: 0.25 },
   // Wave 51: the 'mining' family entry IS the stock Mk I head, derived from
   // MINING_LASERS[0] so the ladder is the single source of truth. applyHit
   // resolves damage families by this key, and combat.js reads the INSTALLED
@@ -154,18 +165,18 @@ export const WEAPONS = {
     family: 'mining', beam: true, extractPerSec: MINING_LASERS[0].extractPerSec,
   },
   missile: {
-    name: 'Dart rack', damage: 22, rof: 0.45, speed: 260, range: 720, heatPerShot: 14,
+    name: 'Dart rack', damage: 22, rof: 0.45, speed: 520, range: 1440, heatPerShot: 14,
     family: 'missile',
     // rad/s; below cutter.turn 1.5 so a cutter can still cut the dart.
     turn: 0.85,
   },
   turret: {
-    name: 'Auto turret', damage: 4, rof: 3, speed: 800, range: 380, heatPerShot: 2,
+    name: 'Auto turret', damage: 4, rof: 3, speed: 1600, range: 760, heatPerShot: 2,
     family: 'energy',
   },
   // Wave 92 BIO-04: Digit 5 projectile. Not beam, not seeker. Owner numbers.
   psionic: {
-    name: 'Psionic bolt', damage: 12, rof: 3, speed: 520, range: 420, heatPerShot: 8,
+    name: 'Psionic bolt', damage: 12, rof: 3, speed: 1040, range: 840, heatPerShot: 8,
     powerPerShot: 10,
     family: 'psionic',
   },
@@ -774,9 +785,14 @@ export function pickRespawnOreType(band, roll, allowedKeys, excludeKey) {
 // order, not collision precedence.
 export const SYSTEMS = { ...AUTHORED_SYSTEMS, ...GENERATED_SYSTEMS };
 export const JUMP = {
-  zone: 60, // activation range from gate
+  // Issue #340: travel-trigger geometry ×2 with the ×2 extent/speeds so a gate
+  // press keeps the same reaction window at cruise and an arrival still clears
+  // the gate bore. The gate bore/tube themselves stay physical (gate-scale.js
+  // BORE_RADIUS/RING_TUBE are unchanged); ZONE/ARRIVAL_OFFSET must stay in
+  // sync with gate-scale.js.
+  zone: 120, // activation range from gate
   chargeTime: 2.5, // s of tunnel/fade before arrival
-  arrivalOffset: 50, // u past the destination gate toward system center
+  arrivalOffset: 100, // u past the destination gate toward system center
   arrivalDrift: 5, // u/s forward momentum an idle arrival keeps (#255 hold)
   graceSeconds: 60, // no hostile intent on arrival or new-game start (covers a gate hop)
   saveOnJump: true, // like dock/undock autosave §4.4

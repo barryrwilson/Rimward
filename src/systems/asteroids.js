@@ -95,12 +95,14 @@ const WORK_HALF = 0.7;
 const TUMBLE_RANGE2 = 1200 * 1200; // 1.5 * ENCOUNTER_BUBBLE; skip far spin only
 const FIELD_KINDS = { belt: true, sparse: true, cloud: true };
 // Mirrors solarsystem.js SLOTS (not exported). Keep-out uses live count via PLANET_SLOT_COUNT.
+// Issue #340 (P5a): orbit radii x2; radii unchanged. ORBIT_K stays 1500, so
+// orbital periods lengthen by 2^1.5.
 const PLANET_SLOTS = [
-  { radius: 9, orbitRadius: 250 },
-  { radius: 14, orbitRadius: 420 },
-  { radius: 16, orbitRadius: 640 },
-  { radius: 12, orbitRadius: 920 },
-  { radius: 30, orbitRadius: 1400 },
+  { radius: 9, orbitRadius: 500 },
+  { radius: 14, orbitRadius: 840 },
+  { radius: 16, orbitRadius: 1280 },
+  { radius: 12, orbitRadius: 1840 },
+  { radius: 30, orbitRadius: 2800 },
 ];
 const _keepOut = { hit: false, nx: 0, ny: 1, nz: 0, overlap: 0 };
 // Issue #149 shard burst: one shared InstancedMesh per ctx, capped.

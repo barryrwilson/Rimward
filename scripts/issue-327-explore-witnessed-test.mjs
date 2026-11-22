@@ -230,7 +230,7 @@ check('a restored offered survey for a witnessed site is withdrawn without pay',
   assert.ok(!ctx.world.jobs.some((j) => j.id === 'explore-hollowreach-0' && j.state === 'offered'),
     'the restored witnessed posting is withdrawn');
   assert.equal(ctx.world.credits, credits, 'restore + withdrawal pays nothing');
-  assert.equal(snapshot(ctx).v, 1, 'the save envelope stays v1');
+  assert.equal(snapshot(ctx).v, 2, 'the save envelope is v2 after issue #340 (v1 is still accepted on load)');
   assert.equal(observe().v, 2, 'the agent API version stays 2');
 });
 

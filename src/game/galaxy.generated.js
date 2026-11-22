@@ -19,9 +19,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Hearth Cart",
         "kind": "wreck",
         "position": [
-          -179,
+          -358,
           20,
-          679
+          1358
         ],
         "line": "A family ark, stripped to the ribs. Somebody's grandmother was born on it, and they'll tell you so."
       }
@@ -39,44 +39,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Hearth Landing",
       "position": [
-        -528,
+        -1056,
         32,
-        96
+        192
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        414,
+        828,
         -38,
-        512
+        1024
       ],
-      "radius": 147,
+      "radius": 294,
       "count": 115,
       "oreMult": 1.62
     },
     "gates": [
       {
         "position": [
-          858,
+          1716,
           46,
-          100
+          200
         ],
         "to": "freehold"
       },
       {
         "position": [
-          -1014,
+          -2028,
           67,
-          133
+          266
         ],
         "to": "fh_wellspring"
       },
       {
         "position": [
-          544,
+          1088,
           74,
-          -1016
+          -2032
         ],
         "to": "fh_haven"
       }
@@ -116,9 +116,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Orchard Bell",
         "kind": "beacon",
         "position": [
-          431,
+          862,
           -94,
-          492
+          984
         ],
         "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
       }
@@ -136,44 +136,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Haven Grange",
       "position": [
-        52,
+        104,
         45,
-        -172
+        -344
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -496,
+        -992,
         -41,
-        87
+        174
       ],
-      "radius": 137,
+      "radius": 274,
       "count": 102,
       "oreMult": 1.59
     },
     "gates": [
       {
         "position": [
-          1067,
+          2134,
           78,
-          81
+          162
         ],
         "to": "freehold"
       },
       {
         "position": [
-          -910,
+          -1820,
           66,
-          235
+          470
         ],
         "to": "fh_hearth"
       },
       {
         "position": [
-          853,
+          1706,
           89,
-          -746
+          -1492
         ],
         "to": "fh_mercy"
       }
@@ -213,9 +213,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Grange Stone",
         "kind": "monument",
         "position": [
-          -84,
+          -168,
           -114,
-          -731
+          -1462
         ],
         "line": "A stone for the first field broken this far out. The names on it are still farmed by their grandchildren."
       }
@@ -233,36 +233,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Meridian Homestead",
       "position": [
-        -400,
+        -800,
         44,
-        -365
+        -730
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -24,
+        -48,
         -63,
-        460
+        920
       ],
-      "radius": 102,
+      "radius": 204,
       "count": 104,
       "oreMult": 1.46
     },
     "gates": [
       {
         "position": [
-          830,
+          1660,
           69,
-          765
+          1530
         ],
         "to": "freehold"
       },
       {
         "position": [
-          -713,
+          -1426,
           70,
-          649
+          1298
         ],
         "to": "fh_granary"
       }
@@ -302,9 +302,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Wain",
         "kind": "wreck",
         "position": [
-          -513,
+          -1026,
           -98,
-          -485
+          -970
         ],
         "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
       }
@@ -322,44 +322,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Alder's Rest Landing",
       "position": [
-        11,
+        22,
         40,
-        -26
+        -52
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -298,
+        -596,
         -29,
-        210
+        420
       ],
-      "radius": 149,
+      "radius": 298,
       "count": 34,
       "oreMult": 2.96
     },
     "gates": [
       {
         "position": [
-          693,
+          1386,
           68,
-          698
+          1396
         ],
         "to": "fh_goodrest"
       },
       {
         "position": [
-          -932,
+          -1864,
           41,
-          104
+          208
         ],
         "to": "fh_longtable"
       },
       {
         "position": [
-          407,
+          814,
           77,
-          -774
+          -1548
         ],
         "to": "fh_meadowlark"
       }
@@ -399,9 +399,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Grange Murmur",
         "kind": "anomaly",
         "position": [
-          -689,
+          -1378,
           24,
-          575
+          1150
         ],
         "line": "The stars here look nearer than they should. Kids dare each other to fly through it."
       }
@@ -419,44 +419,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Mercy Grange",
       "position": [
-        248,
+        496,
         39,
-        -633
+        -1266
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -231,
+        -462,
         -24,
-        425
+        850
       ],
-      "radius": 130,
+      "radius": 260,
       "count": 86,
       "oreMult": 2.03
     },
     "gates": [
       {
         "position": [
-          688,
+          1376,
           81,
-          704
+          1408
         ],
         "to": "fh_haven"
       },
       {
         "position": [
-          -1102,
+          -2204,
           75,
-          88
+          176
         ],
         "to": "fh_harvest"
       },
       {
         "position": [
-          473,
+          946,
           84,
-          -751
+          -1502
         ],
         "to": "fh_tallow"
       }
@@ -496,9 +496,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Hearth Candle",
         "kind": "beacon",
         "position": [
-          807,
+          1614,
           140,
-          -211
+          -422
         ],
         "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
       }
@@ -516,28 +516,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Longtable Homestead",
       "position": [
-        -147,
+        -294,
         32,
-        -583
+        -1166
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -474,
+        -948,
         -47,
-        179
+        358
       ],
-      "radius": 131,
+      "radius": 262,
       "count": 30,
       "oreMult": 2.94
     },
     "gates": [
       {
         "position": [
-          1055,
+          2110,
           49,
-          379
+          758
         ],
         "to": "fh_alder"
       }
@@ -577,9 +577,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Kinward Glow",
         "kind": "anomaly",
         "position": [
-          180,
+          360,
           5,
-          572
+          1144
         ],
         "line": "Out this far the beacon's answer comes back late, and slightly wrong."
       }
@@ -597,28 +597,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Sweetwater Landing",
       "position": [
-        -27,
+        -54,
         38,
-        -287
+        -574
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        223,
+        446,
         -43,
-        104
+        208
       ],
-      "radius": 152,
+      "radius": 304,
       "count": 35,
       "oreMult": 2.91
     },
     "gates": [
       {
         "position": [
-          901,
+          1802,
           54,
-          527
+          1054
         ],
         "to": "fh_harvest"
       }
@@ -658,9 +658,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Orchard Wain",
         "kind": "wreck",
         "position": [
-          -128,
+          -256,
           141,
-          592
+          1184
         ],
         "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
       }
@@ -678,44 +678,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Granary Grange",
       "position": [
-        640,
+        1280,
         36,
-        637
+        1274
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        476,
+        952,
         -35,
-        408
+        816
       ],
-      "radius": 121,
+      "radius": 242,
       "count": 72,
       "oreMult": 2.05
     },
     "gates": [
       {
         "position": [
-          1049,
+          2098,
           70,
-          168
+          336
         ],
         "to": "fh_goodrest"
       },
       {
         "position": [
-          -992,
+          -1984,
           75,
-          110
+          220
         ],
         "to": "fh_meridian"
       },
       {
         "position": [
-          564,
+          1128,
           60,
-          -1054
+          -2108
         ],
         "to": "fh_tallow"
       }
@@ -755,9 +755,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Glow",
         "kind": "anomaly",
         "position": [
-          685,
-          -38,
-          -9
+          -974,
+          103,
+          845
         ],
         "line": "The last freeholder out this way left the porch light on. It's still on."
       }
@@ -775,36 +775,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Kinhold Homestead",
       "position": [
-        6,
+        12,
         36,
-        -169
+        -338
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        231,
+        462,
         -29,
-        532
+        1064
       ],
-      "radius": 102,
+      "radius": 204,
       "count": 54,
       "oreMult": 2.48
     },
     "gates": [
       {
         "position": [
-          847,
+          1694,
           54,
-          237
+          474
         ],
         "to": "fh_wellspring"
       },
       {
         "position": [
-          -1182,
+          -2364,
           78,
-          193
+          386
         ],
         "to": "fh_tallow"
       }
@@ -844,9 +844,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Candle",
         "kind": "beacon",
         "position": [
-          -679,
+          -1358,
           -25,
-          447
+          894
         ],
         "line": "The last freeholder out this way left the porch light on. It's still on."
       }
@@ -864,44 +864,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Tallow Landing",
       "position": [
-        -497,
+        -994,
         40,
-        12
+        24
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        469,
+        938,
         -39,
-        -184
+        -368
       ],
-      "radius": 132,
+      "radius": 264,
       "count": 63,
       "oreMult": 2.46
     },
     "gates": [
       {
         "position": [
-          686,
+          1372,
           79,
-          681
+          1362
         ],
         "to": "fh_mercy"
       },
       {
         "position": [
-          -1164,
+          -2328,
           61,
-          136
+          272
         ],
         "to": "fh_kinhold"
       },
       {
         "position": [
-          102,
+          204,
           86,
-          -981
+          -1962
         ],
         "to": "fh_granary"
       }
@@ -941,9 +941,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Homeward Cairn",
         "kind": "monument",
         "position": [
-          -470,
+          -940,
           -37,
-          -678
+          -1356
         ],
         "line": "A cairn of ballast rock, one stone per family that stayed. It gets taller every year."
       }
@@ -961,28 +961,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Tamsin's Rest Grange",
       "position": [
-        -563,
+        -1126,
         19,
-        -89
+        -178
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -503,
+        -1006,
         -25,
-        127
+        254
       ],
-      "radius": 124,
+      "radius": 248,
       "count": 30,
       "oreMult": 3.06
     },
     "gates": [
       {
         "position": [
-          698,
+          1396,
           87,
-          657
+          1314
         ],
         "to": "fh_meadowlark"
       }
@@ -1022,9 +1022,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Harvest Wain",
         "kind": "wreck",
         "position": [
-          -662,
+          -1324,
           -31,
-          -126
+          -252
         ],
         "line": "A grain-hauler that missed its lane and never found another. The parish still says its name at harvest."
       }
@@ -1042,28 +1042,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Cloverfield Homestead",
       "position": [
-        279,
+        558,
         25,
-        -44
+        -88
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -78,
+        -156,
         -33,
-        93
+        186
       ],
-      "radius": 117,
+      "radius": 234,
       "count": 35,
       "oreMult": 2.95
     },
     "gates": [
       {
         "position": [
-          861,
+          1722,
           79,
-          368
+          736
         ],
         "to": "fh_harvest"
       }
@@ -1103,9 +1103,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Sweetwater Murmur",
         "kind": "anomaly",
         "position": [
-          504,
+          1008,
           82,
-          69
+          138
         ],
         "line": "Out this far the beacon's answer comes back late, and slightly wrong."
       }
@@ -1123,36 +1123,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Bramblehome Landing",
       "position": [
-        -302,
+        -604,
         18,
-        148
+        296
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -391,
+        -782,
         -50,
-        -186
+        -372
       ],
-      "radius": 158,
+      "radius": 316,
       "count": 40,
       "oreMult": 3.14
     },
     "gates": [
       {
         "position": [
-          1051,
+          2102,
           51,
-          497
+          994
         ],
         "to": "fh_saltbox"
       },
       {
         "position": [
-          -1073,
+          -2146,
           47,
-          20
+          40
         ],
         "to": "fh_applebough"
       }
@@ -1192,9 +1192,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Grange Humming Field",
         "kind": "anomaly",
         "position": [
-          -442,
+          -884,
           -38,
-          -725
+          -1450
         ],
         "line": "A slow shimmer, like heat off a summer field. Nothing grows there, but nothing dies there either."
       }
@@ -1212,44 +1212,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Meadowlark Grange",
       "position": [
-        287,
+        574,
         33,
-        -88
+        -176
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        22,
+        44,
         -40,
-        -289
+        -578
       ],
-      "radius": 144,
+      "radius": 288,
       "count": 37,
       "oreMult": 3.05
     },
     "gates": [
       {
         "position": [
-          845,
+          1690,
           67,
-          110
+          220
         ],
         "to": "fh_applebough"
       },
       {
         "position": [
-          -864,
+          -1728,
           69,
-          453
+          906
         ],
         "to": "fh_tamsin"
       },
       {
         "position": [
-          434,
+          868,
           58,
-          -927
+          -1854
         ],
         "to": "fh_alder"
       }
@@ -1289,9 +1289,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Grange Cart",
         "kind": "wreck",
         "position": [
-          -710,
+          -1420,
           74,
-          -461
+          -922
         ],
         "line": "Broke up hauling seed stock inward. The field around it gets left alone, out of respect."
       }
@@ -1309,44 +1309,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Harvest Home Homestead",
       "position": [
-        -553,
+        -1106,
         17,
-        79
+        158
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        -194,
+        -388,
         -20,
-        -298
+        -596
       ],
-      "radius": 103,
+      "radius": 206,
       "count": 55,
       "oreMult": 2.57
     },
     "gates": [
       {
         "position": [
-          1092,
+          2184,
           77,
-          210
+          420
         ],
         "to": "fh_mercy"
       },
       {
         "position": [
-          -1005,
+          -2010,
           87,
-          422
+          844
         ],
         "to": "fh_cloverfield"
       },
       {
         "position": [
-          285,
+          570,
           54,
-          -856
+          -1712
         ],
         "to": "fh_sweetwater"
       }
@@ -1386,9 +1386,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Bell",
         "kind": "beacon",
         "position": [
-          -84,
+          -168,
           -35,
-          620
+          1240
         ],
         "line": "Tended by whoever passes closest. The log of keepers goes back eleven names."
       }
@@ -1406,44 +1406,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Wellspring Landing",
       "position": [
-        -173,
+        -346,
         32,
-        21
+        42
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        311,
+        622,
         -28,
-        102
+        204
       ],
-      "radius": 134,
+      "radius": 268,
       "count": 74,
       "oreMult": 2.02
     },
     "gates": [
       {
         "position": [
-          929,
+          1858,
           60,
-          490
+          980
         ],
         "to": "fh_hearth"
       },
       {
         "position": [
-          -1055,
+          -2110,
           70,
-          269
+          538
         ],
         "to": "fh_saltbox"
       },
       {
         "position": [
-          403,
+          806,
           75,
-          -1064
+          -2128
         ],
         "to": "fh_kinhold"
       }
@@ -1483,9 +1483,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Grange Warm Patch",
         "kind": "anomaly",
         "position": [
-          -611,
+          -1222,
           9,
-          -18
+          -36
         ],
         "line": "The last freeholder out this way left the porch light on. It's still on."
       }
@@ -1503,44 +1503,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Saltbox Grange",
       "position": [
-        427,
+        854,
         45,
-        469
+        938
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        195,
+        390,
         -28,
-        43
+        86
       ],
-      "radius": 146,
+      "radius": 292,
       "count": 65,
       "oreMult": 2.53
     },
     "gates": [
       {
         "position": [
-          1091,
+          2182,
           49,
-          197
+          394
         ],
         "to": "fh_wellspring"
       },
       {
         "position": [
-          -1041,
+          -2082,
           52,
-          578
+          1156
         ],
         "to": "fh_goodrest"
       },
       {
         "position": [
-          380,
+          760,
           62,
-          -1118
+          -2236
         ],
         "to": "fh_bramblehome"
       }
@@ -1580,9 +1580,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Ark",
         "kind": "wreck",
         "position": [
-          -189,
+          -378,
           72,
-          570
+          1140
         ],
         "line": "Broke up hauling seed stock inward. The field around it gets left alone, out of respect."
       }
@@ -1600,36 +1600,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Applebough Homestead",
       "position": [
-        -41,
+        -82,
         19,
-        117
+        234
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        412,
+        824,
         -47,
-        -497
+        -994
       ],
-      "radius": 88,
+      "radius": 176,
       "count": 25,
       "oreMult": 3.02
     },
     "gates": [
       {
         "position": [
-          756,
+          1512,
           41,
-          399
+          798
         ],
         "to": "fh_bramblehome"
       },
       {
         "position": [
-          -913,
+          -1826,
           80,
-          155
+          310
         ],
         "to": "fh_meadowlark"
       }
@@ -1669,9 +1669,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Warm Patch",
         "kind": "anomaly",
         "position": [
-          518,
+          1036,
           -66,
-          -308
+          -616
         ],
         "line": "The last freeholder out this way left the porch light on. It's still on."
       }
@@ -1689,44 +1689,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Goodrest Landing",
       "position": [
-        -648,
+        -1296,
         34,
-        -134
+        -268
       ],
       "palette": 11563066
     },
     "field": {
       "center": [
-        368,
+        736,
         -29,
-        88
+        176
       ],
-      "radius": 128,
+      "radius": 256,
       "count": 49,
       "oreMult": 2.42
     },
     "gates": [
       {
         "position": [
-          1114,
+          2228,
           87,
-          243
+          486
         ],
         "to": "fh_saltbox"
       },
       {
         "position": [
-          -804,
+          -1608,
           65,
-          415
+          830
         ],
         "to": "fh_alder"
       },
       {
         "position": [
-          600,
+          1200,
           64,
-          -606
+          -1212
         ],
         "to": "fh_granary"
       }
@@ -1766,9 +1766,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Pylon",
         "kind": "monument",
         "position": [
-          -345,
+          -690,
           118,
-          503
+          1006
         ],
         "line": "A memorial plaque for a profitable quarter. The company does not mark its losses."
       }
@@ -1786,44 +1786,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Survey Spire",
       "position": [
-        645,
+        1290,
         23,
-        -419
+        -838
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -74,
+        -148,
         -33,
-        212
+        424
       ],
-      "radius": 103,
+      "radius": 206,
       "count": 103,
       "oreMult": 1.57
     },
     "gates": [
       {
         "position": [
-          1090,
+          2180,
           55,
-          216
+          432
         ],
         "to": "veridian"
       },
       {
         "position": [
-          -1036,
+          -2072,
           83,
-          -33
+          -66
         ],
         "to": "vd_stakeside"
       },
       {
         "position": [
-          140,
+          280,
           80,
-          -960
+          -1920
         ],
         "to": "vd_surveyd"
       }
@@ -1863,9 +1863,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Ledgerline Transponder",
         "kind": "beacon",
         "position": [
-          -276,
+          -552,
           146,
-          693
+          1386
         ],
         "line": "A nav beacon broadcasting claim coordinates to a claim that lapsed decades ago."
       }
@@ -1883,36 +1883,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Prospect Assay Office",
       "position": [
-        -137,
+        -274,
         33,
-        -508
+        -1016
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -416,
+        -832,
         -20,
-        359
+        718
       ],
-      "radius": 106,
+      "radius": 212,
       "count": 114,
       "oreMult": 1.52
     },
     "gates": [
       {
         "position": [
-          1012,
+          2024,
           90,
-          146
+          292
         ],
         "to": "veridian"
       },
       {
         "position": [
-          -1000,
+          -2000,
           57,
-          71
+          142
         ],
         "to": "vd_filing12c"
       }
@@ -1952,9 +1952,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Assay Pylon",
         "kind": "monument",
         "position": [
-          240,
+          480,
           71,
-          484
+          968
         ],
         "line": "A survey marker, first of a planned thousand. It remains first."
       }
@@ -1972,44 +1972,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Canaan Refinery",
       "position": [
-        639,
+        1278,
         27,
-        -240
+        -480
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -549,
+        -1098,
         -67,
-        380
+        760
       ],
-      "radius": 133,
+      "radius": 266,
       "count": 104,
       "oreMult": 1.58
     },
     "gates": [
       {
         "position": [
-          983,
+          1966,
           82,
-          608
+          1216
         ],
         "to": "veridian"
       },
       {
         "position": [
-          -1169,
+          -2338,
           72,
-          8
+          16
         ],
         "to": "vd_surveyd"
       },
       {
         "position": [
-          671,
+          1342,
           57,
-          -866
+          -1732
         ],
         "to": "vd_assay"
       }
@@ -2049,9 +2049,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Vested Discrepancy",
         "kind": "anomaly",
         "position": [
-          745,
+          1490,
           -36,
-          -156
+          -312
         ],
         "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
       }
@@ -2069,36 +2069,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Claim Nine Claim Office",
       "position": [
-        -306,
+        -612,
         21,
-        -292
+        -584
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -149,
+        -298,
         -53,
-        -483
+        -966
       ],
-      "radius": 139,
+      "radius": 278,
       "count": 51,
       "oreMult": 2.49
     },
     "gates": [
       {
         "position": [
-          972,
+          1944,
           53,
-          135
+          270
         ],
         "to": "vd_plat12"
       },
       {
         "position": [
-          -895,
+          -1790,
           68,
-          199
+          398
         ],
         "to": "vd_filing12c"
       }
@@ -2138,9 +2138,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Claimed Drift Entry",
         "kind": "anomaly",
         "position": [
-          859,
+          1718,
           -81,
-          250
+          500
         ],
         "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
       }
@@ -2158,44 +2158,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Filing Seven Spire",
       "position": [
-        132,
+        264,
         43,
-        -583
+        -1166
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        515,
+        1030,
         -56,
-        -24
+        -48
       ],
-      "radius": 112,
+      "radius": 224,
       "count": 25,
       "oreMult": 3.02
     },
     "gates": [
       {
         "position": [
-          765,
+          1530,
           80,
-          641
+          1282
         ],
         "to": "vd_gridmark"
       },
       {
         "position": [
-          -1053,
+          -2106,
           53,
-          291
+          582
         ],
         "to": "vd_stakedown"
       },
       {
         "position": [
-          736,
+          1472,
           58,
-          -675
+          -1350
         ],
         "to": "vd_paydirt"
       }
@@ -2235,9 +2235,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Survey Discrepancy",
         "kind": "anomaly",
         "position": [
-          698,
+          1396,
           140,
-          -474
+          -948
         ],
         "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
       }
@@ -2255,36 +2255,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Stakedown Assay Office",
       "position": [
-        -535,
+        -1070,
         44,
-        -471
+        -942
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        14,
+        28,
         -27,
-        332
+        664
       ],
-      "radius": 101,
+      "radius": 202,
       "count": 26,
       "oreMult": 3.1
     },
     "gates": [
       {
         "position": [
-          845,
+          1690,
           83,
-          455
+          910
         ],
         "to": "vd_coresample"
       },
       {
         "position": [
-          -769,
+          -1538,
           72,
-          625
+          1250
         ],
         "to": "vd_filing7"
       }
@@ -2324,9 +2324,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Survey Stone",
         "kind": "monument",
         "position": [
-          -159,
+          -318,
           130,
-          507
+          1014
         ],
         "line": "A cornerstone for an office that was never built. The plaque lists projections."
       }
@@ -2344,28 +2344,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Assay Refinery",
       "position": [
-        -242,
+        -484,
         28,
-        -624
+        -1248
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -1,
+        -2,
         -31,
-        -308
+        -616
       ],
-      "radius": 116,
+      "radius": 232,
       "count": 79,
       "oreMult": 2.1
     },
     "gates": [
       {
         "position": [
-          818,
+          1636,
           61,
-          251
+          502
         ],
         "to": "vd_canaan"
       }
@@ -2405,9 +2405,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Vested Marker",
         "kind": "beacon",
         "position": [
-          512,
+          1024,
           100,
-          501
+          1002
         ],
         "line": "Out here the audit trail ends mid-entry, and the ink looks recent."
       }
@@ -2425,36 +2425,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Gridmark Claim Office",
       "position": [
-        233,
+        466,
         43,
-        -387
+        -774
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        492,
+        984,
         -47,
-        -415
+        -830
       ],
-      "radius": 86,
+      "radius": 172,
       "count": 27,
       "oreMult": 3.01
     },
     "gates": [
       {
         "position": [
-          1053,
+          2106,
           72,
-          357
+          714
         ],
         "to": "vd_motherlode"
       },
       {
         "position": [
-          -846,
+          -1692,
           46,
-          314
+          628
         ],
         "to": "vd_filing7"
       }
@@ -2494,9 +2494,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Assay Transponder",
         "kind": "beacon",
         "position": [
-          -365,
+          -730,
           48,
-          672
+          1344
         ],
         "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
       }
@@ -2514,44 +2514,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Plat Twelve Spire",
       "position": [
-        213,
+        426,
         35,
-        389
+        778
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -385,
+        -770,
         -30,
-        280
+        560
       ],
-      "radius": 105,
+      "radius": 210,
       "count": 52,
       "oreMult": 2.49
     },
     "gates": [
       {
         "position": [
-          805,
+          1610,
           59,
-          334
+          668
         ],
         "to": "vd_stakeside"
       },
       {
         "position": [
-          -831,
+          -1662,
           73,
-          453
+          906
         ],
         "to": "vd_coresample"
       },
       {
         "position": [
-          812,
+          1624,
           62,
-          -815
+          -1630
         ],
         "to": "vd_claim9"
       }
@@ -2591,9 +2591,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Anomaly File",
         "kind": "anomaly",
         "position": [
-          -718,
+          -1436,
           -74,
-          78
+          156
         ],
         "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
       }
@@ -2611,44 +2611,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Motherlode Assay Office",
       "position": [
-        619,
+        1238,
         27,
-        132
+        264
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -72,
+        -144,
         -52,
-        130
+        260
       ],
-      "radius": 103,
+      "radius": 206,
       "count": 60,
       "oreMult": 2.46
     },
     "gates": [
       {
         "position": [
-          770,
+          1540,
           43,
-          506
+          1012
         ],
         "to": "vd_surveyd"
       },
       {
         "position": [
-          -784,
+          -1568,
           40,
-          418
+          836
         ],
         "to": "vd_filing12c"
       },
       {
         "position": [
-          398,
+          796,
           77,
-          -765
+          -1530
         ],
         "to": "vd_gridmark"
       }
@@ -2688,9 +2688,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Ledgerline Drift Entry",
         "kind": "anomaly",
         "position": [
-          581,
+          1162,
           90,
-          -660
+          -1320
         ],
         "line": "Sensor ghosts, consistent enough to bill against. The report is sealed."
       }
@@ -2708,28 +2708,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Claim 44 Refinery",
       "position": [
-        12,
+        24,
         32,
-        -642
+        -1284
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        441,
+        882,
         -57,
-        -347
+        -694
       ],
-      "radius": 95,
+      "radius": 190,
       "count": 32,
       "oreMult": 2.92
     },
     "gates": [
       {
         "position": [
-          862,
+          1724,
           48,
-          585
+          1170
         ],
         "to": "vd_annexclaim"
       }
@@ -2769,9 +2769,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Tow",
         "kind": "wreck",
         "position": [
-          -334,
+          -668,
           -95,
-          564
+          1128
         ],
         "line": "A survey hull written off mid-contract. The crew's severance is still in arbitration."
       }
@@ -2789,44 +2789,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Survey Delta Claim Office",
       "position": [
-        -630,
+        -1260,
         43,
-        -129
+        -258
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -516,
+        -1032,
         -28,
-        89
+        178
       ],
-      "radius": 109,
+      "radius": 218,
       "count": 74,
       "oreMult": 1.91
     },
     "gates": [
       {
         "position": [
-          1165,
+          2330,
           44,
-          256
+          512
         ],
         "to": "vd_survey"
       },
       {
         "position": [
-          -989,
+          -1978,
           50,
-          464
+          928
         ],
         "to": "vd_canaan"
       },
       {
         "position": [
-          584,
+          1168,
           55,
-          -632
+          -1264
         ],
         "to": "vd_motherlode"
       }
@@ -2866,9 +2866,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Margin Pylon",
         "kind": "monument",
         "position": [
-          -63,
+          -126,
           131,
-          -572
+          -1144
         ],
         "line": "A survey marker, first of a planned thousand. It remains first."
       }
@@ -2886,44 +2886,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Filing 12-C Spire",
       "position": [
-        354,
+        708,
         23,
-        179
+        358
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        -125,
+        -250,
         -37,
-        -119
+        -238
       ],
-      "radius": 85,
+      "radius": 170,
       "count": 70,
       "oreMult": 2.05
     },
     "gates": [
       {
         "position": [
-          855,
+          1710,
           66,
-          608
+          1216
         ],
         "to": "vd_motherlode"
       },
       {
         "position": [
-          -853,
+          -1706,
           59,
-          321
+          642
         ],
         "to": "vd_prospect"
       },
       {
         "position": [
-          479,
+          958,
           66,
-          -763
+          -1526
         ],
         "to": "vd_claim9"
       }
@@ -2963,9 +2963,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Margin Drift Entry",
         "kind": "anomaly",
         "position": [
-          -782,
+          -1564,
           -49,
-          290
+          580
         ],
         "line": "The beacon's corporate cipher still resolves. What it resolves to is no longer on any ledger."
       }
@@ -2983,44 +2983,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Core Sample Assay Office",
       "position": [
-        246,
+        492,
         29,
-        -417
+        -834
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        455,
+        910,
         -26,
-        319
+        638
       ],
-      "radius": 92,
+      "radius": 184,
       "count": 25,
       "oreMult": 2.95
     },
     "gates": [
       {
         "position": [
-          953,
+          1906,
           89,
-          246
+          492
         ],
         "to": "vd_plat12"
       },
       {
         "position": [
-          -1048,
+          -2096,
           51,
-          422
+          844
         ],
         "to": "vd_stakedown"
       },
       {
         "position": [
-          187,
+          374,
           46,
-          -1002
+          -2004
         ],
         "to": "vd_annexclaim"
       }
@@ -3060,9 +3060,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Discrepancy",
         "kind": "anomaly",
         "position": [
-          -760,
+          -1520,
           81,
-          -31
+          -62
         ],
         "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
       }
@@ -3080,36 +3080,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Paydirt Refinery",
       "position": [
-        -393,
+        -786,
         28,
-        591
+        1182
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        304,
+        608,
         -56,
-        -315
+        -630
       ],
-      "radius": 88,
+      "radius": 176,
       "count": 28,
       "oreMult": 2.99
     },
     "gates": [
       {
         "position": [
-          1123,
+          2246,
           76,
-          119
+          238
         ],
         "to": "vd_annexclaim"
       },
       {
         "position": [
-          -738,
+          -1476,
           75,
-          423
+          846
         ],
         "to": "vd_filing7"
       }
@@ -3149,9 +3149,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Drift Entry",
         "kind": "anomaly",
         "position": [
-          -292,
+          -584,
           81,
-          -436
+          -872
         ],
         "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
       }
@@ -3169,36 +3169,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Stakeside Claim Office",
       "position": [
-        -199,
+        -398,
         26,
-        281
+        562
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        119,
+        238,
         -30,
-        -228
+        -456
       ],
-      "radius": 109,
+      "radius": 218,
       "count": 85,
       "oreMult": 2.07
     },
     "gates": [
       {
         "position": [
-          1017,
+          2034,
           40,
-          301
+          602
         ],
         "to": "vd_survey"
       },
       {
         "position": [
-          -987,
+          -1974,
           56,
-          182
+          364
         ],
         "to": "vd_plat12"
       }
@@ -3238,9 +3238,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Vested Reading",
         "kind": "anomaly",
         "position": [
-          29,
+          58,
           -13,
-          858
+          1716
         ],
         "line": "An unregistered mass reading, flagged for follow-up in a budget cycle that never came."
       }
@@ -3258,44 +3258,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Annex Claim Spire",
       "position": [
-        -356,
+        -712,
         18,
-        514
+        1028
       ],
       "palette": 5817498
     },
     "field": {
       "center": [
-        264,
+        528,
         -68,
-        247
+        494
       ],
-      "radius": 107,
+      "radius": 214,
       "count": 25,
       "oreMult": 2.99
     },
     "gates": [
       {
         "position": [
-          1168,
+          2336,
           69,
-          91
+          182
         ],
         "to": "vd_coresample"
       },
       {
         "position": [
-          -898,
+          -1796,
           42,
-          234
+          468
         ],
         "to": "vd_claim44"
       },
       {
         "position": [
-          491,
+          982,
           46,
-          -1052
+          -2104
         ],
         "to": "vd_paydirt"
       }
@@ -3335,9 +3335,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Cohort Null Reading",
         "kind": "anomaly",
         "position": [
-          -778,
+          -1556,
           145,
-          -117
+          -234
         ],
         "line": "A dead zone where comms fall flat. Patrols file around it and call the habit tradition."
       }
@@ -3349,44 +3349,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Bastion Foundry",
       "position": [
-        -188,
+        -376,
         34,
-        627
+        1254
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -337,
+        -674,
         -42,
-        89
+        178
       ],
-      "radius": 154,
+      "radius": 308,
       "count": 98,
       "oreMult": 1.46
     },
     "gates": [
       {
         "position": [
-          815,
+          1630,
           66,
-          817
+          1634
         ],
         "to": "freehold"
       },
       {
         "position": [
-          -707,
+          -1414,
           74,
-          598
+          1196
         ],
         "to": "fx_garrison9"
       },
       {
         "position": [
-          263,
+          526,
           61,
-          -927
+          -1854
         ],
         "to": "fx_steelhaven"
       }
@@ -3412,9 +3412,9 @@ export const GENERATED_SYSTEMS = {
     },
     "hub": {
       "position": [
-        36,
+        72,
         120,
-        413
+        826
       ],
       "routes": [
         "fx_bulwark",
@@ -3438,9 +3438,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Muster Gunboat",
         "kind": "wreck",
         "position": [
-          183,
+          366,
           86,
-          -825
+          -1650
         ],
         "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
       }
@@ -3458,44 +3458,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Fort Liron Garrison",
       "position": [
-        -631,
+        -1262,
         35,
-        -568
+        -1136
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        166,
+        332,
         -51,
-        -321
+        -642
       ],
-      "radius": 135,
+      "radius": 270,
       "count": 81,
       "oreMult": 1.95
     },
     "gates": [
       {
         "position": [
-          861,
+          1722,
           49,
-          833
+          1666
         ],
         "to": "fx_merit"
       },
       {
         "position": [
-          -813,
+          -1626,
           66,
-          497
+          994
         ],
         "to": "fx_oathkeep"
       },
       {
         "position": [
-          601,
+          1202,
           70,
-          -759
+          -1518
         ],
         "to": "fx_bastion"
       }
@@ -3535,9 +3535,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Cohort Gunboat",
         "kind": "wreck",
         "position": [
-          522,
+          1044,
           -17,
-          -382
+          -764
         ],
         "line": "A troop-hauler holed at her moorings. The muster roll inside was never recovered."
       }
@@ -3555,44 +3555,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Shieldwall Armory",
       "position": [
-        9,
+        18,
         41,
-        -516
+        -1032
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -133,
+        -266,
         -30,
-        -257
+        -514
       ],
-      "radius": 150,
+      "radius": 300,
       "count": 53,
       "oreMult": 2.54
     },
     "gates": [
       {
         "position": [
-          712,
+          1424,
           48,
-          495
+          990
         ],
         "to": "fx_ward"
       },
       {
         "position": [
-          -799,
+          -1598,
           47,
-          344
+          688
         ],
         "to": "fx_bulwark"
       },
       {
         "position": [
-          359,
+          718,
           44,
-          -849
+          -1698
         ],
         "to": "fx_honorhold"
       }
@@ -3632,9 +3632,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Slag Muster Beacon",
         "kind": "beacon",
         "position": [
-          -309,
+          -618,
           1,
-          -687
+          -1374
         ],
         "line": "A perimeter beacon marking a line the Bastion no longer holds. The watch still logs it."
       }
@@ -3652,44 +3652,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Honorhold Foundry",
       "position": [
-        441,
+        882,
         19,
-        566
+        1132
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        478,
+        956,
         -49,
-        -361
+        -722
       ],
-      "radius": 113,
+      "radius": 226,
       "count": 52,
       "oreMult": 2.46
     },
     "gates": [
       {
         "position": [
-          886,
+          1772,
           50,
-          440
+          880
         ],
         "to": "fx_sentry"
       },
       {
         "position": [
-          -858,
+          -1716,
           54,
-          403
+          806
         ],
         "to": "fx_bulwark"
       },
       {
         "position": [
-          720,
+          1440,
           47,
-          -682
+          -1364
         ],
         "to": "fx_shieldwall"
       }
@@ -3729,9 +3729,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Muster Held Breath",
         "kind": "anomaly",
         "position": [
-          211,
+          422,
           -33,
-          458
+          916
         ],
         "line": "A watch-post buoy beyond the last patrol route. Its log shows one visitor, years apart, always the same hull."
       }
@@ -3749,44 +3749,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Rampart Garrison",
       "position": [
-        416,
+        832,
         33,
-        -538
+        -1076
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        154,
+        308,
         -40,
-        -52
+        -104
       ],
-      "radius": 158,
+      "radius": 316,
       "count": 64,
       "oreMult": 2.62
     },
     "gates": [
       {
         "position": [
-          735,
+          1470,
           66,
-          705
+          1410
         ],
         "to": "fx_garrison9"
       },
       {
         "position": [
-          -1080,
+          -2160,
           63,
-          -15
+          -30
         ],
         "to": "fx_merit"
       },
       {
         "position": [
-          843,
+          1686,
           41,
-          -830
+          -1660
         ],
         "to": "fx_ward"
       }
@@ -3826,9 +3826,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Garrison Dead Zone",
         "kind": "anomaly",
         "position": [
-          640,
+          1280,
           18,
-          481
+          962
         ],
         "line": "A reading like a held breath. Gunnery used it for calibration once; they don't anymore."
       }
@@ -3846,28 +3846,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Aegis Armory",
       "position": [
-        619,
+        1238,
         21,
-        -360
+        -720
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -472,
+        -944,
         -23,
-        -238
+        -476
       ],
-      "radius": 153,
+      "radius": 306,
       "count": 29,
       "oreMult": 3.09
     },
     "gates": [
       {
         "position": [
-          847,
+          1694,
           77,
-          823
+          1646
         ],
         "to": "fx_palisade"
       }
@@ -3907,9 +3907,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Cohort Dead Zone",
         "kind": "anomaly",
         "position": [
-          58,
+          116,
           -112,
-          632
+          1264
         ],
         "line": "The perimeter light at the edge of the map still answers roll call. No one remembers who it answers to."
       }
@@ -3927,28 +3927,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Ironhold Foundry",
       "position": [
-        590,
+        1180,
         44,
-        -203
+        -406
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -364,
+        -728,
         -31,
-        -447
+        -894
       ],
-      "radius": 146,
+      "radius": 292,
       "count": 59,
       "oreMult": 2.52
     },
     "gates": [
       {
         "position": [
-          832,
+          1664,
           73,
-          511
+          1022
         ],
         "to": "fx_steelhaven"
       }
@@ -3988,9 +3988,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Gunboat",
         "kind": "wreck",
         "position": [
-          538,
+          1076,
           160,
-          -386
+          -772
         ],
         "line": "The perimeter light at the edge of the map still answers roll call. No one remembers who it answers to."
       }
@@ -4008,44 +4008,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Ward Garrison",
       "position": [
-        -528,
+        -1056,
         33,
-        55
+        110
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -315,
+        -630,
         -29,
-        -119
+        -238
       ],
-      "radius": 105,
+      "radius": 210,
       "count": 33,
       "oreMult": 2.91
     },
     "gates": [
       {
         "position": [
-          980,
+          1960,
           49,
-          308
+          616
         ],
         "to": "fx_rampart"
       },
       {
         "position": [
-          -1199,
+          -2398,
           49,
-          -55
+          -110
         ],
         "to": "fx_sentry"
       },
       {
         "position": [
-          693,
+          1386,
           40,
-          -699
+          -1398
         ],
         "to": "fx_shieldwall"
       }
@@ -4085,9 +4085,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Garrison Hulk",
         "kind": "wreck",
         "position": [
-          -265,
+          -530,
           113,
-          -548
+          -1096
         ],
         "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
       }
@@ -4105,44 +4105,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Palisade Armory",
       "position": [
-        257,
+        514,
         28,
-        487
+        974
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        311,
+        622,
         -54,
-        508
+        1016
       ],
-      "radius": 86,
+      "radius": 172,
       "count": 52,
       "oreMult": 2.6
     },
     "gates": [
       {
         "position": [
-          973,
+          1946,
           44,
-          2
+          4
         ],
         "to": "fx_steelhaven"
       },
       {
         "position": [
-          -961,
+          -1922,
           53,
-          712
+          1424
         ],
         "to": "fx_aegis"
       },
       {
         "position": [
-          425,
+          850,
           72,
-          -958
+          -1916
         ],
         "to": "fx_citadel"
       }
@@ -4182,9 +4182,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Perimeter Dead Zone",
         "kind": "anomaly",
         "position": [
-          -56,
+          -112,
           120,
-          646
+          1292
         ],
         "line": "A reading like a held breath. Gunnery used it for calibration once; they don't anymore."
       }
@@ -4202,28 +4202,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Vanguard Foundry",
       "position": [
-        -648,
+        -1296,
         37,
-        562
+        1124
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        524,
+        1048,
         -36,
-        -83
+        -166
       ],
-      "radius": 102,
+      "radius": 204,
       "count": 63,
       "oreMult": 2.55
     },
     "gates": [
       {
         "position": [
-          904,
+          1808,
           88,
-          769
+          1538
         ],
         "to": "fx_garrison9"
       }
@@ -4263,9 +4263,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Null Reading",
         "kind": "anomaly",
         "position": [
-          -133,
+          -266,
           -89,
-          -616
+          -1232
         ],
         "line": "A dead zone where comms fall flat. Patrols file around it and call the habit tradition."
       }
@@ -4283,44 +4283,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Bulwark Garrison",
       "position": [
-        340,
+        680,
         26,
-        321
+        642
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -147,
+        -294,
         -60,
-        302
+        604
       ],
-      "radius": 145,
+      "radius": 290,
       "count": 90,
       "oreMult": 2.03
     },
     "gates": [
       {
         "position": [
-          872,
+          1744,
           49,
-          562
+          1124
         ],
         "to": "fx_shieldwall"
       },
       {
         "position": [
-          -779,
+          -1558,
           50,
-          482
+          964
         ],
         "to": "fx_honorhold"
       },
       {
         "position": [
-          616,
+          1232,
           67,
-          -651
+          -1302
         ],
         "to": "fx_bastion"
       }
@@ -4360,9 +4360,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Muster Hulk",
         "kind": "wreck",
         "position": [
-          358,
+          716,
           -70,
-          -631
+          -1262
         ],
         "line": "A gunboat that lost its war before the war started. The garrison salutes it on passing."
       }
@@ -4380,44 +4380,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Garrison Nine Armory",
       "position": [
-        -410,
+        -820,
         31,
-        220
+        440
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -251,
+        -502,
         -26,
-        339
+        678
       ],
-      "radius": 146,
+      "radius": 292,
       "count": 90,
       "oreMult": 2.09
     },
     "gates": [
       {
         "position": [
-          668,
+          1336,
           74,
-          536
+          1072
         ],
         "to": "fx_bastion"
       },
       {
         "position": [
-          -919,
+          -1838,
           44,
-          546
+          1092
         ],
         "to": "fx_rampart"
       },
       {
         "position": [
-          276,
+          552,
           75,
-          -951
+          -1902
         ],
         "to": "fx_vanguard"
       }
@@ -4457,9 +4457,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Slag Held Breath",
         "kind": "anomaly",
         "position": [
-          380,
+          760,
           -58,
-          406
+          812
         ],
         "line": "Something out there reflects ranging pulses a half-second late. The Bastion has standing orders not to ping it."
       }
@@ -4477,36 +4477,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Citadel Foundry",
       "position": [
-        -563,
+        -1126,
         26,
-        -452
+        -904
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        142,
+        284,
         -64,
-        94
+        188
       ],
-      "radius": 89,
+      "radius": 178,
       "count": 34,
       "oreMult": 3.14
     },
     "gates": [
       {
         "position": [
-          888,
+          1776,
           42,
-          195
+          390
         ],
         "to": "fx_merit"
       },
       {
         "position": [
-          -855,
+          -1710,
           56,
-          697
+          1394
         ],
         "to": "fx_palisade"
       }
@@ -4546,9 +4546,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Iron Held Breath",
         "kind": "anomaly",
         "position": [
-          628,
+          1256,
           42,
-          88
+          176
         ],
         "line": "Something out there reflects ranging pulses a half-second late. The Bastion has standing orders not to ping it."
       }
@@ -4566,44 +4566,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Sentry Garrison",
       "position": [
-        -98,
+        -196,
         36,
-        -289
+        -578
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        203,
+        406,
         -39,
-        -120
+        -240
       ],
-      "radius": 125,
+      "radius": 250,
       "count": 60,
       "oreMult": 2.59
     },
     "gates": [
       {
         "position": [
-          893,
+          1786,
           84,
-          422
+          844
         ],
         "to": "fx_ward"
       },
       {
         "position": [
-          -981,
+          -1962,
           74,
-          243
+          486
         ],
         "to": "fx_oathkeep"
       },
       {
         "position": [
-          743,
+          1486,
           88,
-          -882
+          -1764
         ],
         "to": "fx_honorhold"
       }
@@ -4643,9 +4643,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Perimeter Scow",
         "kind": "wreck",
         "position": [
-          8,
+          16,
           -95,
-          551
+          1102
         ],
         "line": "A troop-hauler holed at her moorings. The muster roll inside was never recovered."
       }
@@ -4663,44 +4663,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Oathkeep Armory",
       "position": [
-        -451,
+        -902,
         29,
-        614
+        1228
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -388,
+        -776,
         -34,
-        289
+        578
       ],
-      "radius": 146,
+      "radius": 292,
       "count": 76,
       "oreMult": 2.13
     },
     "gates": [
       {
         "position": [
-          1078,
+          2156,
           65,
-          221
+          442
         ],
         "to": "fx_sentry"
       },
       {
         "position": [
-          -682,
+          -1364,
           63,
-          608
+          1216
         ],
         "to": "fx_liron"
       },
       {
         "position": [
-          675,
+          1350,
           71,
-          -620
+          -1240
         ],
         "to": "fx_bastion"
       }
@@ -4740,9 +4740,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Oathbound Scow",
         "kind": "wreck",
         "position": [
-          861,
+          1722,
           103,
-          251
+          502
         ],
         "line": "A foundry scow, scuttled rather than surrendered. Some say the slag in her holds is still warm."
       }
@@ -4760,44 +4760,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Fort Merit Foundry",
       "position": [
-        -91,
+        -182,
         31,
-        -298
+        -596
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -278,
+        -556,
         -22,
-        -232
+        -464
       ],
-      "radius": 118,
+      "radius": 236,
       "count": 58,
       "oreMult": 2.45
     },
     "gates": [
       {
         "position": [
-          1073,
+          2146,
           68,
-          27
+          54
         ],
         "to": "fx_rampart"
       },
       {
         "position": [
-          -861,
+          -1722,
           89,
-          787
+          1574
         ],
         "to": "fx_citadel"
       },
       {
         "position": [
-          823,
+          1646,
           56,
-          -853
+          -1706
         ],
         "to": "fx_liron"
       }
@@ -4837,9 +4837,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Roll",
         "kind": "monument",
         "position": [
-          -516,
+          -1032,
           128,
-          278
+          556
         ],
         "line": "An oath-stone for a cohort that did not come back. The names are punched, not carved — iron doesn't take sentiment."
       }
@@ -4857,44 +4857,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Steelhaven Garrison",
       "position": [
-        239,
+        478,
         39,
-        -252
+        -504
       ],
       "palette": 7240586
     },
     "field": {
       "center": [
-        -232,
+        -464,
         -23,
-        47
+        94
       ],
-      "radius": 109,
+      "radius": 218,
       "count": 72,
       "oreMult": 2.1
     },
     "gates": [
       {
         "position": [
-          989,
+          1978,
           50,
-          169
+          338
         ],
         "to": "fx_bastion"
       },
       {
         "position": [
-          -884,
+          -1768,
           70,
-          433
+          866
         ],
         "to": "fx_ironhold"
       },
       {
         "position": [
-          297,
+          594,
           57,
-          -1023
+          -2046
         ],
         "to": "fx_palisade"
       }
@@ -4934,9 +4934,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Cutthroat Pillar",
         "kind": "monument",
         "position": [
-          60,
+          120,
           141,
-          -625
+          -1250
         ],
         "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
       }
@@ -4954,44 +4954,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Toll Countinghouse",
       "position": [
-        231,
+        462,
         42,
-        425
+        850
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        -446,
+        -892,
         -56,
-        167
+        334
       ],
-      "radius": 138,
+      "radius": 276,
       "count": 82,
       "oreMult": 2.03
     },
     "gates": [
       {
         "position": [
-          998,
+          1996,
           77,
-          611
+          1222
         ],
         "to": "redmarch"
       },
       {
         "position": [
-          -1100,
+          -2200,
           54,
-          375
+          750
         ],
         "to": "rl_arrears"
       },
       {
         "position": [
-          516,
+          1032,
           82,
-          -1064
+          -2128
         ],
         "to": "rl_due"
       }
@@ -5032,9 +5032,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Cutthroat Reminder",
         "kind": "monument",
         "position": [
-          323,
+          646,
           141,
-          576
+          1152
         ],
         "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
       }
@@ -5052,36 +5052,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Ledger Annex Reckoning",
       "position": [
-        158,
+        316,
         34,
-        -173
+        -346
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        -139,
+        -278,
         -25,
-        469
+        938
       ],
-      "radius": 89,
+      "radius": 178,
       "count": 77,
       "oreMult": 1.97
     },
     "gates": [
       {
         "position": [
-          918,
+          1836,
           78,
-          771
+          1542
         ],
         "to": "redmarch"
       },
       {
         "position": [
-          -810,
+          -1620,
           50,
-          406
+          812
         ],
         "to": "rl_due"
       }
@@ -5122,9 +5122,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Due Blind Toll",
         "kind": "anomaly",
         "position": [
-          205,
+          410,
           -67,
-          -555
+          -1110
         ],
         "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
       }
@@ -5142,44 +5142,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Till at Cutter",
       "position": [
-        -483,
+        -966,
         37,
-        25
+        50
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        -261,
+        -522,
         -34,
-        395
+        790
       ],
-      "radius": 142,
+      "radius": 284,
       "count": 79,
       "oreMult": 2.07
     },
     "gates": [
       {
         "position": [
-          987,
+          1974,
           56,
-          305
+          610
         ],
         "to": "redmarch"
       },
       {
         "position": [
-          -895,
+          -1790,
           81,
-          253
+          506
         ],
         "to": "rl_principal"
       },
       {
         "position": [
-          544,
+          1088,
           76,
-          -670
+          -1340
         ],
         "to": "rl_tithemark"
       }
@@ -5220,9 +5220,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Blind Toll",
         "kind": "anomaly",
         "position": [
-          -788,
+          -1576,
           -118,
-          3
+          6
         ],
         "line": "The farthest toll-light the ledger ever hung. Its account is still open, and something keeps paying it."
       }
@@ -5240,28 +5240,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Interest Countinghouse",
       "position": [
-        507,
+        1014,
         44,
-        -92
+        -184
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        457,
+        914,
         -58,
-        483
+        966
       ],
-      "radius": 142,
+      "radius": 284,
       "count": 25,
       "oreMult": 3
     },
     "gates": [
       {
         "position": [
-          970,
+          1940,
           59,
-          251
+          502
         ],
         "to": "rl_principal"
       }
@@ -5302,9 +5302,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Ledger Gravity Tick",
         "kind": "anomaly",
         "position": [
-          188,
+          376,
           58,
-          844
+          1688
         ],
         "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
       }
@@ -5322,44 +5322,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Ledger Annex Due",
       "position": [
-        -325,
+        -650,
         41,
-        -334
+        -668
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        463,
+        926,
         -24,
-        363
+        726
       ],
-      "radius": 133,
+      "radius": 266,
       "count": 46,
       "oreMult": 2.6
     },
     "gates": [
       {
         "position": [
-          1022,
+          2044,
           83,
-          306
+          612
         ],
         "to": "rl_toll"
       },
       {
         "position": [
-          -909,
+          -1818,
           89,
-          57
+          114
         ],
         "to": "rl_default"
       },
       {
         "position": [
-          126,
+          252,
           79,
-          -1062
+          -2124
         ],
         "to": "rl_reckoning"
       }
@@ -5400,9 +5400,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Gravity Tick",
         "kind": "anomaly",
         "position": [
-          566,
+          1132,
           -8,
-          -73
+          -146
         ],
         "line": "An unmarked gravity tick the pilots feel in their teeth. It isn't in the ledger, which worries the ledger."
       }
@@ -5420,44 +5420,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Till at Arrears",
       "position": [
-        367,
+        734,
         39,
-        382
+        764
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        137,
+        274,
         -63,
-        171
+        342
       ],
-      "radius": 95,
+      "radius": 190,
       "count": 62,
       "oreMult": 2.57
     },
     "gates": [
       {
         "position": [
-          1044,
+          2088,
           60,
-          490
+          980
         ],
         "to": "rl_toll"
       },
       {
         "position": [
-          -1037,
+          -2074,
           85,
-          95
+          190
         ],
         "to": "rl_principal"
       },
       {
         "position": [
-          234,
+          468,
           51,
-          -1161
+          -2322
         ],
         "to": "rl_margin"
       }
@@ -5498,9 +5498,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Posted Guide-Light",
         "kind": "beacon",
         "position": [
-          46,
+          92,
           -87,
-          -552
+          -1104
         ],
         "line": "Out past the last marker, a buoy that bills nobody. The ledger leaves it alone."
       }
@@ -5518,44 +5518,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Principal Countinghouse",
       "position": [
-        32,
+        64,
         28,
-        27
+        54
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        481,
+        962,
         -22,
-        -74
+        -148
       ],
-      "radius": 146,
+      "radius": 292,
       "count": 51,
       "oreMult": 2.6
     },
     "gates": [
       {
         "position": [
-          775,
+          1550,
           72,
-          530
+          1060
         ],
         "to": "rl_arrears"
       },
       {
         "position": [
-          -847,
+          -1694,
           71,
-          342
+          684
         ],
         "to": "rl_interest"
       },
       {
         "position": [
-          648,
+          1296,
           68,
-          -681
+          -1362
         ],
         "to": "rl_cutter"
       }
@@ -5596,9 +5596,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Due Marker",
         "kind": "monument",
         "position": [
-          -194,
+          -388,
           96,
-          713
+          1426
         ],
         "line": "A marker where a ledger war ended. Both sides claim it; both sides pay for its upkeep."
       }
@@ -5616,36 +5616,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Ledger Annex Tithemark",
       "position": [
-        -93,
+        -186,
         25,
-        -46
+        -92
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        -368,
+        -736,
         -39,
-        -5
+        -10
       ],
-      "radius": 87,
+      "radius": 174,
       "count": 61,
       "oreMult": 2.47
     },
     "gates": [
       {
         "position": [
-          999,
+          1998,
           71,
-          586
+          1172
         ],
         "to": "rl_default"
       },
       {
         "position": [
-          -783,
+          -1566,
           64,
-          330
+          660
         ],
         "to": "rl_cutter"
       }
@@ -5686,9 +5686,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Debtor's Echo",
         "kind": "anomaly",
         "position": [
-          608,
+          1216,
           124,
-          -403
+          -806
         ],
         "line": "A stretch of black where the toll-beacons don't answer. The ledger charges extra to cross it, and can't say why."
       }
@@ -5706,44 +5706,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Till at Default",
       "position": [
-        646,
+        1292,
         41,
-        82
+        164
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        -249,
+        -498,
         -35,
-        -529
+        -1058
       ],
-      "radius": 138,
+      "radius": 276,
       "count": 26,
       "oreMult": 3.03
     },
     "gates": [
       {
         "position": [
-          888,
+          1776,
           40,
-          722
+          1444
         ],
         "to": "rl_due"
       },
       {
         "position": [
-          -950,
+          -1900,
           50,
-          37
+          74
         ],
         "to": "rl_tithemark"
       },
       {
         "position": [
-          102,
+          204,
           40,
-          -1071
+          -2142
         ],
         "to": "rl_margin"
       }
@@ -5784,9 +5784,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Posted Echo",
         "kind": "anomaly",
         "position": [
-          -470,
+          -940,
           73,
-          -254
+          -508
         ],
         "line": "Something here echoes back your own transponder, a day later, from somewhere else."
       }
@@ -5804,44 +5804,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Margin Call Countinghouse",
       "position": [
-        -8,
+        -16,
         45,
-        -101
+        -202
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        215,
+        430,
         -40,
-        -182
+        -364
       ],
-      "radius": 92,
+      "radius": 184,
       "count": 40,
       "oreMult": 3.14
     },
     "gates": [
       {
         "position": [
-          1043,
+          2086,
           49,
-          340
+          680
         ],
         "to": "rl_default"
       },
       {
         "position": [
-          -922,
+          -1844,
           47,
-          240
+          480
         ],
         "to": "rl_compound"
       },
       {
         "position": [
-          429,
+          858,
           69,
-          -946
+          -1892
         ],
         "to": "rl_arrears"
       }
@@ -5882,9 +5882,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Marked Blind Toll",
         "kind": "anomaly",
         "position": [
-          -292,
+          -584,
           47,
-          -723
+          -1446
         ],
         "line": "Out past the last marker, a buoy that bills nobody. The ledger leaves it alone."
       }
@@ -5902,28 +5902,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Ledger Annex Compound",
       "position": [
-        300,
+        600,
         37,
-        -521
+        -1042
       ],
       "palette": 10499124
     },
     "field": {
       "center": [
-        -315,
+        -630,
         -28,
-        482
+        964
       ],
-      "radius": 121,
+      "radius": 242,
       "count": 39,
       "oreMult": 2.96
     },
     "gates": [
       {
         "position": [
-          939,
+          1878,
           43,
-          190
+          380
         ],
         "to": "rl_margin"
       }
@@ -5964,9 +5964,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Galleon",
         "kind": "wreck",
         "position": [
-          -445,
+          -890,
           -91,
-          779
+          1558
         ],
         "line": "A lot that failed to sell: one ship, slightly used, reserve not met. It's still on the block."
       }
@@ -5978,44 +5978,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Grand Auction",
       "position": [
-        102,
+        204,
         15,
-        -506
+        -1012
       ],
       "palette": 13938487
     },
     "field": {
       "center": [
-        -184,
+        -368,
         -23,
-        434
+        868
       ],
-      "radius": 88,
+      "radius": 176,
       "count": 81,
       "oreMult": 2.02
     },
     "gates": [
       {
         "position": [
-          987,
+          1974,
           48,
-          394
+          788
         ],
         "to": "veridian"
       },
       {
         "position": [
-          -933,
+          -1866,
           68,
-          166
+          332
         ],
         "to": "gc_lot7"
       },
       {
         "position": [
-          196,
+          392,
           61,
-          -1049
+          -2098
         ],
         "to": "gc_provenance"
       }
@@ -6041,9 +6041,9 @@ export const GENERATED_SYSTEMS = {
     },
     "hub": {
       "position": [
-        368,
+        736,
         76,
-        -747
+        -1494
       ],
       "routes": [
         "bt_cradle",
@@ -6068,9 +6068,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Salvage",
         "kind": "wreck",
         "position": [
-          595,
+          1190,
           134,
-          388
+          776
         ],
         "line": "A buyer's yacht, scuttled for the insurance and then, embarrassingly, found."
       }
@@ -6088,44 +6088,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Gilded Gavel at Gavel",
       "position": [
-        107,
+        214,
         22,
-        -537
+        -1074
       ],
       "palette": 13938487
     },
     "field": {
       "center": [
-        249,
+        498,
         -41,
-        232
+        464
       ],
-      "radius": 133,
+      "radius": 266,
       "count": 39,
       "oreMult": 3.15
     },
     "gates": [
       {
         "position": [
-          867,
+          1734,
           79,
-          223
+          446
         ],
         "to": "gc_provenance"
       },
       {
         "position": [
-          -1142,
+          -2284,
           52,
-          -40
+          -80
         ],
         "to": "gc_appraisal"
       },
       {
         "position": [
-          644,
+          1288,
           70,
-          -824
+          -1648
         ],
         "to": "gc_lot7"
       }
@@ -6166,9 +6166,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Saleroom Shimmer",
         "kind": "anomaly",
         "position": [
-          877,
+          1754,
           94,
-          -75
+          -150
         ],
         "line": "A shimmer the guild certified as art and now charges to view."
       }
@@ -6186,44 +6186,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Lot Seven Auction House",
       "position": [
-        -646,
+        -1292,
         26,
-        -81
+        -162
       ],
       "palette": 13938487
     },
     "field": {
       "center": [
-        460,
+        920,
         -45,
-        -79
+        -158
       ],
-      "radius": 107,
+      "radius": 214,
       "count": 49,
       "oreMult": 2.57
     },
     "gates": [
       {
         "position": [
-          862,
+          1724,
           84,
-          284
+          568
         ],
         "to": "gc_auction"
       },
       {
         "position": [
-          -974,
+          -1948,
           86,
-          672
+          1344
         ],
         "to": "gc_showcase"
       },
       {
         "position": [
-          112,
+          224,
           72,
-          -1167
+          -2334
         ],
         "to": "gc_gavel"
       }
@@ -6264,9 +6264,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Consignment Gallery",
         "kind": "anomaly",
         "position": [
-          443,
+          886,
           134,
-          381
+          762
         ],
         "line": "The guild's farthest showroom: one spotlight, one pedestal, nothing on it. Offers are accepted."
       }
@@ -6284,36 +6284,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Appraisal Exchange",
       "position": [
-        -154,
+        -308,
         41,
-        154
+        308
       ],
       "palette": 13938487
     },
     "field": {
       "center": [
-        -24,
+        -48,
         -53,
-        -531
+        -1062
       ],
-      "radius": 117,
+      "radius": 234,
       "count": 63,
       "oreMult": 2.41
     },
     "gates": [
       {
         "position": [
-          890,
+          1780,
           90,
-          76
+          152
         ],
         "to": "gc_gavel"
       },
       {
         "position": [
-          -1103,
+          -2206,
           58,
-          308
+          616
         ],
         "to": "gc_auction"
       }
@@ -6354,9 +6354,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Catalog Shimmer",
         "kind": "anomaly",
         "position": [
-          -142,
+          -284,
           -7,
-          -654
+          -1308
         ],
         "line": "A catalog beacon past the last buyer. The lots it lists were beautiful, once."
       }
@@ -6374,36 +6374,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Gilded Gavel at Reserve",
       "position": [
-        -568,
+        -1136,
         29,
-        -221
+        -442
       ],
       "palette": 13938487
     },
     "field": {
       "center": [
-        -10,
+        -20,
         -21,
-        351
+        702
       ],
-      "radius": 93,
+      "radius": 186,
       "count": 36,
       "oreMult": 2.95
     },
     "gates": [
       {
         "position": [
-          828,
+          1656,
           76,
-          280
+          560
         ],
         "to": "gc_showcase"
       },
       {
         "position": [
-          -1033,
+          -2066,
           64,
-          436
+          872
         ],
         "to": "gc_provenance"
       }
@@ -6444,9 +6444,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Reserve Yacht",
         "kind": "wreck",
         "position": [
-          78,
+          156,
           -38,
-          -867
+          -1734
         ],
         "line": "A galleon that went down with the season's catalog. The auction of its salvage rights outlasted the salvage."
       }
@@ -6464,44 +6464,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Provenance Auction House",
       "position": [
-        -546,
+        -1092,
         45,
-        545
+        1090
       ],
       "palette": 13938487
     },
     "field": {
       "center": [
-        436,
+        872,
         -49,
-        235
+        470
       ],
-      "radius": 135,
+      "radius": 270,
       "count": 54,
       "oreMult": 2.53
     },
     "gates": [
       {
         "position": [
-          838,
+          1676,
           74,
-          496
+          992
         ],
         "to": "gc_auction"
       },
       {
         "position": [
-          -933,
+          -1866,
           57,
-          638
+          1276
         ],
         "to": "gc_gavel"
       },
       {
         "position": [
-          610,
+          1220,
           45,
-          -796
+          -1592
         ],
         "to": "gc_reserve"
       }
@@ -6542,9 +6542,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Gavel Acoustic",
         "kind": "anomaly",
         "position": [
-          -756,
+          -1512,
           -66,
-          -247
+          -494
         ],
         "line": "A patch of space with excellent acoustics. Recitals are held there. Attendance is declining."
       }
@@ -6562,36 +6562,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Hammerfall Exchange",
       "position": [
-        56,
+        112,
         39,
-        -275
+        -550
       ],
       "palette": 13938487
     },
     "field": {
       "center": [
-        -105,
+        -210,
         -48,
-        368
+        736
       ],
-      "radius": 145,
+      "radius": 290,
       "count": 56,
       "oreMult": 2.44
     },
     "gates": [
       {
         "position": [
-          882,
+          1764,
           41,
-          580
+          1160
         ],
         "to": "gc_showcase"
       },
       {
         "position": [
-          -853,
+          -1706,
           74,
-          493
+          986
         ],
         "to": "gc_auction"
       }
@@ -6632,9 +6632,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Yacht",
         "kind": "wreck",
         "position": [
-          -589,
+          -1178,
           122,
-          -656
+          -1312
         ],
         "line": "A galleon that went down with the season's catalog. The auction of its salvage rights outlasted the salvage."
       }
@@ -6652,44 +6652,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Gilded Gavel at Showcase",
       "position": [
-        -443,
+        -886,
         33,
-        62
+        124
       ],
       "palette": 13938487
     },
     "field": {
       "center": [
-        543,
+        1086,
         -43,
-        -88
+        -176
       ],
-      "radius": 92,
+      "radius": 184,
       "count": 25,
       "oreMult": 2.98
     },
     "gates": [
       {
         "position": [
-          904,
+          1808,
           87,
-          703
+          1406
         ],
         "to": "gc_lot7"
       },
       {
         "position": [
-          -965,
+          -1930,
           59,
-          577
+          1154
         ],
         "to": "gc_reserve"
       },
       {
         "position": [
-          541,
+          1082,
           60,
-          -802
+          -1604
         ],
         "to": "gc_hammerfall"
       }
@@ -6730,9 +6730,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Mirror Monument",
         "kind": "monument",
         "position": [
-          181,
+          362,
           3,
-          545
+          1090
         ],
         "line": "A mirror-polished obelisk. It shows you the stars behind you, slightly improved."
       }
@@ -6750,36 +6750,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Cradle",
       "position": [
-        -516,
+        -1032,
         22,
-        151
+        302
       ],
       "palette": 8380584
     },
     "field": {
       "center": [
-        369,
+        738,
         -61,
-        -519
+        -1038
       ],
-      "radius": 105,
+      "radius": 210,
       "count": 100,
       "oreMult": 1.45
     },
     "gates": [
       {
         "position": [
-          985,
+          1970,
           64,
-          211
+          422
         ],
         "to": "gc_auction"
       },
       {
         "position": [
-          -926,
+          -1852,
           80,
-          438
+          876
         ],
         "to": "stolenwomb"
       }
@@ -6819,9 +6819,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Muse",
         "kind": "monument",
         "position": [
-          723,
+          1446,
           138,
-          -502
+          -1004
         ],
         "line": "A mirror-polished obelisk. It shows you the stars behind you, slightly improved."
       }
@@ -6839,36 +6839,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Stolen Womb",
       "position": [
-        -514,
+        -1028,
         23,
-        -408
+        -816
       ],
       "palette": 8380584
     },
     "field": {
       "center": [
-        -191,
+        -382,
         -65,
-        -166
+        -332
       ],
-      "radius": 115,
+      "radius": 230,
       "count": 86,
       "oreMult": 2.14
     },
     "gates": [
       {
         "position": [
-          818,
+          1636,
           53,
-          578
+          1156
         ],
         "to": "bt_cradle"
       },
       {
         "position": [
-          -817,
+          -1634,
           53,
-          236
+          472
         ],
         "to": "bt_moss"
       }
@@ -6908,9 +6908,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Last Season's Obelisk",
         "kind": "monument",
         "position": [
-          849,
+          1698,
           144,
-          -135
+          -270
         ],
         "line": "A statue of a muse the artist later denied sculpting. Both are famous now."
       }
@@ -6928,28 +6928,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Moss",
       "position": [
-        208,
+        416,
         20,
-        98
+        196
       ],
       "palette": 8380584
     },
     "field": {
       "center": [
-        -173,
+        -346,
         -31,
-        -169
+        -338
       ],
-      "radius": 140,
+      "radius": 280,
       "count": 49,
       "oreMult": 2.51
     },
     "gates": [
       {
         "position": [
-          716,
+          1432,
           49,
-          645
+          1290
         ],
         "to": "stolenwomb"
       }
@@ -6989,9 +6989,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Unshriven Vow-Stone",
         "kind": "monument",
         "position": [
-          509,
+          1018,
           64,
-          516
+          1032
         ],
         "line": "A vow-stone, carved by hands that never saw it placed. That was the vow."
       }
@@ -7009,36 +7009,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Vigil Chapel",
       "position": [
-        503,
+        1006,
         21,
-        -79
+        -158
       ],
       "palette": 14206608
     },
     "field": {
       "center": [
-        -212,
+        -424,
         -23,
-        -266
+        -532
       ],
-      "radius": 92,
+      "radius": 184,
       "count": 73,
       "oreMult": 2.1
     },
     "gates": [
       {
         "position": [
-          1035,
+          2070,
           90,
-          40
+          80
         ],
         "to": "cg_psalm"
       },
       {
         "position": [
-          -1078,
+          -2156,
           51,
-          159
+          318
         ],
         "to": "lastbeacon"
       }
@@ -7078,9 +7078,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Chapel Ship",
         "kind": "wreck",
         "position": [
-          -438,
+          -876,
           -49,
-          414
+          828
         ],
         "line": "The last chapel lamp before the quiet. The psalm sung here is shorter than it used to be."
       }
@@ -7098,36 +7098,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Psalm Chapel",
       "position": [
-        589,
+        1178,
         34,
-        -420
+        -840
       ],
       "palette": 14206608
     },
     "field": {
       "center": [
-        -229,
+        -458,
         -36,
-        -530
+        -1060
       ],
-      "radius": 142,
+      "radius": 284,
       "count": 60,
       "oreMult": 2.47
     },
     "gates": [
       {
         "position": [
-          639,
+          1278,
           41,
-          584
+          1168
         ],
         "to": "cg_vigil"
       },
       {
         "position": [
-          -1067,
+          -2134,
           70,
-          132
+          264
         ],
         "to": "cg_shore"
       }
@@ -7167,9 +7167,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Vigil Answer",
         "kind": "anomaly",
         "position": [
-          315,
+          630,
           153,
-          -448
+          -896
         ],
         "line": "An answer comes back to prayers broadcast here. It is one word. The word is not comfort."
       }
@@ -7187,28 +7187,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Further Shore Chapel",
       "position": [
-        -615,
+        -1230,
         25,
-        211
+        422
       ],
       "palette": 14206608
     },
     "field": {
       "center": [
-        -308,
+        -616,
         -30,
-        343
+        686
       ],
-      "radius": 123,
+      "radius": 246,
       "count": 26,
       "oreMult": 3.07
     },
     "gates": [
       {
         "position": [
-          1009,
+          2018,
           55,
-          109
+          218
         ],
         "to": "cg_psalm"
       }
@@ -7248,9 +7248,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Courier Hull",
         "kind": "wreck",
         "position": [
-          546,
+          1092,
           55,
-          -449
+          -898
         ],
         "line": "A filing beacon past the rim's edge. It acknowledges receipt of nothing, promptly."
       }
@@ -7268,36 +7268,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Census Registry",
       "position": [
-        -131,
+        -262,
         38,
-        -497
+        -994
       ],
       "palette": 8370360
     },
     "field": {
       "center": [
-        -39,
+        -78,
         -65,
-        -183
+        -366
       ],
-      "radius": 125,
+      "radius": 250,
       "count": 51,
       "oreMult": 2.47
     },
     "gates": [
       {
         "position": [
-          932,
+          1864,
           82,
-          224
+          448
         ],
         "to": "blackstation"
       },
       {
         "position": [
-          -805,
+          -1610,
           50,
-          660
+          1320
         ],
         "to": "as_archive"
       }
@@ -7337,9 +7337,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Filed Courier Hull",
         "kind": "wreck",
         "position": [
-          -251,
+          -502,
           134,
-          -714
+          -1428
         ],
         "line": "A census barge, sunk by paperwork in the literal end. Its crew are listed as present."
       }
@@ -7357,28 +7357,28 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Archive Bureau",
       "position": [
-        252,
+        504,
         40,
-        218
+        436
       ],
       "palette": 8370360
     },
     "field": {
       "center": [
-        374,
+        748,
         -45,
-        -482
+        -964
       ],
-      "radius": 155,
+      "radius": 310,
       "count": 25,
       "oreMult": 3.1
     },
     "gates": [
       {
         "position": [
-          983,
+          1966,
           54,
-          563
+          1126
         ],
         "to": "as_census"
       }
@@ -7418,9 +7418,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Unclaimed Hull",
         "kind": "wreck",
         "position": [
-          252,
+          504,
           -15,
-          596
+          1192
         ],
         "line": "The last light nobody owns. Past it, even the ledger gives up."
       }
@@ -7432,44 +7432,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Black Station",
       "position": [
-        390,
+        780,
         37,
-        -274
+        -548
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -154,
+        -308,
         -48,
-        359
+        718
       ],
-      "radius": 151,
+      "radius": 302,
       "count": 49,
       "oreMult": 2.41
     },
     "gates": [
       {
         "position": [
-          956,
+          1912,
           53,
-          368
+          736
         ],
         "to": "redmarch"
       },
       {
         "position": [
-          -892,
+          -1784,
           47,
-          403
+          806
         ],
         "to": "uc_wisp"
       },
       {
         "position": [
-          553,
+          1106,
           44,
-          -679
+          -1358
         ],
         "to": "uc_gone"
       }
@@ -7495,9 +7495,9 @@ export const GENERATED_SYSTEMS = {
     },
     "hub": {
       "position": [
-        653,
+        1306,
         120,
-        -453
+        -906
       ],
       "routes": [
         "as_census",
@@ -7523,9 +7523,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Bootleg Hull",
         "kind": "wreck",
         "position": [
-          790,
+          1580,
           -78,
-          -198
+          -396
         ],
         "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
       }
@@ -7543,44 +7543,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Drift Anchorage",
       "position": [
-        -647,
+        -1294,
         30,
-        -209
+        -418
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        311,
+        622,
         -33,
-        250
+        500
       ],
-      "radius": 119,
+      "radius": 238,
       "count": 71,
       "oreMult": 1.96
     },
     "gates": [
       {
         "position": [
-          810,
+          1620,
           62,
-          508
+          1016
         ],
         "to": "hollowreach"
       },
       {
         "position": [
-          -1003,
+          -2006,
           89,
-          -9
+          -18
         ],
         "to": "uc_tumble"
       },
       {
         "position": [
-          639,
+          1278,
           77,
-          -578
+          -1156
         ],
         "to": "uc_cinder"
       }
@@ -7621,9 +7621,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Hulk",
         "kind": "wreck",
         "position": [
-          283,
+          566,
           105,
-          755
+          1510
         ],
         "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
       }
@@ -7641,44 +7641,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Sorrow Landing",
       "position": [
-        -619,
+        -1238,
         33,
-        629
+        1258
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -152,
+        -304,
         -37,
-        225
+        450
       ],
-      "radius": 124,
+      "radius": 248,
       "count": 80,
       "oreMult": 1.97
     },
     "gates": [
       {
         "position": [
-          885,
+          1770,
           42,
-          579
+          1158
         ],
         "to": "hollowreach"
       },
       {
         "position": [
-          -992,
+          -1984,
           71,
-          85
+          170
         ],
         "to": "uc_ember"
       },
       {
         "position": [
-          444,
+          888,
           62,
-          -754
+          -1508
         ],
         "to": "uc_faint"
       }
@@ -7719,9 +7719,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Signal",
         "kind": "beacon",
         "position": [
-          785,
+          1570,
           -2,
-          302
+          604
         ],
         "line": "A hand-built lane-light. The drift keeps it lit for the next ones through."
       }
@@ -7739,44 +7739,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Ashfall Camp",
       "position": [
-        -543,
+        -1086,
         22,
-        -10
+        -20
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -60,
+        -120,
         -37,
-        -109
+        -218
       ],
-      "radius": 143,
+      "radius": 286,
       "count": 64,
       "oreMult": 2.48
     },
     "gates": [
       {
         "position": [
-          1110,
+          2220,
           81,
-          298
+          596
         ],
         "to": "uc_tumble"
       },
       {
         "position": [
-          -928,
+          -1856,
           86,
-          337
+          674
         ],
         "to": "uc_husk"
       },
       {
         "position": [
-          636,
+          1272,
           88,
-          -866
+          -1732
         ],
         "to": "uc_nowhere"
       }
@@ -7817,9 +7817,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Bootleg Road Sign",
         "kind": "wreck",
         "position": [
-          -771,
+          -1542,
           -119,
-          5
+          10
         ],
         "line": "A nameless hulk the drifters use as a road sign. Turn inward at the wreck, they say, and you'll find water."
       }
@@ -7837,44 +7837,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Tumble Anchorage",
       "position": [
-        -338,
+        -676,
         29,
-        576
+        1152
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        282,
+        564,
         -41,
-        411
+        822
       ],
-      "radius": 146,
+      "radius": 292,
       "count": 48,
       "oreMult": 2.59
     },
     "gates": [
       {
         "position": [
-          1022,
+          2044,
           66,
-          103
+          206
         ],
         "to": "uc_wisp"
       },
       {
         "position": [
-          -766,
+          -1532,
           90,
-          662
+          1324
         ],
         "to": "uc_drift"
       },
       {
         "position": [
-          81,
+          162,
           51,
-          -874
+          -1748
         ],
         "to": "uc_ashfall"
       }
@@ -7915,9 +7915,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Hum",
         "kind": "anomaly",
         "position": [
-          384,
+          768,
           -78,
-          437
+          874
         ],
         "line": "A drift-current with no mass behind it. The unclaimed ride it inward and pay nothing."
       }
@@ -7935,44 +7935,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Nowhere Landing",
       "position": [
-        -168,
+        -336,
         18,
-        136
+        272
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -514,
+        -1028,
         -42,
-        240
+        480
       ],
-      "radius": 106,
+      "radius": 212,
       "count": 60,
       "oreMult": 2.63
     },
     "gates": [
       {
         "position": [
-          833,
+          1666,
           61,
-          464
+          928
         ],
         "to": "uc_ember"
       },
       {
         "position": [
-          -931,
+          -1862,
           43,
-          517
+          1034
         ],
         "to": "uc_stray"
       },
       {
         "position": [
-          679,
+          1358,
           81,
-          -657
+          -1314
         ],
         "to": "uc_ashfall"
       }
@@ -8013,9 +8013,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Scratch Hulk",
         "kind": "wreck",
         "position": [
-          -361,
+          -722,
           -15,
-          -541
+          -1082
         ],
         "line": "A nameless hulk the drifters use as a road sign. Turn inward at the wreck, they say, and you'll find water."
       }
@@ -8033,44 +8033,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Faint Camp",
       "position": [
-        -580,
+        -1160,
         45,
-        101
+        202
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -110,
+        -220,
         -65,
-        93
+        186
       ],
-      "radius": 150,
+      "radius": 300,
       "count": 77,
       "oreMult": 2.06
     },
     "gates": [
       {
         "position": [
-          943,
+          1886,
           70,
-          31
+          62
         ],
         "to": "uc_sorrow"
       },
       {
         "position": [
-          -1011,
+          -2022,
           85,
-          50
+          100
         ],
         "to": "uc_cinder"
       },
       {
         "position": [
-          347,
+          694,
           77,
-          -878
+          -1756
         ],
         "to": "blackstation"
       }
@@ -8111,9 +8111,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Unclaimed Hulk",
         "kind": "wreck",
         "position": [
-          -81,
+          -162,
           -23,
-          -530
+          -1060
         ],
         "line": "A claim-jumper's barge, dead between claims. Nobody filed. Nobody files out here."
       }
@@ -8131,44 +8131,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Wisp Anchorage",
       "position": [
-        384,
+        768,
         28,
-        -450
+        -900
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -398,
+        -796,
         -65,
-        437
+        874
       ],
-      "radius": 117,
+      "radius": 234,
       "count": 73,
       "oreMult": 2.05
     },
     "gates": [
       {
         "position": [
-          972,
+          1944,
           78,
-          560
+          1120
         ],
         "to": "blackstation"
       },
       {
         "position": [
-          -1082,
+          -2164,
           87,
-          149
+          298
         ],
         "to": "uc_ember"
       },
       {
         "position": [
-          368,
+          736,
           46,
-          -768
+          -1536
         ],
         "to": "uc_tumble"
       }
@@ -8209,9 +8209,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Hand-Built Lane-Light",
         "kind": "beacon",
         "position": [
-          -569,
+          -1138,
           149,
-          -269
+          -538
         ],
         "line": "The last light nobody owns. Past it, even the ledger gives up."
       }
@@ -8229,44 +8229,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Cinder Landing",
       "position": [
-        596,
+        1192,
         38,
-        297
+        594
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -298,
+        -596,
         -34,
-        215
+        430
       ],
-      "radius": 133,
+      "radius": 266,
       "count": 49,
       "oreMult": 2.42
     },
     "gates": [
       {
         "position": [
-          878,
+          1756,
           40,
-          36
+          72
         ],
         "to": "uc_faint"
       },
       {
         "position": [
-          -749,
+          -1498,
           70,
-          565
+          1130
         ],
         "to": "uc_drift"
       },
       {
         "position": [
-          492,
+          984,
           72,
-          -892
+          -1784
         ],
         "to": "uc_husk"
       }
@@ -8307,9 +8307,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Wayward Hull",
         "kind": "wreck",
         "position": [
-          139,
+          278,
           -33,
-          483
+          966
         ],
         "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
       }
@@ -8327,36 +8327,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Stray Camp",
       "position": [
-        -216,
+        -432,
         38,
-        81
+        162
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        498,
+        996,
         -26,
-        -531
+        -1062
       ],
-      "radius": 92,
+      "radius": 184,
       "count": 71,
       "oreMult": 2.06
     },
     "gates": [
       {
         "position": [
-          1083,
+          2166,
           48,
-          488
+          976
         ],
         "to": "uc_nowhere"
       },
       {
         "position": [
-          -1071,
+          -2142,
           56,
-          212
+          424
         ],
         "to": "blackstation"
       }
@@ -8397,9 +8397,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Nameless Bell Pile",
         "kind": "monument",
         "position": [
-          144,
+          288,
           110,
-          -686
+          -1372
         ],
         "line": "A marker for a well found by accident and lost on purpose. The coordinates are a shared secret."
       }
@@ -8417,44 +8417,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Husk Anchorage",
       "position": [
-        616,
+        1232,
         25,
-        459
+        918
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -492,
+        -984,
         -51,
-        -520
+        -1040
       ],
-      "radius": 135,
+      "radius": 270,
       "count": 78,
       "oreMult": 1.9
     },
     "gates": [
       {
         "position": [
-          1098,
+          2196,
           79,
-          38
+          76
         ],
         "to": "uc_ashfall"
       },
       {
         "position": [
-          -636,
+          -1272,
           85,
-          568
+          1136
         ],
         "to": "uc_cinder"
       },
       {
         "position": [
-          630,
+          1260,
           69,
-          -853
+          -1706
         ],
         "to": "blackstation"
       }
@@ -8495,9 +8495,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Nameless Barge",
         "kind": "wreck",
         "position": [
-          -571,
+          -1142,
           -16,
-          -322
+          -644
         ],
         "line": "A claim-jumper's barge, dead between claims. Nobody filed. Nobody files out here."
       }
@@ -8515,36 +8515,36 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Gone Landing",
       "position": [
-        306,
+        612,
         44,
-        562
+        1124
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        261,
+        522,
         -29,
-        483
+        966
       ],
-      "radius": 108,
+      "radius": 216,
       "count": 82,
       "oreMult": 2.11
     },
     "gates": [
       {
         "position": [
-          1089,
+          2178,
           82,
-          400
+          800
         ],
         "to": "blackstation"
       },
       {
         "position": [
-          -957,
+          -1914,
           53,
-          561
+          1122
         ],
         "to": "lastbeacon"
       }
@@ -8585,9 +8585,9 @@ export const GENERATED_SYSTEMS = {
         "name": "The Hull",
         "kind": "wreck",
         "position": [
-          -118,
+          -236,
           -65,
-          -853
+          -1706
         ],
         "line": "A drifter's hull, patched past patching. Whoever left it didn't look back, and neither does anyone else."
       }
@@ -8605,44 +8605,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "Ember Camp",
       "position": [
-        -332,
+        -664,
         27,
-        515
+        1030
       ],
       "palette": 10135480
     },
     "field": {
       "center": [
-        -312,
+        -624,
         -52,
-        -192
+        -384
       ],
-      "radius": 119,
+      "radius": 238,
       "count": 52,
       "oreMult": 2.51
     },
     "gates": [
       {
         "position": [
-          937,
+          1874,
           64,
-          182
+          364
         ],
         "to": "uc_wisp"
       },
       {
         "position": [
-          -1097,
+          -2194,
           59,
-          435
+          870
         ],
         "to": "uc_sorrow"
       },
       {
         "position": [
-          468,
+          936,
           85,
-          -906
+          -1812
         ],
         "to": "uc_nowhere"
       }
@@ -8683,9 +8683,9 @@ export const GENERATED_SYSTEMS = {
         "name": "Way Hull",
         "kind": "wreck",
         "position": [
-          668,
+          1336,
           48,
-          -539
+          -1078
         ],
         "line": "A lamp-tender's tender, run down by its own route. The lamps it served are still lit."
       }
@@ -8703,44 +8703,44 @@ export const GENERATED_SYSTEMS = {
     "station": {
       "name": "The Last Beacon",
       "position": [
-        192,
+        384,
         17,
-        -418
+        -836
       ],
       "palette": 16765562
     },
     "field": {
       "center": [
-        -289,
+        -578,
         -60,
-        459
+        918
       ],
-      "radius": 135,
+      "radius": 270,
       "count": 62,
       "oreMult": 2.56
     },
     "gates": [
       {
         "position": [
-          1017,
+          2034,
           53,
-          105
+          210
         ],
         "to": "hollowreach"
       },
       {
         "position": [
-          -1178,
+          -2356,
           70,
-          -63
+          -126
         ],
         "to": "cg_vigil"
       },
       {
         "position": [
-          283,
+          566,
           65,
-          -1147
+          -2294
         ],
         "to": "uc_gone"
       }

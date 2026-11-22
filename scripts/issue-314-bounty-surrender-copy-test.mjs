@@ -417,7 +417,17 @@ check('E1 the rendered ace card names the kill-only exception; the pirate card k
 //    persists.
 // ---------------------------------------------------------------------------
 check('F1 a non-bounty surrender card has no note and unchanged labels', () => {
-  if (ctx.flags.docked) ctx.stationDesk.undock();
+  // #340 doubled the playable speeds and keeps live traffic in the lanes, so
+  // the departure lane can be fouled when the previous check leaves the berth.
+  // Retry the real launch edge like a player would; the launch refusal is
+  // transient (lane clearance), not a state change.
+  let receipt = { ok: true };
+  for (let attempt = 0; attempt < 40 && ctx.flags.docked; attempt++) {
+    receipt = ctx.stationDesk.undock();
+    if (!ctx.flags.docked) break;
+    step(0.5);
+  }
+  assert.equal(receipt.ok, true, 'the launch is accepted: ' + JSON.stringify(receipt));
   step(0.2);
   assert.equal(ctx.flags.docked, false, 'the non-bounty approach is flown in space');
   const rec = bank().find((r) => r && r.role === 'pirate' && r.name === 'Sable Ilex'
