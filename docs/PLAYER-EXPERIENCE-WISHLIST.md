@@ -2126,6 +2126,8 @@ rather than the ordinary procedural pool.
 **Status:** AI-01 / AI-02 / AI-03 / AI-04 first pass DONE (Wave 56).
 Wave 57 closed ship-vs-ship bolts, dest-bank ticks, and miners.
 AI-05 (fleeing ships run somewhere) implemented and locally verified for issue #68.
+AI-06 ambient distant traffic implemented for issue #341 (Phase 4 of the
+system scale/population plan).
 **Player problem:** Traffic intersects at the new ship scales, ships repeat
 local paths through gates, and almost every ship attacks the player instead of
 having believable work.  
@@ -2217,6 +2219,35 @@ deadlocks; new avoidance breaking authored encounters; off-screen simulation
 creating impossible economic quantities; neutral AI failing to defend itself;
 runners clustering on one gate; escape state outliving the encounter that
 justified it.
+
+### AI-06 — Ambient distant traffic speaks
+
+**Status:** implemented for issue #341 (system scale/population Phase 4).
+Focused pins and the full boot suite pass; live production evidence is recorded
+in [REMAINING-WORK.md](REMAINING-WORK.md).
+
+- Far and mid traffic speak short, rate-limited comms lines naming real distant
+  places (station and gate-destination system). The cadence is band-scaled
+  through the authored `BANDS[].chatterMult` pacing table, so the core feels
+  inhabited while the Hush and Verge stay near-silent; chatter is suppressed
+  while docked, in a berth overlay, on a hail card, reading the chart, or
+  mid-jump, and it never floods the five-toast cap.
+- The existing convoy surge event gains a far-lane variant whose start line
+  names a distant system and the current station. The guaranteed first
+  scheduled dynamic event of each newly loaded system is a far-lane convoy so
+  the ambient outcome is observable; the persisted event object keeps its
+  exact shape and the variant/line ride only the session-only event payload.
+- Station approach lanes reuse the existing mid-traffic instanced proxy layer:
+  uninstantiated non-terminal records inside the 900 u bubble (queued or docked
+  station-hold traders, over-cap lane traffic) draw as proxies, so the lane
+  reads as traffic without a new mesh, draw call, simulation or persistent
+  field. A record promoted to a live hull hides its proxy on the next update.
+
+**Regression risks to call out:** chatter noise or toast flooding; comms
+dedupe interfering with player/station notices; the guaranteed first convoy
+shifting the seeded boot stream; proxy/hull duplicates at the 900 u handoff;
+the near-band proxies crowding out distant mid-band proxies under the shared
+nearest-first cap.
 
 ---
 

@@ -1,3 +1,99 @@
+## Ambient life: distant-traffic comms, convoys, and far-lane events — #341
+
+Implemented on `dsh/issue-341-ai-ambient-life-distant-traffic-comms-co`
+(base master `b0a1259`). Phase 4 of the system scale/population plan (#337 is
+the Phase 0 measurement gate; #338 Phase 1, #339 Phase 2; #340 Phase 3 remains
+open and still needs the save-migration decision). Ships no new persistent
+field, no save-format change, no player keybinding and no aim-glass digit.
+
+- `src/game/distant-chatter.js` voices short, rate-limited `commLine` lines
+  from non-live MID/FAR abstract records (distance > `NEAR_RANGE`, never a live
+  hull) on the existing comms/toast channel. Cadence is band-scaled through the
+  authored `BANDS[].chatterMult` pacing table (core 1.0, Hush 0.1, Verge 0.05)
+  with a 12 s absolute floor; every pick (speaker, gate reference, template,
+  gap) is an FNV/xorshift hash of the system id and a session counter, so the
+  module consumes zero global `Math.random` draws (the boot harness's seeded
+  stream and the #201 route fixture stay intact). Lines name the current
+  station and a real gate destination system (a place beyond the player's
+  bubble); the lanes are suppressed while docked, in a berth overlay, on a hail
+  card, reading the chart, or mid-jump, and the timer/counter reset on a real
+  system change. Session-only timer/counter in the world closure; no record or
+  `ctx.world` mutation.
+- `src/game/world.js` adds the convoy/far-lane event variant (owner decision:
+  a variant of the existing `convoySurge` event, not a new event kind). Its
+  start `worldEvent` payload carries a session-only `variant` and a
+  place-referencing `line` (e.g. "Convoy inbound from Veridian Reach —
+  Freehold Landing approach stacked."); the persisted
+  `ctx.world.activeEvent` object keeps its exact
+  `{kind,startedAt,endsAt,system}` shape. Selection is a stable per-system hash
+  (rim bands always `farLane`); each newly loaded system's first scheduled
+  dynamic event is the guaranteed far-lane convoy so the outcome is observable
+  in a normal flight window, later events stay random. The scheduler always
+  consumes the pre-#341 event-kind `Math.random` draw and mimics the one extra
+  commodity draw a rolled `commodityGlut` would make, so the boot harness's
+  seeded stream stays byte-identical while the kind is overridden.
+- `src/systems/mid-traffic.js` extends the existing ONE 40-capacity instanced
+  proxy layer inward: uninstantiated, non-terminal records inside the 900 u
+  bubble now draw as proxies, so queued/docked station-hold traders and
+  over-cap lane traffic stay visible instead of vanishing when `traffic.js`
+  cannot instantiate them (live cap 10; only `state === 'enroute'` hulls
+  instantiate). `hidePromoted` hides a proxy on the next update once its record
+  becomes live, far-traffic keeps the >2,500 u band, and no record is drawn
+  twice. Adds no draw call, no simulation and no new mesh; session-only
+  `nearProxyCount`/`nearProxyIds` on the mesh `userData` are the test evidence.
+- `src/systems/hud.js` shows the convoy start line through the existing
+  `worldEvent` toast branch (plus a convoy copy for generic/end phases);
+  `src/core/ctx.js` documents the optional `worldEvent` variant/line payload.
+
+Focused regressions are `scripts/issue-341-ambient-life-test.mjs` (26 pins:
+band-scaled cadence and no-flood bounds, non-live distant speaker, place
+references, overlay/jump suppression, system-change reset, zero
+`Math.random` draws, no `ctx.world`/record mutation, deterministic convoy
+variant/line and the real-boot first-event convoy with the persisted
+`activeEvent` shape) and `scripts/issue-341-approach-lane-test.mjs` (26 pins:
+docked/queued station-hold records visible as near proxies, live/terminal
+hidden, far split and 8 Hz/one-layer/cap/heading/colour preserved, promotion
+hides the proxy on the next update, no ctx field or record mutation).
+`scripts/issue-339-tier-test.mjs` carries a bounded pin update for the
+expanded Phase 4 mid-layer contract (near uninstantiated records now visible;
+live/terminal exclusions and the >2,500 u far split unchanged) with a rationale
+comment. All three are wired into `npm run test:boot`.
+
+Verification: `npm run build` passes (vite 6.4.3; bundle policy 2035.17 KiB
+minified / 615.85 KiB gzip; `dist/assets/index-B6F43cv1.js` 2,084.02 kB
+minified / 630.63 kB gzip; +7.47 kB minified / +2.51 kB gzip vs the Phase 2
+artifact, within the ≤50 KB per-phase budget). `npm run test:boot` exits 0
+end-to-end (`BOOT TEST PASS — no update errors`, `ISSUE #341 AMBIENT LIFE
+PASS (26 checks)`, `ISSUE #341 APPROACH LANE PASS (26 checks)`, unchanged
+#339 suites pass). The final 600 s production ambient-life probe
+(`npm run test:ambient-live`, `?agent=1&perf=1`, untracked
+`out/issue-341-live/ambient-life/`) passed: 600/600 one-second samples, 9
+completed Freehold↔Veridian legs, 17 distant chatter lines (14 unique speakers,
+all non-live enroute records beyond 900 u; every line names a real place;
+within-system gaps ≥22 s with zero violations and a single 19.68 s cross-system
+reset; toast cap max 5, chatter toasts max 1), one far-lane `convoySurge`
+start (variant `farLane`, line naming Veridian Reach + Freehold Landing; the
+persisted `activeEvent` shape stayed exactly
+`{kind,startedAt,endsAt,system}` and was observable in 159 samples), near-band
+approach-lane proxies max 37 overall / 36 at docked or approaching samples
+across 441 positive samples with zero persistent or transient live+proxy
+duplicates, zero console errors/exceptions and a stable runtime source hash
+(`f7b78654…`, matching the boot log). `npm run test:perf-live` passed on the
+same artifact: frame p50 18.0 / p95 18.7 / p99 19.1 ms (headless cadence; no
+regression), draw calls 62.5 median / 113 max (+4.5 median vs Phase 2, under
++≤25), triangles 135,616 median (+1,536, under +≤30k), live near cap 10,
+abstract current bank max 47, CPU top-10 sum ~0.73 ms, zero console errors and
+a stable source hash. Bundle growth is +7,465 bytes minified / +2,511 bytes
+gzip vs the Phase 2 artifact (within the ≤50 KB phase budget).
+
+Parked: the chatter cadence uses the authored `chatterMult` values unchanged;
+the Hush/Verge stay near-silent by design. Ambient chatter is comms-only (no
+new hail card, no contact row, no agent command). The guaranteed first convoy
+per visited system is a presentation/observability decision, not a new market
+event kind. The mid layer's nearest-first cap means a busy approach lane can
+crowd out distant mid-band proxies (intended relevance ordering). Phase 3
+(#340) still needs the save-migration decision.
+
 ## Deep-field scale layer, far-traffic impostors, and asteroid density — #338
 
 Implemented on `dsh/issue-338-world-deep-field-scale-layer-far-traffic`

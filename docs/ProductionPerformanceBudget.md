@@ -382,3 +382,87 @@ No CI frame-time gate is added yet (same Phase-0 decision: baseline first,
 enforce later). Phase 3 (#340, extent + in-system chart) should reuse these
 derived tiers and attach the same before/after probe evidence.
 
+## Frame-time budget — system scale/population Phase 4 (issue #341)
+
+Issue #341 ships ambient life: distant-traffic comms, a far-lane convoy event
+variant and station approach-lane proxies that reuse the Phase 2 instanced
+mid-traffic layer. It adds no persistent field, no save-format change, no HUD
+key, no aim-glass digit and no new mesh or render system.
+
+### What is added
+
+- `src/game/distant-chatter.js` voices text-only `commLine` lines from
+  non-live MID/FAR records on the existing comms/toast channel. Cadence is
+  band-scaled through the authored `BANDS[].chatterMult` pacing table with a
+  12 s absolute floor and one line per gap; the module consumes zero global
+  `Math.random` draws and does no per-frame work beyond a timer and a bounded
+  record scan on a line tick. No draw call, geometry, material or texture.
+- `src/game/world.js` adds the far-lane `convoySurge` variant. The persisted
+  `ctx.world.activeEvent` object keeps its exact
+  `{kind,startedAt,endsAt,system}` shape; the variant and place-referencing
+  line ride only the session-only `worldEvent` payload. The guaranteed first
+  event per newly loaded system is a far-lane convoy, and the scheduler keeps
+  the seeded boot stream byte-identical by consuming the pre-#341 event-kind
+  draw and mimicking the one extra commodity draw a rolled `commodityGlut`
+  would make.
+- `src/systems/mid-traffic.js` extends the existing ONE 40-capacity instanced
+  proxy layer inward: uninstantiated non-terminal records inside the 900 u
+  bubble now draw as proxies (queued/docked station-hold traders and over-cap
+  lane traffic), so station approach lanes read as traffic. One draw call and
+  the same 8 Hz refresh remain; the per-instance matrix writes are still capped
+  at 40 per refresh, `hidePromoted` removes a proxy on the next update once its
+  record becomes live, and far-traffic keeps the >2,500 u band so no record is
+  drawn twice.
+- `src/systems/hud.js` shows the convoy start line through the existing
+  `worldEvent` toast branch.
+
+### Measured after (2026-11-22, same machine/build/harness as the Phase-0/1/2 baselines)
+
+The after run used the same probe (`npm run test:perf-live`, production
+`dist/`, `?agent=1&perf=1`, 60 one-second samples, fixed Greenhand → Veridian
+route), the same named machine and the same headless Chrome/ANGLE RTX 4090
+configuration. Evidence is in the untracked
+`out/issue-337-live/perf-baseline/` (same probe path; Phase 4 overwrote the
+Phase 2 artifact in this worktree). The runtime source hash was stable
+start=end (`f7b78654…`). The absolute headless frame cadence varies between
+runs (the compositor paced this run at ~18 ms rather than the earlier ~32 ms),
+so the decision below uses same-probe draw/triangle/CPU/bundle deltas rather
+than an absolute frame-time comparison; p50/p95/p99 are recorded for the
+contract.
+
+| Measure | Phase 2 artifact | Phase 4 measured | Delta |
+|---|---:|---:|---:|
+| Frame p50 | 32.5 ms | 18.0 ms | −14.5 ms (headless cadence; no regression) |
+| Frame p95 | 33.3 ms | 18.7 ms | −14.6 ms (headless cadence; no regression) |
+| Frame p99 | 33.75 ms | 19.1 ms | −14.65 ms (headless cadence; no regression) |
+| Draw calls | 58 median / 115 max | 62.5 median / 113 max | +4.5 / −2 |
+| Triangles | 134,080 median | 135,616 median / 263,018 max | +1,536 |
+| Points | 8,239 median | 8,254 median | +15 |
+| Asteroid matrix writes | 113 median / 163 max | 113 median / 163 max (Phase 2 value retained) | 0 |
+| CPU per subsystem total | ~1.05 ms (top-10 sum) | ~0.73 ms (top-10 sum; ship 0.365, npc 0.108) | −0.32 ms |
+| Render CPU | not recorded in Phase 2 table | 0.6 ms median / 91.4 ms max | — |
+| Subsystems observed | 38 | 38 | 0 |
+| Live NPCs | 10 max | 10 max (near 10, mid 6, far 0) | 0 |
+| Abstract records | current bank max 47 | current bank max 47 | 0 |
+| Memory | not recorded in Phase 2 table | geometries 102 median / 104 max; textures 39.5 / 41; JS heap 58.3 MB median / 94.2 MB max | — |
+| Console errors / exceptions | 0 / 0 | 0 / 0 | 0 |
+| Production JS | 2,076,553 bytes minified / 628,119 gzip | 2,084,018 bytes minified / 630,630 gzip | +7,465 / +2,511 |
+
+All Phase 4 budgets pass: draw-call growth (+4.5 median / −2 max) is under
++≤25, triangles are +1,536 median (under +≤30k), the live near cap stays 10,
+the abstract record bank is unchanged, CPU did not grow, and bundle growth
+(+7.29 KiB minified / +2.45 KiB gzip) is under the ≤50 KB per-phase budget.
+The perf probe verdict was PASS with zero console errors or exceptions, a
+stable runtime source hash and clean Chrome/Vite/port cleanup.
+
+The 600 s production ambient-life probe on the same artifact also passed
+(`out/issue-341-live/ambient-life/`, untracked): 600/600 one-second samples,
+9 completed Freehold↔Veridian legs, 17 distant chatter lines (all from
+non-live records beyond 900 u, every line naming a real place; within-system
+gaps ≥22 s, no flood; toast cap max 5), one far-lane convoy start with the
+persisted `activeEvent` shape unchanged, near-band approach-lane proxies max
+37 overall / 36 at docked or approaching samples with zero live+proxy
+duplicates, zero console errors/exceptions and a stable source hash
+(`f7b78654…`). No CI frame-time gate is added yet (same Phase-0 decision);
+Phase 3 (#340) still needs the save-migration decision.
+

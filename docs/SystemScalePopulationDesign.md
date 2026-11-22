@@ -1,8 +1,11 @@
 # Making solar systems feel larger with more NPCs — a performance-bounded brainstorm
 
 Status: **proposal / brainstorm** for Phases 1–4, filed as #338–#341. Phase 0
-(measurement, issue #337) is implemented: a dev-only `?perf=1` overlay plus an
-unattended production-build probe, with the measured baseline and budgets in
+(measurement, issue #337), Phase 1 (#338), Phase 2 (#339) and Phase 4 (#341)
+are implemented; Phase 3 (#340, P5 extent + P6 in-system chart) remains and
+still needs the owner save-migration decision. Phase 0 shipped the dev-only
+`?perf=1` overlay plus an unattended production-build probe, with the measured
+baseline and budgets in
 [ProductionPerformanceBudget.md](ProductionPerformanceBudget.md). Neither the
 brainstorm nor Phase 0 changed gameplay. Evidence below is current-code
 inspection plus three read-only investigations; every number is cited to
@@ -360,3 +363,47 @@ lane still completes. Measured evidence lives in the untracked
 Phase 2 leaves Phase 3 (P5 extent + P6 in-system chart) as the next planned
 phase; it needs the save-migration decision and should reuse these derived
 tiers.
+
+## 11. Phase 4 status (issue #341)
+
+Phase 4 (P7 ambient life) is implemented. It is text/event work plus a reuse of
+the Phase 2 instanced proxy layer; it ships no new mesh, no new simulation, no
+new player key, no aim-glass digit and no new persistent field.
+
+- **Distant-traffic comms** — `src/game/distant-chatter.js` voices short,
+  rate-limited `commLine` lines from non-live MID/FAR abstract records (never a
+  live hull) on the existing comms/toast channel. Cadence is band-scaled through
+  the authored `BANDS[].chatterMult` pacing table (core 1.0 → Verge 0.05), with
+  an absolute floor so even the busiest core lane cannot flood the five-toast
+  cap. Every pick (speaker, gate reference, template, gap) is an FNV/xorshift
+  hash of the system id and a session line counter, so the module consumes ZERO
+  global `Math.random` draws and the boot harness's seeded stream is untouched.
+  Lines name the current station and a real gate destination system (a place
+  beyond the player's bubble). The lanes are suppressed while docked, in a berth
+  overlay, on a hail card, reading the chart, or mid-jump, and the timer resets
+  on a real system change.
+- **Convoy / far-lane event variant** — owner decision recorded: this is a
+  variant of the existing `convoySurge` event, not a new event kind. Its start
+  payload names the current station and a gate destination system (e.g.
+  "Convoy inbound from Veridian Reach — Freehold Landing approach stacked.").
+  Selection is a stable per-system hash (rim bands always far-lane); the
+  guaranteed first scheduled dynamic event of each newly loaded system is the
+  far-lane convoy so the outcome is observable in a normal flight window, and
+  later events stay random with the existing band-scaled gaps. The persisted
+  `ctx.world.activeEvent` object keeps its exact
+  `{kind, startedAt, endsAt, system}` shape: the variant and line ride only the
+  session-only `worldEvent` payload consumed by the HUD toast.
+- **Station approach-lane traffic** — `src/systems/mid-traffic.js` extends its
+  existing ONE 40-capacity instanced proxy layer inward: uninstantiated,
+  non-terminal records inside the 900 u bubble now draw as proxies, so queued
+  or docked station-hold traders and over-cap lane traffic stay visible instead
+  of vanishing when `traffic.js` cannot instantiate them (live cap 10; only
+  `state === 'enroute'` hulls instantiate). A record promoted to a live hull
+  hides its proxy on the next update (`hidePromoted`), far-traffic keeps the
+  >2,500 u band, and no record is drawn twice. This adds no draw call and no
+  simulation.
+
+No new persistent fields, save-format change, HUD key or aim-glass digit were
+added. Live evidence and the focused pins are recorded in
+[REMAINING-WORK.md](REMAINING-WORK.md) and
+[ProductionPerformanceBudget.md](ProductionPerformanceBudget.md).
