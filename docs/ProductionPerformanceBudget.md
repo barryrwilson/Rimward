@@ -453,7 +453,7 @@ and p50/p95/p99 are recorded for the contract.
 | Production JS | 2,084,018 bytes minified / 630,630 gzip | 2,102,074 bytes minified / 636,230 gzip | +18,056 / +5,600 |
 
 All Phase 3 budgets pass: frame p50/p95 are unchanged and p99 is 0.1 ms lower,
-draw-call growth (+10 median / +1 max) is under +≤25, triangles are below the
+draw-call growth (+10 median / +1 max) is under the +25 draw-call budget, triangles are below the
 Phase 4 median and max, asteroid matrix writes fell, CPU grew by 0.06 ms (well
 inside the 2 ms frame budget), the heap maximum is 20.9 MB lower, and bundle
 growth (+17.6 KiB minified / +5.5 KiB gzip) is under the ≤50 KB per-phase
