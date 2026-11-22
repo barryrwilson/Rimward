@@ -49,7 +49,11 @@ persistent fields, player keys, or aim-glass digits.
   (3,924 checks), `issue-340-pacing-test.mjs` (75),
   `issue-340-save-migration-test.mjs` (79) and `issue-340-chart-test.mjs`
   (15). The production-build live probe `scripts/issue-340-live-probe.mjs` is
-  a separate `test:issue-340-live` run because it needs `vite preview`.
+  a separate `test:issue-340-live` run because it needs `vite preview`. The
+  extent suite reads its pre-x2 baseline from the branch base commit via git;
+  in the shallow CI checkout it falls back to `raw.githubusercontent.com` for
+  this public repo, and skips only the migration diff (with an explicit notice)
+  if neither source is reachable.
   Existing boot pins/fixtures were updated for the new scale (v2 envelope,
   landmark invariants, dock/arrival/respawn/combat fixtures); no assertion was
   removed, only stale pre-scale pins/geometry were re-derived from the live
