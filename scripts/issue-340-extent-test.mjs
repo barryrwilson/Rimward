@@ -23,7 +23,11 @@
  *  - far-asteroid scenery determinism and 600-800 system density.
  *
  * Base comparison uses the branch base commit (68e89d9) so the pre-x2 data is
- * read from git, not hard-coded.
+ * read from git, not hard-coded. The GitHub CI checkout is shallow (it fetches
+ * only the PR head), so when git cannot resolve the base commit the same files
+ * are read from raw.githubusercontent.com for this public repo. If neither
+ * source is reachable, the migration-diff checks are skipped with an explicit
+ * notice while every absolute post-x2 assertion still runs.
  */
 import { readFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -33,24 +37,44 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = '68e89d9';
+const BASE_REPO = 'barryrwilson/Rimward';
 const GEN_REL = 'src/game/galaxy.generated.js';
+const BASE_MODE = process.env.ISSUE340_BASE_SOURCE || 'auto';
+const FORCE_RAW = BASE_MODE === 'raw';
 
 let pass = 0;
 const failures = [];
+let skippedGroups = 0;
 function check(cond, msg, detail) {
   if (cond) { pass++; return true; }
   failures.push(msg + (detail === undefined ? '' : ' (' + detail + ')'));
   console.error('FAIL: ' + msg + (detail === undefined ? '' : ' (' + detail + ')'));
   return false;
 }
+function skipBase() { skippedGroups++; }
 function read(rel) { return readFileSync(join(ROOT, rel), 'utf8'); }
-function baseSource(rel) {
-  try {
-    return execFileSync('git', ['show', BASE + ':' + rel], { cwd: ROOT, encoding: 'utf8' });
-  } catch (err) {
-    console.error('FATAL: cannot read ' + rel + ' at base commit ' + BASE + ': ' + err.message);
-    process.exit(1);
+const baseCache = new Map();
+async function baseSource(rel) {
+  if (baseCache.has(rel)) return baseCache.get(rel);
+  let src = null;
+  if (BASE_MODE === 'off') { baseCache.set(rel, null); return null; }
+  if (!FORCE_RAW) {
+    try {
+      src = execFileSync('git', ['show', BASE + ':' + rel], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch {
+      src = null;
+    }
   }
+  if (src === null) {
+    try {
+      const res = await fetch('https://raw.githubusercontent.com/' + BASE_REPO + '/' + BASE + '/' + rel, { signal: AbortSignal.timeout(15000) });
+      if (res.ok) src = await res.text();
+    } catch {
+      src = null;
+    }
+  }
+  baseCache.set(rel, src);
+  return src;
 }
 function parseGenerated(src) {
   const marker = 'export const GENERATED_SYSTEMS = ';
@@ -84,8 +108,15 @@ const reportedFallbacks = fallbackMatch ? Number(fallbackMatch[1]) : -1;
 
 const authored = await loadData(read('src/game/authored-systems.js'), 'AUTHORED_SYSTEMS');
 const generated = await loadData(read(GEN_REL), 'GENERATED_SYSTEMS');
-const baseAuthored = await loadData(baseSource('src/game/authored-systems.js'), 'AUTHORED_SYSTEMS');
-const baseGenerated = parseGenerated(baseSource(GEN_REL));
+const baseAuthoredSrc = await baseSource('src/game/authored-systems.js');
+const baseGeneratedSrc = await baseSource(GEN_REL);
+const baseAuthored = baseAuthoredSrc === null ? null : await loadData(baseAuthoredSrc, 'AUTHORED_SYSTEMS');
+const baseGenerated = baseGeneratedSrc === null ? null : parseGenerated(baseGeneratedSrc);
+const haveBase = baseAuthored !== null && baseGenerated !== null;
+if (!haveBase) {
+  console.error('NOTE: base commit ' + BASE + ' data unavailable (shallow checkout and no network);');
+  console.error('      migration-diff checks will be skipped; absolute post-x2 assertions still run.');
+}
 
 check(Object.keys(generated).length === 94, 'generated system count 94', Object.keys(generated).length);
 check(Object.keys(authored).length === 7, 'authored system count 7', Object.keys(authored).length);
@@ -111,14 +142,18 @@ const SHADOW_MARK = 'export const PLANET_ORBITS = Object.freeze([';
 const solarTable = planetTable(read('src/systems/solarsystem.js'), SOLAR_MARK);
 const astTable = planetTable(read('src/systems/asteroids.js'), AST_MARK);
 const shadowTable = planetTable(read('src/game/courier-shadow.js'), SHADOW_MARK);
-const baseSolar = planetTable(baseSource('src/systems/solarsystem.js'), SOLAR_MARK);
-const baseAst = planetTable(baseSource('src/systems/asteroids.js'), AST_MARK);
-const baseShadow = planetTable(baseSource('src/game/courier-shadow.js'), SHADOW_MARK);
+const baseSolarSrc = await baseSource('src/systems/solarsystem.js');
+const baseAstSrc = await baseSource('src/systems/asteroids.js');
+const baseShadowSrc = await baseSource('src/game/courier-shadow.js');
+const baseSolar = baseSolarSrc === null ? null : planetTable(baseSolarSrc, SOLAR_MARK);
+const baseAst = baseAstSrc === null ? null : planetTable(baseAstSrc, AST_MARK);
+const baseShadow = baseShadowSrc === null ? null : planetTable(baseShadowSrc, SHADOW_MARK);
 check(JSON.stringify(solarTable) === JSON.stringify(EXPECTED_TABLE), 'solarsystem.js SLOTS orbit radii/radii', JSON.stringify(solarTable));
 check(JSON.stringify(astTable) === JSON.stringify(EXPECTED_TABLE), 'asteroids.js PLANET_SLOTS orbit radii/radii', JSON.stringify(astTable));
 check(JSON.stringify(shadowTable) === JSON.stringify(EXPECTED_TABLE), 'courier-shadow.js PLANET_ORBITS orbit radii/radii', JSON.stringify(shadowTable));
 check(JSON.stringify(solarTable) === JSON.stringify(astTable) && JSON.stringify(astTable) === JSON.stringify(shadowTable), 'all three planet tables agree exactly');
 for (const [name, baseTable] of [['solarsystem', baseSolar], ['asteroids', baseAst], ['courier-shadow', baseShadow]]) {
+  if (baseTable === null) { skipBase(); continue; }
   check(baseTable !== null && baseTable.length === 5, name + ' base planet table has 5 slots');
   check(baseTable.every((slot, i) => slot[1] * 2 === EXPECTED_TABLE[i][1] && slot[0] === EXPECTED_TABLE[i][0]), name + ' base table is the x2 source (radius unchanged, orbit doubled)');
 }
@@ -158,71 +193,106 @@ function stripGeometry(def) {
 }
 
 // authored systems: exact x2, y unchanged, field radius x2 with its centre.
-for (const id of Object.keys(baseAuthored)) {
-  const oldDef = baseAuthored[id];
-  const newDef = authored[id];
-  check(newDef !== undefined, 'authored system ' + id + ' still present');
-  if (!newDef) continue;
-  const oldPairs = positionsOf(oldDef);
-  const newPairs = positionsOf(newDef);
-  check(oldPairs.length === newPairs.length, id + ' authored position-field count unchanged');
-  for (let i = 0; i < oldPairs.length; i++) {
-    checkVecX2(oldPairs[i][1], newPairs[i][1], id + ' ' + oldPairs[i][0] + ' authored x2/y-identical');
+if (haveBase) {
+  for (const id of Object.keys(baseAuthored)) {
+    const oldDef = baseAuthored[id];
+    const newDef = authored[id];
+    check(newDef !== undefined, 'authored system ' + id + ' still present');
+    if (!newDef) continue;
+    const oldPairs = positionsOf(oldDef);
+    const newPairs = positionsOf(newDef);
+    check(oldPairs.length === newPairs.length, id + ' authored position-field count unchanged');
+    for (let i = 0; i < oldPairs.length; i++) {
+      checkVecX2(oldPairs[i][1], newPairs[i][1], id + ' ' + oldPairs[i][0] + ' authored x2/y-identical');
+    }
+    check(newDef.field && oldDef.field && newDef.field.radius === oldDef.field.radius * 2, id + ' authored field radius exactly x2');
+    check(newDef.field && newDef.field.radius >= 160 && newDef.field.radius <= 320, id + ' authored field radius in 160-320', newDef.field && newDef.field.radius);
+    for (const [, p] of newPairs) check(radial(p) <= 2800, id + ' authored position within 2800u', radial(p).toFixed(1));
+    check(JSON.stringify(stripGeometry(oldDef)) === JSON.stringify(stripGeometry(newDef)), id + ' authored non-geometry fields unchanged');
   }
-  check(newDef.field && oldDef.field && newDef.field.radius === oldDef.field.radius * 2, id + ' authored field radius exactly x2');
-  check(newDef.field && newDef.field.radius >= 160 && newDef.field.radius <= 320, id + ' authored field radius in 160-320', newDef.field && newDef.field.radius);
-  for (const [, p] of newPairs) check(radial(p) <= 2800, id + ' authored position within 2800u', radial(p).toFixed(1));
-  check(JSON.stringify(stripGeometry(oldDef)) === JSON.stringify(stripGeometry(newDef)), id + ' authored non-geometry fields unchanged');
+  check(Object.keys(authored).every((id) => id in baseAuthored), 'no authored system added');
+} else {
+  skipBase();
+  for (const [id, newDef] of Object.entries(authored)) {
+    check(newDef.field && newDef.field.radius >= 160 && newDef.field.radius <= 320, id + ' authored field radius in 160-320', newDef.field && newDef.field.radius);
+    for (const [, p] of positionsOf(newDef)) check(radial(p) <= 2800, id + ' authored position within 2800u', radial(p).toFixed(1));
+  }
 }
-check(Object.keys(authored).every((id) => id in baseAuthored), 'no authored system added');
 
 // generated systems: exact x2 geometry, y unchanged, bounds.
 const generatedIds = Object.keys(generated);
-check(generatedIds.length === Object.keys(baseGenerated).length, 'generated system id set size unchanged');
-let generatedX2 = 0;
-for (const id of generatedIds) {
-  const oldDef = baseGenerated[id];
-  const newDef = generated[id];
-  check(oldDef !== undefined, 'generated system ' + id + ' exists in base');
-  if (!oldDef) continue;
-  checkVecX2(oldDef.station.position, newDef.station.position, id + ' station x2/y-identical');
-  check(newDef.station.position[1] >= 15 && newDef.station.position[1] <= 45, id + ' station y authored range');
-  check(oldDef.gates.length === newDef.gates.length, id + ' gate count unchanged');
-  for (let i = 0; i < oldDef.gates.length; i++) {
-    checkVecX2(oldDef.gates[i].position, newDef.gates[i].position, id + ' gate[' + i + '] x2/y-identical');
-    check(newDef.gates[i].to === oldDef.gates[i].to, id + ' gate[' + i + '] destination unchanged');
-    check(radial(newDef.gates[i].position) <= 2401.5, id + ' gate[' + i + '] inside 2400u radius (rounding tolerance)', radial(newDef.gates[i].position).toFixed(1));
+if (haveBase) {
+  check(generatedIds.length === Object.keys(baseGenerated).length, 'generated system id set size unchanged');
+  let generatedX2 = 0;
+  for (const id of generatedIds) {
+    const oldDef = baseGenerated[id];
+    const newDef = generated[id];
+    check(oldDef !== undefined, 'generated system ' + id + ' exists in base');
+    if (!oldDef) continue;
+    checkVecX2(oldDef.station.position, newDef.station.position, id + ' station x2/y-identical');
+    check(newDef.station.position[1] >= 15 && newDef.station.position[1] <= 45, id + ' station y authored range');
+    check(oldDef.gates.length === newDef.gates.length, id + ' gate count unchanged');
+    for (let i = 0; i < oldDef.gates.length; i++) {
+      checkVecX2(oldDef.gates[i].position, newDef.gates[i].position, id + ' gate[' + i + '] x2/y-identical');
+      check(newDef.gates[i].to === oldDef.gates[i].to, id + ' gate[' + i + '] destination unchanged');
+      check(radial(newDef.gates[i].position) <= 2401.5, id + ' gate[' + i + '] inside 2400u radius (rounding tolerance)', radial(newDef.gates[i].position).toFixed(1));
+    }
+    checkVecX2(oldDef.field.center, newDef.field.center, id + ' field center x2/y-identical');
+    check(newDef.field.radius === oldDef.field.radius * 2, id + ' field radius exactly x2');
+    check(newDef.field.radius >= 170 && newDef.field.radius <= 320, id + ' field radius in 170-320', newDef.field.radius);
+    check(Math.abs(newDef.station.position[0]) <= 1300 && Math.abs(newDef.station.position[2]) <= 1300, id + ' station inside +/-1300 x/z');
+    check(Math.abs(newDef.field.center[0]) <= 1100 && Math.abs(newDef.field.center[2]) <= 1100, id + ' field center inside +/-1100 x/z');
+    if (oldDef.hub) {
+      checkVecX2(oldDef.hub.position, newDef.hub.position, id + ' hub x2/y-identical');
+      const dx = newDef.hub.position[0] - newDef.station.position[0];
+      const dz = newDef.hub.position[2] - newDef.station.position[2];
+      check(dx >= 300 && dx <= 560, id + ' hub x offset in 300-560', dx);
+      check(dz >= -520 && dz <= -240, id + ' hub z offset in -520..-240', dz);
+      check(newDef.hub.position[1] >= -80 && newDef.hub.position[1] <= 120, id + ' hub y authored range');
+    }
+    check(JSON.stringify(stripGeometry(oldDef)) === JSON.stringify(stripGeometry(newDef)), id + ' generated non-geometry fields unchanged');
+    generatedX2++;
   }
-  checkVecX2(oldDef.field.center, newDef.field.center, id + ' field center x2/y-identical');
-  check(newDef.field.radius === oldDef.field.radius * 2, id + ' field radius exactly x2');
-  check(newDef.field.radius >= 170 && newDef.field.radius <= 320, id + ' field radius in 170-320', newDef.field.radius);
-  check(Math.abs(newDef.station.position[0]) <= 1300 && Math.abs(newDef.station.position[2]) <= 1300, id + ' station inside +/-1300 x/z');
-  check(Math.abs(newDef.field.center[0]) <= 1100 && Math.abs(newDef.field.center[2]) <= 1100, id + ' field center inside +/-1100 x/z');
-  if (oldDef.hub) {
-    checkVecX2(oldDef.hub.position, newDef.hub.position, id + ' hub x2/y-identical');
-    const dx = newDef.hub.position[0] - newDef.station.position[0];
-    const dz = newDef.hub.position[2] - newDef.station.position[2];
-    check(dx >= 300 && dx <= 560, id + ' hub x offset in 300-560', dx);
-    check(dz >= -520 && dz <= -240, id + ' hub z offset in -520..-240', dz);
-    check(newDef.hub.position[1] >= -80 && newDef.hub.position[1] <= 120, id + ' hub y authored range');
+  check(generatedX2 === 94, 'all 94 generated systems checked');
+} else {
+  skipBase();
+  for (const id of generatedIds) {
+    const newDef = generated[id];
+    check(newDef.station.position[1] >= 15 && newDef.station.position[1] <= 45, id + ' station y authored range');
+    for (const [i, g] of newDef.gates.entries()) {
+      check(radial(g.position) <= 2401.5, id + ' gate[' + i + '] inside 2400u radius (rounding tolerance)', radial(g.position).toFixed(1));
+    }
+    check(newDef.field.radius >= 170 && newDef.field.radius <= 320, id + ' field radius in 170-320', newDef.field.radius);
+    check(Math.abs(newDef.station.position[0]) <= 1300 && Math.abs(newDef.station.position[2]) <= 1300, id + ' station inside +/-1300 x/z');
+    check(Math.abs(newDef.field.center[0]) <= 1100 && Math.abs(newDef.field.center[2]) <= 1100, id + ' field center inside +/-1100 x/z');
+    if (newDef.hub) {
+      const dx = newDef.hub.position[0] - newDef.station.position[0];
+      const dz = newDef.hub.position[2] - newDef.station.position[2];
+      check(dx >= 300 && dx <= 560, id + ' hub x offset in 300-560', dx);
+      check(dz >= -520 && dz <= -240, id + ' hub z offset in -520..-240', dz);
+      check(newDef.hub.position[1] >= -80 && newDef.hub.position[1] <= 120, id + ' hub y authored range');
+    }
   }
-  check(JSON.stringify(stripGeometry(oldDef)) === JSON.stringify(stripGeometry(newDef)), id + ' generated non-geometry fields unchanged');
-  generatedX2++;
 }
-check(generatedX2 === 94, 'all 94 generated systems checked');
 
 // generated landmarks: metadata unchanged (covered above), positions inside
 // 2000u and separation invariants; the fallback count is bounded.
 let landmarkX2 = 0;
 const fallbackIds = [];
 for (const id of generatedIds) {
-  const oldDef = baseGenerated[id];
+  const oldDef = haveBase ? baseGenerated[id] : null;
   const newDef = generated[id];
   const oldLm = oldDef && oldDef.landmarks && oldDef.landmarks[0];
   const newLm = newDef.landmarks && newDef.landmarks[0];
   check(newDef.landmarks && newDef.landmarks.length === 1, id + ' has exactly one landmark');
-  check(newLm && oldLm && newLm.id === id + '_lm', id + ' landmark id scheme');
-  check(newLm && oldLm && newLm.id === oldLm.id && newLm.kind === oldLm.kind && newLm.name === oldLm.name && newLm.line === oldLm.line, id + ' landmark metadata unchanged');
+  check(newLm && newLm.id === id + '_lm', id + ' landmark id scheme');
+  if (oldLm) {
+    check(newLm && newLm.id === oldLm.id && newLm.kind === oldLm.kind && newLm.name === oldLm.name && newLm.line === oldLm.line, id + ' landmark metadata unchanged');
+  } else if (haveBase) {
+    check(false, id + ' landmark missing from base');
+  } else {
+    skipBase();
+  }
   const p = newLm.position;
   check(radial(p) <= 2000, id + ' landmark inside 2000u bubble', radial(p).toFixed(1));
   check(dist3(p, newDef.station.position) >= 800, id + ' landmark >=800u from station', dist3(p, newDef.station.position).toFixed(1));
@@ -235,9 +305,13 @@ for (const id of generatedIds) {
     fallbackIds.push(id);
   }
 }
-check(landmarkX2 + fallbackIds.length === 94, 'all 94 generated landmarks classified');
-check(fallbackIds.length <= 5, 'landmark fallbacks bounded', fallbackIds.length + ': ' + fallbackIds.join(','));
-check(fallbackIds.length === reportedFallbacks, 'fallback count matches generator report', fallbackIds.length + ' vs ' + reportedFallbacks);
+if (haveBase) {
+  check(landmarkX2 + fallbackIds.length === 94, 'all 94 generated landmarks classified');
+  check(fallbackIds.length <= 5, 'landmark fallbacks bounded', fallbackIds.length + ': ' + fallbackIds.join(','));
+  check(fallbackIds.length === reportedFallbacks, 'fallback count matches generator report', fallbackIds.length + ' vs ' + reportedFallbacks);
+} else {
+  skipBase();
+}
 
 // record totals stay in the Phase 2 contract for every system.
 function recordTotal(def) {
@@ -257,19 +331,27 @@ for (const [id, def] of [...Object.entries(authored), ...Object.entries(generate
 check(minTotal >= 25 && maxTotal <= 50, 'record totals range 25-50', minTotal + '-' + maxTotal);
 
 // chart coordinates unchanged (explicit, in addition to stripGeometry).
-for (const id of generatedIds) {
-  check(JSON.stringify(generated[id].chart) === JSON.stringify(baseGenerated[id].chart), id + ' generated chart coords unchanged');
-}
-for (const id of Object.keys(baseAuthored)) {
-  check(JSON.stringify(authored[id].chart) === JSON.stringify(baseAuthored[id].chart), id + ' authored chart coords unchanged');
+if (haveBase) {
+  for (const id of generatedIds) {
+    check(JSON.stringify(generated[id].chart) === JSON.stringify(baseGenerated[id].chart), id + ' generated chart coords unchanged');
+  }
+  for (const id of Object.keys(baseAuthored)) {
+    check(JSON.stringify(authored[id].chart) === JSON.stringify(baseAuthored[id].chart), id + ' authored chart coords unchanged');
+  }
+} else {
+  skipBase();
 }
 
 // no new persistent field: top-level key sets unchanged.
-for (const [id, oldDef, newDef] of [
-  ...generatedIds.map((id) => [id, baseGenerated[id], generated[id]]),
-  ...Object.keys(baseAuthored).map((id) => [id, baseAuthored[id], authored[id]]),
-]) {
-  check(JSON.stringify(Object.keys(oldDef).sort()) === JSON.stringify(Object.keys(newDef).sort()), id + ' persistent field set unchanged');
+if (haveBase) {
+  for (const [id, oldDef, newDef] of [
+    ...generatedIds.map((id) => [id, baseGenerated[id], generated[id]]),
+    ...Object.keys(baseAuthored).map((id) => [id, baseAuthored[id], authored[id]]),
+  ]) {
+    check(JSON.stringify(Object.keys(oldDef).sort()) === JSON.stringify(Object.keys(newDef).sort()), id + ' persistent field set unchanged');
+  }
+} else {
+  skipBase();
 }
 
 // ------------------------------------------------------- phase 1 deep field
@@ -288,13 +370,17 @@ check(/2,800|2800/.test(df), 'deepfield band documented beyond ~2800u extent');
 
 // starfield: reference doubles with the extent; shells/clamp unchanged.
 const sf = read('src/systems/starfield.js');
-const baseSf = baseSource('src/systems/starfield.js');
+const baseSf = await baseSource('src/systems/starfield.js');
 check(/const EXTENT_REFERENCE = 2200;/.test(sf), 'starfield EXTENT_REFERENCE 2200');
 check(/const SCALE_MIN = 0\.9;/.test(sf) && /const SCALE_MAX = 1\.15;/.test(sf), 'starfield clamp 0.9-1.15 unchanged');
-check(/const EXTENT_REFERENCE = 1100;/.test(baseSf), 'starfield base EXTENT_REFERENCE 1100');
-const shellPairs = (src) => [...src.matchAll(/minRadius:\s*(\d+),\s*maxRadius:\s*(\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
-check(JSON.stringify(shellPairs(sf)) === JSON.stringify(shellPairs(baseSf)), 'starfield shell radii unchanged', JSON.stringify(shellPairs(sf)));
-check((sf.match(/Math\.random\(/g) || []).length === (baseSf.match(/Math\.random\(/g) || []).length, 'starfield global random draw count unchanged');
+if (baseSf !== null) {
+  check(/const EXTENT_REFERENCE = 1100;/.test(baseSf), 'starfield base EXTENT_REFERENCE 1100');
+  const shellPairs = (src) => [...src.matchAll(/minRadius:\s*(\d+),\s*maxRadius:\s*(\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  check(JSON.stringify(shellPairs(sf)) === JSON.stringify(shellPairs(baseSf)), 'starfield shell radii unchanged', JSON.stringify(shellPairs(sf)));
+  check((sf.match(/Math\.random\(/g) || []).length === (baseSf.match(/Math\.random\(/g) || []).length, 'starfield global random draw count unchanged');
+} else {
+  skipBase();
+}
 
 // far asteroid scenery: beyond the playable extent, density unchanged.
 const af = read('src/game/asteroid-fields.js');
@@ -331,6 +417,7 @@ check(maxOrbit < 8000 * 0.9, 'starfield inner shell stays beyond the content edg
 // --------------------------------------------------------------------- done
 console.log('');
 console.log('issue-340 extent test: ' + pass + ' checks passed, ' + failures.length + ' failed');
+if (skippedGroups > 0) console.log('base-diff groups skipped (no base commit in this checkout): ' + skippedGroups);
 if (failures.length > 0) {
   console.log('failures:');
   for (const f of failures) console.log('  - ' + f);
