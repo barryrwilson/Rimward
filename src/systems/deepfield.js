@@ -7,7 +7,8 @@ import { withoutGlobalRandom } from '../game/random-scope.js';
  * Deep field — deterministic distant scenery beyond the playable bubble
  * (issue #338, system scale/population Phase 1).
  *
- * Per-system content lives at 1,800–8,000 u from the sun: planet silhouettes,
+ * Per-system content lives at 3,200–8,000 u from the sun (issue #340 P5a:
+ * playable extent is now up to ~2,800 u, so the band starts beyond it): planet silhouettes,
  * an optional companion star, ring/megastructure silhouettes, a beacon chain
  * with distant station lights, and low-opacity nebula sprites. It is static or
  * very slowly rotating presentation only: no collision, no AI, no save data,
@@ -27,7 +28,9 @@ import { withoutGlobalRandom } from '../game/random-scope.js';
  * identically run-to-run. update() allocates nothing.
  */
 
-const BAND_MIN = 1800;
+// Issue #340 (P5a): playable extent is up to ~2,800 u on x/z; the deep-field
+// band starts at 3,200 u so it stays outside the playable bubble.
+const BAND_MIN = 3200;
 const BAND_MAX = 8000;
 const RNG_SALT = 0x9e370000;
 
@@ -124,7 +127,7 @@ function placeInBand(rng, min, max) {
 function buildPlanetSilhouette(rng, style, index) {
   const radius = 90 + rng() * 210;
   const geometry = new THREE.SphereGeometry(radius, 16, 12);
-  const position = placeInBand(rng, 1800, 6800);
+  const position = placeInBand(rng, BAND_MIN, 6800);
   const toSun = new THREE.Vector3(-position.x, -position.y, -position.z).normalize();
   const baseHex = index % 2 === 0
     ? (style?.hull ?? 0x6a7076)
@@ -224,7 +227,7 @@ export function initDeepField(ctx) {
         new THREE.MeshBasicMaterial({ color: tinted(i % 2 ? glow : accent, 0.22 + rng() * 0.12) }),
       );
       ring.name = 'deepfield-ring-' + i;
-      ring.position.copy(placeInBand(rng, 2400, 7200));
+      ring.position.copy(placeInBand(rng, 3600, 7200));
       ring.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
       ring.frustumCulled = true;
       root.add(ring);
@@ -240,7 +243,7 @@ export function initDeepField(ctx) {
     const beaconDir = new THREE.Vector3(
       Math.cos(rng() * Math.PI * 2), (rng() - 0.5) * 0.2, Math.sin(rng() * Math.PI * 2),
     ).normalize();
-    const beaconStart = 1900 + rng() * 500;
+    const beaconStart = 3600 + rng() * 600;
     const beaconEnd = 5800 + rng() * 1500;
     counts.beaconNodes = 8;
     const beaconPoints = [];
@@ -333,7 +336,7 @@ export function initDeepField(ctx) {
         depthWrite: false,
       }));
       nebula.name = 'deepfield-nebula-' + i;
-      nebula.position.copy(placeInBand(rng, 2800, BAND_MAX));
+      nebula.position.copy(placeInBand(rng, 4000, BAND_MAX));
       nebula.scale.setScalar(700 + rng() * 1800);
       nebula.frustumCulled = true;
       root.add(nebula);

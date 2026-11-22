@@ -232,7 +232,10 @@ pin('live Freehold spawn idle-turns then docks', liveSpawn.token === ''
 // keep-out body collected for that same tick. The berth lies beyond the sun,
 // with the station cylinder behind the stage point, so only the sun requires
 // a turn. Freeze the pose to compare the first and following controller ticks.
-const firstSun = makeCtx(400, 0, { stationX: -400, sunRadius: 50 });
+// Issue #340: the ×2 extent doubles the stage geometry, so this fixture's
+// relative geometry (station/ship/sun) is scaled ×2 as well; its synthetic
+// flight model keeps the pre-Phase-3 freighter envelope.
+const firstSun = makeCtx(800, 0, { stationX: -800, sunRadius: 100 });
 firstSun.player.classKey = 'freighter';
 firstSun.config.ship = { acceleration: 45, creep: 15, maxSpeed: 60, damping: 1 / 3.5 };
 const firstSunSystem = initAutopilot(firstSun);

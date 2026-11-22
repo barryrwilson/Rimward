@@ -179,7 +179,10 @@ const ok = (label) => { pass++; console.log('PASS', label); };
   const rec = die(ctx, systems, dom);
   assert.equal(rec.source, 'fresh', 'no save means a fresh start');
   const p = ctx.ship.object.position;
-  assert.ok(Math.abs(p.x - 120) < 1e-6 && Math.abs(p.z - 680) < 1e-6, 'fresh hull waits at the Freehold pad: ' + JSON.stringify(p.toArray()));
+  // Issue #340: the Freehold station moved with the ×2 extent; the pad wait is
+  // the live station pose plus the authored +60 z launch offset.
+  assert.ok(Math.abs(p.x - STATION.x) < 1e-6 && Math.abs(p.z - (STATION.z + 60)) < 1e-6,
+  'fresh hull waits at the Freehold pad: ' + JSON.stringify(p.toArray()));
   const out = outward(ctx);
   assert.ok(dot(nose(ctx), out) > 0.9999, 'fresh respawn faces away from the sun (dot=' + dot(nose(ctx), out).toFixed(6) + ')');
   const flight = ordinaryFlight(ctx, systems, 60);
@@ -302,8 +305,11 @@ const ok = (label) => { pass++; console.log('PASS', label); };
     quaternion: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, 0.7, -0.3)).toArray(),
   };
   dom = installDomStubs();
+  // Issue #340: this fixture pins the ordinary saved-pose contract, so it
+  // writes the current envelope (v2). A v1 blob is deliberately migrated on
+  // load and is covered by scripts/issue-340-save-migration-test.mjs.
   const snapshot = {
-    v: 1,
+    v: 2,
     savedAt: 1,
     berth: true,
     berthSavedAt: 1,

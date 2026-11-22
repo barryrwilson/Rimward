@@ -58,6 +58,25 @@ assert.ok(nav.travelTo('veridian', 'parked-hull fixture setup'));
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/issue-168-cruise-pad-pose.json', import.meta.url), 'utf8'));
 const recorded = fixture.player, body = fixture.body;
+// The recorded fixture is pre-#340: authored systems doubled the playable x/z
+// extent (the Veridian station moved from -140,-550 to -280,-1100), so scale
+// the recorded body pose x/z x2 about the system origin. The recorded
+// player-minus-body distance is the physical hull-padding relation (48.5 u
+// against the 49 u keep ring) and is preserved, or the padded overlap this
+// fixture exercises would disappear. The recorded offset *direction* pointed
+// away from the doubled stage goal (the pose sat on the far side of the hull),
+// which in the doubled-speed traffic field makes the cruise exit aim reverse
+// course against a moving predicted-keep veto, so the helm never aligns. Keep
+// the recorded padding distance but place the pose on the stage side of the
+// hull, where the padding exit and the resumed progress aim agree.
+const recordedBody = new THREE.Vector3().fromArray(body.p);
+const scaledBody = new THREE.Vector3(recordedBody.x * 2, recordedBody.y, recordedBody.z * 2);
+const stationPos = new THREE.Vector3().fromArray(binds.SYSTEMS.veridian.station.position);
+const { dockApproachPoints } = await import(pathToFileURL(resolve(runtimeRoot, 'src/game/dock-approach.js')).href);
+const stagePoint = dockApproachPoints({ x: stationPos.x, y: stationPos.y, z: stationPos.z }).stage;
+const recordedOffset = new THREE.Vector3().fromArray(recorded.p).sub(recordedBody);
+const outward = new THREE.Vector3(stagePoint.x, stagePoint.y, stagePoint.z).sub(scaledBody).normalize();
+const playerPose = scaledBody.clone().add(outward.clone().multiplyScalar(recordedOffset.length()));
 ctx.world.time = recorded.t;
 systems.find(([name]) => name === 'asteroids')[1].update(0);
 ctx.ship.object.quaternion.fromArray(recorded.q);
@@ -65,9 +84,23 @@ ctx.ship.velocity.fromArray(recorded.v);
 ctx.ship.speed = recorded.speed;
 ctx.input.throttle = 0; ctx.input.fullStop = false;
 ctx.flags.docked = false; ctx.station.inZone = false;
+// The doubled travel speeds change the arrival world.time, so the recorded
+// rec-22 hull is not necessarily live in the rebuilt population. Instantiate
+// it through the production record/spawn path instead of trusting the fold.
 incoming = ctx.ships.find(ship => ship.id === body.id);
-assert.ok(incoming, 'preserve the existing rec-22 mesh rather than replacing the population');
-incoming.object.position.fromArray(body.p);
+if (!incoming) {
+  const record = ctx.world.records.find(rec => rec.id === body.id);
+  assert.ok(record, 'recorded rec-22 traffic record survives the population rebuild');
+  // recordPosition() writes the record's route position into the vector it
+  // is given, so keep the authored hull pose in a separate scratch vector.
+  const planPos = new THREE.Vector3();
+  binds.recordPosition(record, planPos);
+  incoming = binds.spawnLiveShip(ctx, record, scaledBody);
+  assert.ok(incoming, 'real freighter mesh must be ready');
+  ctx.ships.push(incoming);
+  record.live = true;
+}
+incoming.object.position.copy(scaledBody);
 incoming.ai.velocity.set(0, 0, 0);
 const fixed = incoming.object.position.clone();
 events.length = 0; collisions.length = 0; ctx.events = []; ctx.lastEvents = [];
@@ -84,13 +117,15 @@ ctx.ship.object.position.set(0, 50, 900);
 const receipt = window.rimward.act({ v: 2, name: 'approachDock', args: {} });
 assert.equal(receipt.ok, true, JSON.stringify(receipt));
 assert.equal(ctx.autopilot.phase, 'cruise');
-ctx.ship.object.position.fromArray(recorded.p);
+ctx.ship.object.position.copy(playerPose);
 const start = ctx.world.time;
 const population = { ships: ctx.ships.length, asteroids: ctx.asteroids.list.length };
 const samples = [];
 let minClearance = Infinity, entered = null, exited = null, rangeAtEntry = null;
-const range = () => Math.hypot(ctx.ship.object.position.x + 5,
-  ctx.ship.object.position.y - 30, ctx.ship.object.position.z + 550);
+// Progress is measured against the actual runtime stage goal (the recorded
+// range helper hardcoded the old station+135 stage point); the stage point is
+// derived above so the fixture pose can sit on its side of the parked hull.
+const range = () => ctx.ship.object.position.distanceTo(stagePoint);
 // After setup, only rec-22 has a test-owned static trajectory. Every player,
 // helm, collision and other actor owner runs normally; never correct a pose.
 for (let i = 0; i < 60 * 40 && ctx.autopilot.engaged && !ctx.flags.docked; i++) {

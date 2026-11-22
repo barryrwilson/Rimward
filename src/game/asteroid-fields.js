@@ -54,7 +54,9 @@ export function asteroidSceneryLayout(def) {
     if (rem > 0) rem -= 1;
     if (count <= 0) continue;
     const angle = rng() * Math.PI * 2;
-    const dist = 1300 + rng() * 1300; // beyond the playable bubble
+    // Issue #340 (P5a): playable extent is up to ~2,800 u, so far scenery
+    // starts beyond it. Draw count/order unchanged; density stays 600-800.
+    const dist = 3000 + rng() * 2000;
     const radius = 90 + rng() * 130;
     out.push({
       center: [

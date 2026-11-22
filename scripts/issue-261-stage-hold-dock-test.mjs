@@ -65,7 +65,12 @@ tick(60);
 
 const station = ctx.station.position.clone();
 const obj = ctx.ship.object;
-obj.position.set(-158.25, 24.98, -473.16);
+// The recorded seed-7 hold point (-158.25, 24.98, -473.16) is pre-#340: the
+// authored systems doubled the playable x/z extent (the Veridian station moved
+// from -140,-550 to -280,-1100), so scale the world pose x/z x2 about the
+// system origin. That preserves the recorded station-relative hold geometry
+// (36.5 u west, 153.7 u north of the station, 158 u out) and y is unchanged.
+obj.position.set(-316.5, 24.98, -946.32);
 obj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1),
   station.clone().sub(obj.position).normalize());
 ctx.ship.velocity.set(0, 0, 0);
@@ -96,7 +101,9 @@ const result = {
   station: station.toArray().map(v => +v.toFixed(1)),
 };
 console.log('ISSUE261 STAGE HOLD', JSON.stringify(result));
-assert.ok(startRange < 100, 'the fixture starts the stage leg near the station');
+// The recorded hold point was 79 u from the pre-scale station; the doubled
+// pose above is 158 u out, still well inside the runtime stage range (270 u).
+assert.ok(startRange < 170, 'the fixture starts the stage leg near the station');
 assert.deepEqual(stationHits, [], 'the stage leg never touches the station body');
 assert.ok(minRange > 32 + PHY.PLAYER_RADIUS, `the hull clears the station body (${minRange.toFixed(1)}u)`);
 // The stage point is on the +X side. The short way from the hold point passes

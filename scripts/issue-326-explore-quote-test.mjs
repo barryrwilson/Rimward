@@ -175,7 +175,7 @@ check('accept stamps the displayed 483 quote as payQuoted', () => {
   const saved = snapshot(ctx).world.jobs.find((j) => j.id === job.id);
   assert.equal(saved.reward, 300);
   assert.equal(saved.payQuoted, 483);
-  assert.equal(snapshot(ctx).v, 1, 'the save envelope stays v1');
+  assert.equal(snapshot(ctx).v, 2, 'the save envelope is v2 after issue #340 (v1 is still accepted on load)');
   assert.equal(observe().v, 2, 'the agent API version stays 2');
 });
 

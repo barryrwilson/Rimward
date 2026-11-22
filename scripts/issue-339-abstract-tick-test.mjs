@@ -19,6 +19,7 @@
  */
 import assert from 'node:assert/strict';
 import { seedBootRandom, installDomStubs, bootGameSystems } from './lib/boot-harness.mjs';
+import { SHIP_CLASSES } from '../src/game/state.js';
 
 seedBootRandom();
 installDomStubs();
@@ -29,7 +30,7 @@ const { SYSTEMS, snapshot } = binds;
 const world = systems.find(([name]) => name === 'world')[1];
 
 const DT = 1 / 60;
-const CUTTER_CRUISE = 105; // SHIP_CLASSES.cutter.cruise, the tickBank speed source
+const CUTTER_CRUISE = SHIP_CLASSES.cutter.cruise; // the tickBank speed source; issue #340 doubled it
 const LEG_LEN = 100000; // long leg so legT never reaches 1 inside the test
 const PER_TICK_LEGT = CUTTER_CRUISE / LEG_LEN; // one galaxy tick's progress
 

@@ -36,11 +36,13 @@ export const SHADOW_NAME_MAX = 40;
  * renderer actually publishes.
  */
 export const PLANET_ORBITS = Object.freeze([
-  Object.freeze({ radius: 9, orbitRadius: 250 }),
-  Object.freeze({ radius: 14, orbitRadius: 420 }),
-  Object.freeze({ radius: 16, orbitRadius: 640 }),
-  Object.freeze({ radius: 12, orbitRadius: 920 }),
-  Object.freeze({ radius: 30, orbitRadius: 1400 }),
+  // Issue #340 (P5a): orbit radii x2 to match solarsystem.js SLOTS; radii
+  // unchanged. ORBIT_K stays 1500, so orbital periods lengthen by 2^1.5.
+  Object.freeze({ radius: 9, orbitRadius: 500 }),
+  Object.freeze({ radius: 14, orbitRadius: 840 }),
+  Object.freeze({ radius: 16, orbitRadius: 1280 }),
+  Object.freeze({ radius: 12, orbitRadius: 1840 }),
+  Object.freeze({ radius: 30, orbitRadius: 2800 }),
 ]);
 
 /**

@@ -3,14 +3,22 @@
  * Pure: no THREE, DOM, ctx writes, input, or persistence.
  */
 
-export const DOCK_STAGE_RANGE = 135;
-export const DOCK_CRUISE_RANGE = 100;
-export const DOCK_CRUISE_START_RANGE = 500;
+// Issue #340 (×2 extent + doubled cruise/burn): the cruise/stage braking
+// geometry is doubled so the approach has the same time budget and braking
+// profile as before. The settle/request zone and the final maneuvering speeds
+// are PHYSICAL (station cylinder, dock range, creep-scale control) and stay
+// authored: only the travel/braking distances scale.
+export const DOCK_STAGE_RANGE = 270;
+export const DOCK_CRUISE_RANGE = 200;
+export const DOCK_CRUISE_START_RANGE = 1000;
 export const DOCK_SETTLE_RANGE = 40;
 export const DOCK_REQUEST_RANGE = 43;
 export const DOCK_STAGE_ARRIVE = 12;
 export const DOCK_STAGE_SPEED = 20;
 export const DOCK_REQUEST_SPEED = 5;
+// The brake buffer is a safety margin for the exact stop-distance math, not a
+// travel distance: doubling it would make the stage hold brake to rest before
+// the DOCK_STAGE_ARRIVE tolerance and stall. Kept authored.
 export const DOCK_STAGE_BRAKE_BUFFER = 10;
 export const DOCK_FINAL_BRAKE_BUFFER = 2;
 export const DOCK_BLOCK_SECONDS = 10;

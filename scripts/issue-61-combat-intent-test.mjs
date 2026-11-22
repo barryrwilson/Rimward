@@ -434,6 +434,10 @@ test('stale or discontinuous motion falls back safely and current hull clearance
 test('ordinary flight builds physical turning response while correcting a close off-nose contact', () => {
   const f=fixture(),ctx=f.ctx;
   ctx.config.world.shipSpawn=new THREE.Vector3();ctx.config.world.stationPosition=new THREE.Vector3(5000,5000,5000);
+  // Issue #340: this fixture pins the combat-geometry contract at the
+  // pre-Phase-3 light envelope so the world speed pass cannot silently change
+  // the intent law. The real world speeds are covered by the agent/cruise suites.
+  ctx.config.ship.maxSpeed=120;ctx.config.ship.acceleration=90;
   const flight=initShip(ctx),initialSpeed=40.8;
   ctx.ship.velocity.set(0,0,-initialSpeed);ctx.ship.speed=initialSpeed;ctx.input.throttle=.12;
   f.target.object.position.set(100,0,-Math.sqrt(3)*100);

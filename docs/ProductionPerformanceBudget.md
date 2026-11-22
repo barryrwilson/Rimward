@@ -379,8 +379,115 @@ format or schema changed, and a normal playthrough visits a handful of systems
 is parked for a later phase if a full-galaxy save becomes a concern.
 
 No CI frame-time gate is added yet (same Phase-0 decision: baseline first,
-enforce later). Phase 3 (#340, extent + in-system chart) should reuse these
-derived tiers and attach the same before/after probe evidence.
+enforce later). Phase 3 (#340, extent + in-system chart) reuses these derived
+tiers and attaches the same before/after probe evidence (see below).
+
+## Frame-time budget — system scale/population Phase 3 (issue #340)
+
+Issue #340 ships the owner-selected P5a option: a uniform ×2 playable in-system
+extent with a matching speed/pacing pass, plus an in-system chart view inside
+the existing chart overlay. It adds no new persistent record field, no new
+persisted key, no HUD key/digit and no aim-glass digit; the save envelope
+advances to v2 with a load-time position transform and v1 acceptance.
+
+### What is added
+
+- Extent: authored/generated stations, fields, gates, hubs, landmarks and clue
+  sites are ×2 on x/z (y unchanged); field radii are ×2 (160–320 u); the orbit
+  slot tables in `src/systems/solarsystem.js`, `src/systems/asteroids.js` and
+  `src/game/courier-shadow.js` agree at 500/840/1,280/1,840/2,800 u (planet
+  radii unchanged); deep-field bands start at 3,200 u and the starfield
+  reference is 2,200 u. Maximum playable extent is 2,800 u radius (~8 km
+  diameter), against the documented design target 1,802/2,201/2,800 u for
+  authored/generated/ring.
+- Speed/pacing: ship cruise/burn ×2 (light 240/480 u/s, heavy 180/360,
+  freighter 120/240, ace 270/540, cutter 210/420, frigate 44/90; creep, turn
+  rate and stop time unchanged), jump zone 120 u, arrival offset 100 u, dock
+  approach cruise 200/start 1,000/stage 270 u, and clearance/mystery/wake
+  discovery radii scaled to match. Because doubling hull speed halves the
+  relative dogfight envelope, combat projectile speed and range are ×2
+  (cannon 1,800/1,000, disruptor 1,400/700, missile 520/1,440, turret
+  1,600/760, psionic 1,040/840); damage, rate of fire and heat are unchanged
+  and no new aim-glass digit is added.
+- Chart: `src/systems/galaxychart.js` gains a Galaxy|System switch inside the
+  existing dialog, and `src/systems/systemchart.js` renders the current system
+  as DOM/SVG (rings, orbit slots, planets, gates, landmarks and traffic tiers
+  with near/mid/far legends) on the existing KeyM/Escape path
+  (`ctx.flags.chartOpen` remains the only writer). It imports no THREE object
+  and adds no canvas, draw call, geometry or texture; refresh is 0.5 s while
+  open.
+- Save: `src/game/save-migrate.js` transforms persisted v1 x/z positions ×2
+  exactly once at load (y, velocities and quaternions untouched, leg lengths
+  recomputed), `save.js` writes envelope `v: 2` and accepts v1 for
+  autosave/berth/slots with key names unchanged. No bank regeneration and no
+  new persisted field.
+
+### Measured after (2026-11-22, same machine/build/harness as the Phase-0/1/2/4 baselines)
+
+The after run used the same probe (`npm run test:perf-live`, production
+`dist/`, `?agent=1&perf=1`, 60 one-second samples, fixed Greenhand → Veridian
+route), the same named machine and the same headless Chrome/ANGLE RTX 4090
+configuration. Evidence is in the untracked
+`out/issue-337-live/perf-baseline/` (same probe path; Phase 3 overwrote the
+Phase 4 artifact in this worktree). The runtime source hash was stable
+start=end (`7896a15d…`). The compositor paced this run at ~18 ms, the same
+cadence as the Phase 4 run, so draw/triangle/CPU/bundle deltas are comparable
+and p50/p95/p99 are recorded for the contract.
+
+| Measure | Phase 4 artifact | Phase 3 measured | Delta |
+|---|---:|---:|---:|
+| Frame p50 | 18.0 ms | 18.0 ms | 0.0 ms |
+| Frame p95 | 18.7 ms | 18.7 ms | 0.0 ms |
+| Frame p99 | 19.1 ms | 19.0 ms | −0.1 ms |
+| Draw calls | 62.5 median / 113 max | 72.5 median / 114 max | +10 / +1 |
+| Triangles | 135,616 median / 263,018 max | 131,707 median / 231,560 max | −3,909 / −31,458 |
+| Points | 8,254 median | 8,254 median | 0 |
+| Asteroid matrix writes | 113 median / 163 max | 64 median / 139 max | −49 / −24 |
+| CPU per subsystem total | ~0.73 ms (top-10 sum) | ~0.79 ms (top-10 sum; ship 0.359, npc 0.118) | +0.06 ms |
+| Render CPU | 0.6 ms median / 91.4 ms max | 0.6 ms median / 1.3 ms max | 0 / −90.1 ms |
+| Subsystems observed | 38 | 38 | 0 |
+| Live NPCs | 10 max | 10 max (near 10, mid 7, far 0) | 0 |
+| Abstract records | current bank 47 / galaxy 89 | current bank 47 / galaxy 89 | 0 / 0 |
+| Memory | geometries 102 median / 104 max; textures 39.5 / 41; JS heap 58.3 MB median / 94.2 MB max | geometries 108 / 109; textures 40 / 41; JS heap 57.9 MB median / 73.3 MB max | +6 / +5 geometries; −0.4 MB median / −20.9 MB max heap |
+| Console errors / exceptions | 0 / 0 | 0 / 0 | 0 |
+| Production JS | 2,084,018 bytes minified / 630,630 gzip | 2,102,074 bytes minified / 636,230 gzip | +18,056 / +5,600 |
+
+All Phase 3 budgets pass: frame p50/p95 are unchanged and p99 is 0.1 ms lower,
+draw-call growth (+10 median / +1 max) is under +≤25, triangles are below the
+Phase 4 median and max, asteroid matrix writes fell, CPU grew by 0.06 ms (well
+inside the 2 ms frame budget), the heap maximum is 20.9 MB lower, and bundle
+growth (+17.6 KiB minified / +5.5 KiB gzip) is under the ≤50 KB per-phase
+budget. The wider frustum does put more landmark/belt batches in view (the
+draw-call median rise), and the abstract record bank is unchanged because the
+extent scale adds no records. The probe verdict was PASS with zero console
+errors or exceptions, a stable runtime source hash and clean Chrome/Vite/port
+cleanup; the `?perf=1` overlay was attached and its labels/counters validated.
+
+The in-system chart adds no render cost, measured live under a frozen sim by
+comparing the same window with the chart open vs closed: draw calls 51 vs 51,
+scene children 203 vs 203, geometries 113 vs 113, textures 40 vs 40, and no
+chart canvas exists (DOM/SVG only). The chart's own module cost is ~0.02 ms
+CPU, and the galaxy chart was already ~0.02 ms.
+
+### Travel-time and save-migration verification
+
+The documented ≤60 s travel legs are station→gate and station→outer POI. The
+live autopilot route measured station→gate at 15.0 s (arrival→dock 37.0 s,
+undock→dock 53.0 s); the table-derived worst cases are gate ≤6.78 s and outer
+POI ≤12.87 s, with a 2,800 u diameter taking 11.67 s at burn / 23.33 s at
+cruise. The post-jump dock lane is traffic-shared (37–75 s observed across
+runs, with crowd hulls and station-arc detours/yields), so it is budgeted per
+attempt at 90 s and per route at 180 s; both autopilot dock and manual flight
+were verified, so there is no >60 s dead time without a transit option.
+
+Save migration was exercised end to end: a demoted v1 fixture restored with the
+same system/record identity and x/z scaled ×2 exactly once (116.5 → 233), the
+next real dock wrote envelope 2, and a second load kept the same 233 position
+(no double-scale). The record bank does not grow (47 current / 89 galaxy
+records, unchanged); only the envelope version integer changes. No CI
+frame-time gate is added yet (same Phase-0 decision: baseline first, enforce
+later); Phase 3 reuses the Phase 2 derived tiers and attaches the same probe
+evidence.
 
 ## Frame-time budget — system scale/population Phase 4 (issue #341)
 
@@ -464,5 +571,6 @@ persisted `activeEvent` shape unchanged, near-band approach-lane proxies max
 37 overall / 36 at docked or approaching samples with zero live+proxy
 duplicates, zero console errors/exceptions and a stable source hash
 (`f7b78654…`). No CI frame-time gate is added yet (same Phase-0 decision);
-Phase 3 (#340) still needs the save-migration decision.
+Phase 3 (#340) above records the save-migration decision (v2 envelope, load-time
+×2 transform, v1 accepted) and its own measurement.
 

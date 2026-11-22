@@ -34,8 +34,10 @@
 
 import { CONVERGENCE, DEEPENING } from './state.js';
 
-const CLUE_RADIUS = 35; // u — clue discovery range
-export const LANDMARK_RADIUS = 100; // u — landmark discovery range
+// Issue #340: discovery radii scale with the ×2 extent so finding a site still
+// means flying to it (the same relative approach distance as before).
+const CLUE_RADIUS = 70; // u — clue discovery range
+export const LANDMARK_RADIUS = 200; // u — landmark discovery range
 const EMPTY = []; // shared fallback for systems without authored POIs
 
 export function initMystery(ctx) {

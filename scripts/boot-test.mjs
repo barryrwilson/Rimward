@@ -63,7 +63,7 @@
 // freehold return leg.
 // Wave 23: generated-system depth, part 1 — every generated system carries
 // exactly one landmark ('<sysId>_lm', kind wreck|beacon|monument|anomaly,
-// placed clear of station/gates/field/hub and inside the 1000u bubble)
+// placed clear of station/gates/field/hub and inside the 2000u bubble)
 // discovered by the real 100u proximity path at fh_hearth, the keeper
 // ledger stays authored-lane only (an unwitnessed generated landmark never
 // opens a second-column page), the three generated hubs
@@ -385,6 +385,10 @@ console.log(`save present: ${store.has('rimward-save-v1')}`);
 // wave-21 hub-arrival rule) instead of the gates[0] fallback.
 const fhHub = SYSTEMS.freehold.hub;
 const fhRoutes = fhHub?.routes ?? [];
+// Phase 3 (#340): the hub/back-gate arrival offset is JUMP.arrivalOffset (100).
+// Allow the arrival drift before asserting the ship landed at the junction.
+const { JUMP: jump21 } = await import('../src/game/state.js');
+const arrivalTol21 = jump21.arrivalOffset + 30;
 ctx.ship.object.position.set(...(fhHub?.position ?? [0, 0, 0]));
 ctx.ship.velocity.set(0, 0, 0);
 tick(5, 'wave21 at freehold junction');
@@ -457,7 +461,7 @@ w21hubChecks.arrivedAtHearth = w21hearthOk && ctx.world.currentSystem === 'fh_he
 const hearthBack = returnGate('fh_hearth', 'freehold');
 const p21a = ctx.ship.object.position;
 w21hubChecks.nearHearthBackGate = !!hearthBack && hearthBack.to === 'freehold'
-  && Math.hypot(p21a.x - hearthBack.position[0], p21a.y - hearthBack.position[1], p21a.z - hearthBack.position[2]) < 80;
+  && Math.hypot(p21a.x - hearthBack.position[0], p21a.y - hearthBack.position[1], p21a.z - hearthBack.position[2]) < arrivalTol21;
 // Wave 22: fh_hearth is hub-less — no junction group may survive the rebuild.
 w22hubChecks.goneInHearth = w22junctionsAt().length === 0;
 // Home through the physical back-gate — the real J path again. The
@@ -474,7 +478,7 @@ const w21homeOk = tickUntilJumpDone('freehold', 'wave21 junction return');
 const p21b = ctx.ship.object.position;
 w21hubChecks.returnedToFreehold = w21homeOk && ctx.world.currentSystem === 'freehold';
 w21hubChecks.hubArrivalRule = Math.hypot(
-  p21b.x - (fhHub?.position?.[0] ?? 1e9), p21b.y - (fhHub?.position?.[1] ?? 1e9), p21b.z - (fhHub?.position?.[2] ?? 1e9)) < 80;
+  p21b.x - (fhHub?.position?.[0] ?? 1e9), p21b.y - (fhHub?.position?.[1] ?? 1e9), p21b.z - (fhHub?.position?.[2] ?? 1e9)) < arrivalTol21;
 console.log('wave21 hub junction:', JSON.stringify(w21hubChecks));
 if (!Object.values(w21hubChecks).every(Boolean)) { console.log('WAVE21 HUB JUNCTION FAIL'); errors++; }
 // Wave 22: back in freehold the systemLoaded rebuild must restore exactly
@@ -4740,11 +4744,13 @@ const lmShapeOk23 = (id) => {
 const lmSeparationOk23 = (id) => {
   const def = SYSTEMS[id];
   const p = def.landmarks[0].position;
-  return dist23(p, def.station.position) >= 400
-    && (def.gates ?? []).every((g) => dist23(p, g.position) >= 300)
-    && dist23(p, def.field.center) >= def.field.radius + 200
-    && (!def.hub || dist23(p, def.hub.position) >= 300)
-    && Math.hypot(p[0], p[1], p[2]) <= 1000;
+  // Issue #340 (P5a x2 extent): the generator's separation invariants and the
+  // landmark bubble are doubled with the layout (authored y is unchanged).
+  return dist23(p, def.station.position) >= 800
+    && (def.gates ?? []).every((g) => dist23(p, g.position) >= 600)
+    && dist23(p, def.field.center) >= def.field.radius + 400
+    && (!def.hub || dist23(p, def.hub.position) >= 600)
+    && Math.hypot(p[0], p[1], p[2]) <= 2000;
 };
 const authoredLmIds23 = (id) => (SYSTEMS[id].landmarks ?? []).map((l) => l.id).join('|');
 const w23dataChecks = {
@@ -6505,7 +6511,8 @@ const w28Checks = {
   calmBeforeSave: w28calmBeforeSave,
   calmBeforeLoad: w28calmBeforeLoad,
   manualSaveWritten: store.has('rimward-save-v1-slot-1'),
-  envelopeShape: w28snap1?.v === 1 && !!w28snap1?.world && typeof w28snap1.world === 'object',
+  // Issue #340: the save envelope is v2 (v1 blobs are accepted and migrated on load).
+  envelopeShape: w28snap1?.v === 2 && !!w28snap1?.world && typeof w28snap1.world === 'object',
   envelopeCaptured: Number.isFinite(w28savedCredits) && Array.isArray(w28savedPos) && w28savedPos.length === 3,
   sealedToast: w28sealedToast,
   creditsRestored: ctx.world.credits === w28savedCredits,
@@ -13771,7 +13778,7 @@ removeLiveShip(w42indyCtx, w42indy);
   const dartCost = W68_LAUNCHERS.dart.cost;
   const catalog = {
     missileFamily: W68_WEAPONS.missile.family === 'missile' && W68_WEAPONS.missile.beam !== true,
-    missileStats: W68_WEAPONS.missile.damage === 22 && W68_WEAPONS.missile.range === 720,
+    missileStats: W68_WEAPONS.missile.damage === 22 && W68_WEAPONS.missile.range === 1440,
     turretFamily: W68_WEAPONS.turret.family === 'energy' && W68_WEAPONS.turret.damage === 4,
     mountLight: W68_MOUNTS.light.missile === 0,
     mountHeavy: W68_MOUNTS.heavy.missile === 2,
@@ -20123,8 +20130,9 @@ removeLiveShip(w42indyCtx, w42indy);
 
   const phys = g85gate({ world: { currentSystem: 'freehold' } }, 'veridian');
   const hub = g85gate({ world: { currentSystem: 'freehold' } }, 'fh_hearth');
-  const physPos = !!phys && phys.x === 0 && phys.y === 60 && phys.z === -900;
-  const hubPos = !!hub && hub.x === 120 && hub.y === 70 && hub.z === -820;
+  // Phase 3 (#340): authored x/z are doubled; y is unchanged.
+  const physPos = !!phys && phys.x === 0 && phys.y === 60 && phys.z === -1800;
+  const hubPos = !!hub && hub.x === 240 && hub.y === 70 && hub.z === -1640;
 
   let marker = null;
   ctx.scene.traverse((o) => { if (o.name === 'nav-gate-marker') marker = o; });
@@ -20414,7 +20422,7 @@ removeLiveShip(w42indyCtx, w42indy);
     && plotCtx.world.nav.path[1] === 'veridian';
 
   const authV = p85Auth({ world: { currentSystem: 'freehold' } }, 'veridian');
-  const authStay = !!authV && authV.x === 0 && authV.y === 60 && authV.z === -900;
+  const authStay = !!authV && authV.x === 0 && authV.y === 60 && authV.z === -1800;
 
   const savedSysP = ctx.world.currentSystem;
   const savedNavP = ctx.world.nav;
@@ -20440,8 +20448,8 @@ removeLiveShip(w42indyCtx, w42indy);
 
   const liveV = p85Live('veridian');
   const liveH = p85Live('fh_hearth');
-  const liveMatch = !!liveV && liveV.x === 0 && liveV.y === 60 && liveV.z === -900
-    && !!liveH && liveH.x === 120 && liveH.y === 70 && liveH.z === -820
+  const liveMatch = !!liveV && liveV.x === 0 && liveV.y === 60 && liveV.z === -1800
+    && !!liveH && liveH.x === 240 && liveH.y === 70 && liveH.z === -1640
     && p85Live('vd_survey') == null;
   const posUsesLive = !!p85Pos(ctx, 'veridian')
     && p85Pos(ctx, 'veridian').z === liveV.z;
@@ -20562,7 +20570,7 @@ removeLiveShip(w42indyCtx, w42indy);
 
   const frR = effectiveTurnRadius('frigate', 40);
   const closePlan = planApPath({
-    px: 80, py: 0, pz: 0,
+    px: 160, py: 0, pz: 0,
     gx: 0, gy: 0, gz: 0,
     hx: 0, hy: 0, hz: -1,
     bodies: { count: 0, items: [] },
@@ -20572,8 +20580,8 @@ removeLiveShip(w42indyCtx, w42indy);
     zone: j88.zone,
     sideHint: 0,
   });
-  const closeDistAim = Math.hypot(closePlan.ax - 80, closePlan.ay, closePlan.az);
-  const closeDistGate = 80;
+  const closeDistAim = Math.hypot(closePlan.ax - 160, closePlan.ay, closePlan.az);
+  const closeDistGate = 160;
   const thClose = throttleForPath(
     closePlan.hold, closePlan.intercept, 0, closePlan.distGate, closePlan.turnR,
   );
@@ -20625,14 +20633,19 @@ removeLiveShip(w42indyCtx, w42indy);
   ctx.gate.nearTo = null;
   ctx.world.currentSystem = 'freehold';
   if (ctx.player) ctx.player.classKey = 'light';
-  ctx.ship.speed = 30;
+  // Phase 3 (#340): JUMP.zone is 120. The no-orbit widen branch only fires
+  // outside the zone and inside turnR*AP_LEAD_MARGIN, so use the doubled
+  // cruise (light turn radius 141) with the ship 160 u off the gate.
+  ctx.ship.speed = 120;
   const apSys88 = (systems.find((s) => s[0] === 'autopilot') || [])[1];
   let noOrbitCmd = false;
   let wantJumpStay = false;
   if (ctx.ship.object && apSys88) {
     ctx.world.nav = undefined;
     plot88(ctx, 'veridian');
-    ctx.ship.object.position.set(80, 60, -900);
+    // 160 u off the gate: outside the 120 u zone, inside the light turn radius
+    // lead margin (141 x 1.25), so the plan widens instead of orbiting.
+    ctx.ship.object.position.set(160, 60, -1800);
     ctx.ship.object.quaternion.identity();
     const tok = e88(ctx);
     if (tok === '') {
@@ -24408,7 +24421,7 @@ removeLiveShip(w42indyCtx, w42indy);
     chartEngageStay,
     chartCancelLive,
     missingHopTok,
-    zoneUnchanged: jump117.zone === 60,
+    zoneUnchanged: jump117.zone === 120,
   };
   console.log('wave117 nav-05 handoff:', JSON.stringify(w117));
   if (!Object.values(w117).every(Boolean)) { console.log('WAVE117 NAV-05 HANDOFF FAIL'); errors++; }

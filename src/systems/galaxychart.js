@@ -9,6 +9,7 @@ import { canOpenPlayCard, playSurfaceBlocked, isTypingFocus, settingsOwnsScreen 
 import { decodeKeyCode } from './key-code.js';
 import { codeOf } from './bindings.js';
 import { guardShadowDossierSpace } from '../game/courier-shadow.js';
+import { renderSystemChart, systemChartIdentity, SYSTEM_CHART_REFRESH_SECONDS } from './systemchart.js';
 import '../ui/hud.css';
 
 /**
@@ -268,7 +269,30 @@ export function initGalaxyChart(ctx) {
   const desc = document.createElement('p');
   desc.className = 'rw-galaxy-chart-desc';
   desc.id = 'rw-galaxy-chart-desc';
-  desc.textContent = 'Names, factions, and gate routes of the known rim. Solid lines are two-way gates; dashed gold lines are one-way Lamplighter hub routes. Click a system to plot a route. M or Escape closes.';
+  const galaxyDescText = 'Names, factions, and gate routes of the known rim. Solid lines are two-way gates; dashed gold lines are one-way Lamplighter hub routes. Click a system to plot a route. M or Escape closes.';
+  const systemDescText = 'Local chart of the current system: sun, planet orbits, station, gates with destinations, asteroid fields, landmarks/clues (faint until charted) and abstract-traffic tiers. M or Escape closes.';
+  desc.textContent = galaxyDescText;
+
+  // Galaxy | System view switch (issue #340). Same dialog, same M/Escape
+  // keys; no new binding, gauge or aim-glass digit.
+  const viewSwitch = document.createElement('div');
+  viewSwitch.className = 'rw-chart-views';
+  viewSwitch.setAttribute('role', 'group');
+  viewSwitch.setAttribute('aria-label', 'Chart view');
+  const galaxyTab = document.createElement('button');
+  galaxyTab.type = 'button';
+  galaxyTab.className = 'rw-chart-viewtab is-active';
+  galaxyTab.setAttribute('data-view', 'galaxy');
+  galaxyTab.setAttribute('aria-pressed', 'true');
+  galaxyTab.textContent = 'Galaxy';
+  const systemTab = document.createElement('button');
+  systemTab.type = 'button';
+  systemTab.className = 'rw-chart-viewtab';
+  systemTab.setAttribute('data-view', 'system');
+  systemTab.setAttribute('aria-pressed', 'false');
+  systemTab.textContent = 'System';
+  viewSwitch.appendChild(galaxyTab);
+  viewSwitch.appendChild(systemTab);
 
   const destField = document.createElement('div');
   destField.className = 'rw-galaxy-dest-field';
@@ -423,6 +447,12 @@ export function initGalaxyChart(ctx) {
   legend.appendChild(legendRoute);
   legend.appendChild(legendHub);
   legend.appendChild(legendPlot);
+
+  // In-system view host: rendered by systems/systemchart.js into this same
+  // dialog. Presentation-only DOM/SVG — no THREE objects, no renderer cost.
+  const systemHost = document.createElement('div');
+  systemHost.className = 'rw-system-chart-host is-hidden';
+  systemHost.setAttribute('aria-hidden', 'true');
 
   // ---------- svg ----------
   const svg = svgEl('svg', {
@@ -585,6 +615,7 @@ export function initGalaxyChart(ctx) {
 
   panel.appendChild(header);
   panel.appendChild(desc);
+  panel.appendChild(viewSwitch);
   const shadowSection = document.createElement('section');
   shadowSection.className = 'rw-shadow-assignment';
   shadowSection.setAttribute('aria-label', 'Shadow assignment');
@@ -649,6 +680,7 @@ export function initGalaxyChart(ctx) {
   panel.appendChild(filterRow);
   panel.appendChild(itinerary);
   panel.appendChild(svg);
+  panel.appendChild(systemHost);
   panel.appendChild(hoverReadout);
   panel.appendChild(status);
   panel.appendChild(legend);
@@ -670,6 +702,7 @@ export function initGalaxyChart(ctx) {
   let panMovedThisGesture = false;
   let plottedIdThisGesture = null;
   let lastItinKey = '';
+  let chartView = 'galaxy'; // session-only view choice; never persisted
 
   function hoverControlValue(model) {
     if (!model || model.political === 'unknown') return 'Unknown';
@@ -1025,15 +1058,76 @@ export function initGalaxyChart(ctx) {
       paintItinerary();
       paintShadowAssignments();
       shadowPaintAt = ctx.elapsed;
+      if (chartView === 'system') refreshSystemView(true);
     } else {
       resetView();
       clearHover();
+      if (chartView !== 'galaxy') setChartView('galaxy');
       try {
         const ae = typeof document !== 'undefined' ? document.activeElement : null;
         if (ae && typeof root.contains === 'function' && root.contains(ae) && typeof ae.blur === 'function') {
           ae.blur();
         }
       } catch { /* close still wins */ }
+    }
+  }
+
+  // ---------- Galaxy | System view ----------
+  let systemView = null;
+  let lastSystemViewKey = '';
+  let systemViewPaintAt = -Infinity;
+  const galaxyOnlyEls = [shadowSection, destField, filterRow, itinerary, svg, hoverReadout, status, legend];
+
+  function refreshSystemView(force) {
+    if (!open || chartView !== 'system') return;
+    const key = systemChartIdentity(ctx);
+    if (!force && key === lastSystemViewKey) return;
+    lastSystemViewKey = key;
+    try {
+      systemView = renderSystemChart(systemHost, ctx);
+      systemViewPaintAt = ctx.elapsed;
+    } catch {
+      systemView = null;
+      lastSystemViewKey = '';
+    }
+  }
+
+  function setChartView(next) {
+    const view = next === 'system' ? 'system' : 'galaxy';
+    const isSystem = view === 'system';
+    chartView = view;
+    galaxyTab.setAttribute('aria-pressed', String(!isSystem));
+    systemTab.setAttribute('aria-pressed', String(isSystem));
+    galaxyTab.classList.toggle('is-active', !isSystem);
+    systemTab.classList.toggle('is-active', isSystem);
+    root.classList.toggle('is-system-view', isSystem);
+    for (let i = 0; i < galaxyOnlyEls.length; i++) {
+      galaxyOnlyEls[i].classList.toggle('is-view-hidden', isSystem);
+    }
+    systemHost.classList.toggle('is-hidden', !isSystem);
+    systemHost.setAttribute('aria-hidden', String(!isSystem));
+    desc.textContent = isSystem ? systemDescText : galaxyDescText;
+    if (isSystem) {
+      clearHover();
+      refreshSystemView(true);
+    }
+  }
+
+  function updateSystemView() {
+    if (!open || chartView !== 'system') return;
+    const key = systemChartIdentity(ctx);
+    if (key !== lastSystemViewKey) {
+      refreshSystemView(true);
+      return;
+    }
+    if (!Number.isFinite(systemViewPaintAt) || ctx.elapsed < systemViewPaintAt) {
+      systemViewPaintAt = ctx.elapsed;
+    }
+    if (ctx.elapsed - systemViewPaintAt >= SYSTEM_CHART_REFRESH_SECONDS) {
+      systemViewPaintAt = ctx.elapsed;
+      try {
+        if (systemView && typeof systemView.update === 'function') systemView.update(ctx);
+      } catch { /* keep the chart open */ }
     }
   }
 
@@ -1272,6 +1366,8 @@ export function initGalaxyChart(ctx) {
   }
 
   closeBtn.addEventListener('click', () => setOpen(false));
+  galaxyTab.addEventListener('click', () => setChartView('galaxy'));
+  systemTab.addEventListener('click', () => setChartView('system'));
   clearBtn.addEventListener('click', () => {
     clearRoute(ctx);
     retargetPlot(true);
@@ -1498,6 +1594,7 @@ export function initGalaxyChart(ctx) {
         root.style.setProperty('--rw-text-scale', String(scale));
       }
       try { applyFilters(); paintItinerary(); } catch { /* keep flying */ }
+      updateSystemView();
       if (hoverId) {
         const href = nodesById.get(hoverId);
         if (!href || (href.el && href.el.classList.contains('is-filter-hidden'))) clearHover();

@@ -1,9 +1,82 @@
+## System scale/population Phase 3: ×2 playable extent + in-system chart — #340
+
+Implemented on `dsh/issue-340-navigation-expand-playable-system-extent` (base
+master `68e89d9`, which includes Phase 4 #341). Phase 3 of the
+[SystemScalePopulationDesign.md](SystemScalePopulationDesign.md) plan. Owner
+decisions recorded for this phase: **P5a, a uniform ×2 playable extent with a
+speed/pacing pass** (not P5b sub-regions); **old saves migrate by transforming
+persisted positions ×2 at load, with a save envelope v2 that accepts v1 and no
+bank regeneration**; and **the in-system chart ships in the same PR**. No new
+persistent fields, player keys, or aim-glass digits.
+
+- `src/game/authored-systems.js`, `scripts/generate-galaxy.mjs`,
+  `src/game/galaxy.generated.js`: every authored/generated station, field
+  centre, gate, hub, landmark and clue is ×2 on x/z; y is authored and
+  unchanged. Generator validation and the landmark bubble/separation invariants
+  are scaled with the layout (one 1/94 landmark, `fh_kinhold`, is re-solved
+  off-stream because its authored y plus the doubled 3D separation pushed it
+  past the bubble; documented in the generator). Field radii are ×2; the
+  playable ceiling is ~2,800 u.
+- `src/systems/solarsystem.js`, `src/systems/asteroids.js`,
+  `src/game/courier-shadow.js`: the three planet-slot tables agree at orbit
+  radii 500/840/1,280/1,840/2,800 (radii unchanged) with `ORBIT_K` 1500 and
+  the doubled periods documented. `src/systems/deepfield.js` BAND_MIN 3200
+  (planets 3200–6800, ring 3600–7200, beacon 3600–4200, nebula 4000–8000,
+  companion 5200–8000); `src/systems/starfield.js` extent reference 2200;
+  asteroid far scenery 3000 + rng·2000 with the existing 600–800 density band.
+- Speed/pacing pass: ship-class cruise/burn ×2 (light 240/480, heavy 180/360,
+  freighter 120/240, ace 270/540, cutter 210/420, frigate 44/90; creep, turn,
+  stopTime unchanged), dock approach ranges and JUMP zone/arrival offset
+  scaled, collision damage parity by halving `IMPACT_SCREEN_PER_U`, discovery
+  radii (landmark/clue/wake) scaled, combat projectile speed/range ×2 with
+  damage/rof/heat unchanged. Measured travel: station→gate 0.97–6.78 s at
+  burn, station→outer POI 3.90–12.87 s, full diameter 11.67 s burn / 23.33 s
+  cruise — no >60 s dead leg. Hop-based pay/deadlines are unchanged, so the
+  economy is not re-based.
+- `src/game/save-migrate.js` (new, pure): `SAVE_VERSION` 2, `V1_POSITION_SCALE`
+  2, `scaleSnapshotPositions`, `migrateSnapshotV1ToV2`,
+  `demoteSnapshotV2ToV1`; x/z only, y/velocities/quaternions untouched, leg
+  lengths recomputed, fail-safe. `src/game/save.js` writes v2 and accepts v1
+  autosave/berth/slot snapshots at load (key names unchanged); raw in-memory
+  fixtures passed to `restore()` are intentionally not migrated.
+- `src/systems/systemchart.js` (new) + `src/systems/galaxychart.js`: a
+  Galaxy|System switch inside the existing chart overlay; the existing KeyM /
+  Escape bindings open/close it, no new key. Pure model + DOM/SVG (no THREE),
+  text-safe APIs, 0.5 s refresh, near/mid/far traffic tiers, contrast and
+  colorblind overrides in `src/ui/hud.css`; renderer draw calls and
+  scene/geometry/texture counts are unchanged.
+- Focused suites wired into `test:boot`: `scripts/issue-340-extent-test.mjs`
+  (3,924 checks), `issue-340-pacing-test.mjs` (75),
+  `issue-340-save-migration-test.mjs` (79) and `issue-340-chart-test.mjs`
+  (15). The production-build live probe `scripts/issue-340-live-probe.mjs` is
+  a separate `test:issue-340-live` run because it needs `vite preview`.
+  Existing boot pins/fixtures were updated for the new scale (v2 envelope,
+  landmark invariants, dock/arrival/respawn/combat fixtures); no assertion was
+  removed, only stale pre-scale pins/geometry were re-derived from the live
+  owners.
+- Verification: `npm run build` passes (2,052.81 KiB minified / 621.32 KiB
+  gzip; the JS chunk is 2,102,074 bytes minified / 636,230 gzip) and the full
+  `npm run test:boot` chain passes (boot-test plus 42 focused segments,
+  including the four #340 suites). Live Chrome against the production build:
+  station→gate 15.0 s, arrival→dock 37.0 s, undock→dock 53.0 s, jump; KeyM
+  opens/closes the chart, the System view renders, and with the sim frozen the
+  chart changes 0 draw calls / 0 scene children / 0 geometries / 0 textures;
+  manual flight reaches the 240 u/s cruise and docks; a demoted v1 save
+  restores with x/z ×2 exactly once (116.5→233), the next dock writes envelope
+  v2, and a second load keeps 233 (no double-scale); console 0 errors / 0
+  exceptions. Frame p50 18.0 / p95 18.7 / p99 19.0 ms, draw calls 72.5 median
+  / 114 max, triangles 131,707 median, NPC max 10, records 47 current / 89
+  galaxy; evidence and the before/after table are in
+  [ProductionPerformanceBudget.md](ProductionPerformanceBudget.md).
+- Parked follow-ups: P5b sub-regions remain the "only if P5a still feels
+  small" option; gate radial rounding may exceed 2400 by <1 u; one landmark
+  fallback noted above.
 ## Ambient life: distant-traffic comms, convoys, and far-lane events — #341
 
 Implemented on `dsh/issue-341-ai-ambient-life-distant-traffic-comms-co`
 (base master `b0a1259`). Phase 4 of the system scale/population plan (#337 is
-the Phase 0 measurement gate; #338 Phase 1, #339 Phase 2; #340 Phase 3 remains
-open and still needs the save-migration decision). Ships no new persistent
+the Phase 0 measurement gate; #338 Phase 1, #339 Phase 2; #340 Phase 3 is
+implemented with the owner save-migration decision recorded above). Ships no new persistent
 field, no save-format change, no player keybinding and no aim-glass digit.
 
 - `src/game/distant-chatter.js` voices short, rate-limited `commLine` lines

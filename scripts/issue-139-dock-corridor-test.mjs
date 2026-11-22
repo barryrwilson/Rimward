@@ -53,6 +53,7 @@ const dom = installDomStubs();
 const { ctx, systems, binds } = await bootGameSystems();
 const { stationLoiterWaypoints } = await runtimeImport('src/systems/npc.js');
 const { disengage, tryApproachDock } = await runtimeImport('src/game/autopilot.js');
+const { dockApproachPoints } = await runtimeImport('src/game/dock-approach.js');
 
 const DT = 1 / 60;
 const events = [];
@@ -94,7 +95,9 @@ ctx.flags.docked = false;
 const rw = globalThis.window.rimward;
 ctx.agent.optIn = true;
 const station = ctx.station.position;
-const stage = { x: station.x + 135, y: station.y, z: station.z };
+// #340 doubled the playable x/z extent, so derive the real runtime stage point
+// from the dock-approach owner instead of the pre-scale station+135 literal.
+const stage = dockApproachPoints({ x: station.x, y: station.y, z: station.z }).stage;
 pin('fixture: fresh Greenhand in Freehold', ctx.world.origin === 'greenhand' && ctx.world.currentSystem === 'freehold');
 
 if (caseName === 'freighter') {
@@ -278,7 +281,9 @@ if (caseName === 'cancel') {
 
 // ---- 1. geometry -------------------------------------------------------------
 {
-  const center = { x: 120, y: 20, z: 620 };
+  // The sweep geometry is station-relative; use the live station rather than
+  // the pre-#340 Freehold loiter centre literal.
+  const center = { x: station.x, y: station.y, z: station.z };
   for (const r of [80, 127, 150]) {
     const pts = stationLoiterWaypoints(center, r);
     const onFarSide = pts.every((p) => p.x <= center.x + 1e-9);
@@ -323,7 +328,9 @@ function runApproach(shape, radius) {
     initialTraffic:ctx.ships.length,asteroidCount:ctx.asteroids.list.length,
     loitererMotion:{samples:0,minX:Infinity,maxX:-Infinity,legacyThresholdCrossings:0}};
   watchedLoiterer=null;
-  ctx.ship.object.position.set(0, 30, 800);
+  // The authored pre-#340 start pose (0,30,800) is origin-scaled x/z x2 to
+  // match the doubled playable extent; y is unchanged.
+  ctx.ship.object.position.set(0, 30, 1600);
   ctx.ship.object.quaternion.identity();
   ctx.ship.velocity.set(0, 0, 0); ctx.ship.speed = 0;
   ctx.input.throttle = 0; ctx.input.fullStop = false;
@@ -397,7 +404,10 @@ if(caseName==='repeat'){
   checkApproach(null);
 }else checkApproach(['fresh','freighter'].includes(caseName)?null:caseName);
 if (caseName === 'freighter') {
-  pin('freighter docks within 65 sim seconds on the corridor fixture', journeys[0].elapsed <= 65, journeys[0].elapsed);
+  // #340 doubled the playable x/z extent, so this fixture's authored approach
+  // distance also doubled (216 u -> 433 u). Scale the pre-scale 65 s pace bound
+  // with it; the docking and no-contact assertions are unchanged.
+  pin('freighter docks within 130 sim seconds on the corridor fixture', journeys[0].elapsed <= 130, journeys[0].elapsed);
   console.log('FREIGHTER elapsed', journeys[0].elapsed);
 }
 

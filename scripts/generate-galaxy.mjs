@@ -60,6 +60,13 @@ const rf = (lo, hi) => lo + rng() * (hi - lo);
 const lmRng = mulberry32(SEED + 1);
 const lmRint = (lo, hi) => lo + Math.floor(lmRng() * (hi - lo + 1));
 const lmRf = (lo, hi) => lo + lmRng() * (hi - lo);
+// Issue #340 (P5a) landmark POSITION fallback stream: consumed only when the
+// x2-scaled pre-x2 candidate fails the doubled 3D separation invariants (the y
+// axis stays authored, so 3D distances do not scale exactly). Keeping this off
+// lmRng preserves the landmark kind/name/line draw sequence byte-identically.
+const lmPosRng = mulberry32(SEED + 3);
+const lmPosRf = (lo, hi) => lo + lmPosRng() * (hi - lo);
+const lmPosRint = (lo, hi) => lo + Math.floor(lmPosRng() * (hi - lo + 1));
 // Wave 24 contact stream: separate seed, separate helpers, consumed ONLY by
 // the contact pass after the landmark loop. Neither the main rng sequence
 // above nor the lmRng sequence is ever advanced by contact generation.
@@ -632,12 +639,16 @@ for (const cluster of CLUSTERS) {
       priceBase[k] = round2(clamp(val, 0.5, 2.2));
     }
 
-    const stationPos = [rint(-650, 650), rint(15, 45), rint(-650, 650)];
+    // Issue #340 (P5a): playable extent x2 on x/z; y stays authored. The draw
+    // sequence is unchanged — the pre-x2 draws are kept and their x/z outputs
+    // multiply by 2, so ids/names/lines and every non-geometry value stay
+    // byte-identical (effective station +/-1300, gate radius 1700-2400).
+    const stationPos = [rint(-650, 650) * 2, rint(15, 45), rint(-650, 650) * 2];
     const gates = s.gatesTo.map((to, i) => {
       const angle = i * 2.399963 + rf(0, 0.8);
-      const r = rf(850, 1200);
+      const r = rf(850, 1200); // old draw kept; x/z output x2 -> effective 1700-2400
       return {
-        position: [Math.round(Math.cos(angle) * r), rint(40, 90), Math.round(Math.sin(angle) * r)],
+        position: [Math.round(Math.cos(angle) * r) * 2, rint(40, 90), Math.round(Math.sin(angle) * r) * 2],
         to,
       };
     });
@@ -654,8 +665,8 @@ for (const cluster of CLUSTERS) {
       worldSeed: rint(1000, 99999),
       station: { name: s.stationName, position: stationPos, palette: factionColor },
       field: {
-        center: [rint(-550, 550), rint(-70, -20), rint(-550, 550)],
-        radius: rint(85, 160),
+        center: [rint(-550, 550) * 2, rint(-70, -20), rint(-550, 550) * 2],
+        radius: rint(85, 160) * 2, // old draw kept; output x2 -> 170-320
         count: clamp(Math.round(130 - band * 25 + rint(-10, 10)), 25, 140),
         oreMult: round2(clamp(1 + band * 0.5 + rf(-0.1, 0.15), 0.5, 3.5)),
       },
@@ -667,9 +678,9 @@ for (const cluster of CLUSTERS) {
     if (s.isHub) {
       sys.hub = {
         position: [
-          stationPos[0] + rint(150, 280),
+          stationPos[0] + rint(150, 280) * 2,
           clamp(stationPos[1] + rint(60, 110), -80, 120),
-          stationPos[2] + rint(-260, -120),
+          stationPos[2] + rint(-260, -120) * 2,
         ],
         routes: routes.get(s.id).slice(),
       };
@@ -1056,26 +1067,63 @@ const LM_TONE = {
 };
 
 const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-// Separation invariants (re-checked in validate()): >=400u from the station,
-// >=300u from every gate and (when present) the hub gate, beyond field
-// radius + 200, and within 1000u of the origin.
+// Separation invariants (re-checked in validate()): >=800u from the station,
+// >=600u from every gate and (when present) the hub gate, beyond field
+// radius + 400 (2 * the pre-x2 radius + 200 clearance), and within 2000u of
+// the origin (issue #340 P5a x2). The y axis stays authored, so 3D distances
+// do not scale exactly; lmPosition() replays the pre-x2 candidate search on
+// halved geometry and falls back to lmPosRng only when the scaled candidate
+// fails these doubled invariants. That keeps the lmRng metadata sequence
+// (kind/name/line) byte-identical to the pre-x2 generator.
 function lmPositionOk(sys, pos) {
-  if (Math.hypot(pos[0], pos[1], pos[2]) > 1000) return false;
-  if (dist3(pos, sys.station.position) < 400) return false;
-  for (const g of sys.gates) if (dist3(pos, g.position) < 300) return false;
-  if (dist3(pos, sys.field.center) < sys.field.radius + 200) return false;
-  if (sys.hub && dist3(pos, sys.hub.position) < 300) return false;
+  if (Math.hypot(pos[0], pos[1], pos[2]) > 2000) return false;
+  if (dist3(pos, sys.station.position) < 800) return false;
+  for (const g of sys.gates) if (dist3(pos, g.position) < 600) return false;
+  if (dist3(pos, sys.field.center) < sys.field.radius + 400) return false;
+  if (sys.hub && dist3(pos, sys.hub.position) < 600) return false;
   return true;
 }
+// Pre-x2 geometry recovered exactly: every x/z value in `sys` came from
+// multiplying the old draw output by 2, so halving reconstructs the geometry
+// the old generator used (y is authored and unchanged).
+function preX2Geom(sys) {
+  const h = (p) => [p[0] / 2, p[1], p[2] / 2];
+  return {
+    station: { position: h(sys.station.position) },
+    gates: sys.gates.map((g) => ({ position: h(g.position) })),
+    field: { center: h(sys.field.center), radius: sys.field.radius / 2 },
+    hub: sys.hub ? { position: h(sys.hub.position) } : null,
+  };
+}
+function preX2PositionOk(geom, pos) {
+  if (Math.hypot(pos[0], pos[1], pos[2]) > 1000) return false;
+  if (dist3(pos, geom.station.position) < 400) return false;
+  for (const g of geom.gates) if (dist3(pos, g.position) < 300) return false;
+  if (dist3(pos, geom.field.center) < geom.field.radius + 200) return false;
+  if (geom.hub && dist3(pos, geom.hub.position) < 300) return false;
+  return true;
+}
+let lmFallbacks = 0;
 function lmPosition(sys) {
+  const pre = preX2Geom(sys);
   for (let attempt = 0; attempt < 40; attempt++) {
     const ang = lmRf(0, Math.PI * 2);
     const d = lmRf(500, 900);
     const pos = [Math.round(Math.cos(ang) * d), lmRint(-120, 160), Math.round(Math.sin(ang) * d)];
+    if (!preX2PositionOk(pre, pos)) continue;
+    const scaled = [pos[0] * 2, pos[1], pos[2] * 2];
+    if (lmPositionOk(sys, scaled)) return scaled;
+    break; // scaled candidate fails the doubled 3D invariants; re-solve off-stream
+  }
+  lmFallbacks += 1;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const ang = lmPosRf(0, Math.PI * 2);
+    const d = lmPosRf(1000, 1800);
+    const pos = [Math.round(Math.cos(ang) * d), lmPosRint(-120, 160), Math.round(Math.sin(ang) * d)];
     if (lmPositionOk(sys, pos)) return pos;
   }
   fail(`${sys.id} landmark position: no valid candidate in 40 attempts`);
-  return [0, 0, 0]; // validate() bails before output on any error
+  return [0, 0, 0];
 }
 function lmKindPick(band) {
   const w = LM_KIND_WEIGHTS[band];
@@ -1313,11 +1361,11 @@ function validate() {
       fail(`${sys.id} landmark position malformed`);
       continue;
     }
-    if (Math.hypot(p[0], p[1], p[2]) > 1000) fail(`${sys.id} landmark beyond 1000u from origin`);
-    if (dist3(p, sys.station.position) < 400) fail(`${sys.id} landmark <400u from station`);
-    for (const g of sys.gates) if (dist3(p, g.position) < 300) fail(`${sys.id} landmark <300u from gate to ${g.to}`);
-    if (dist3(p, sys.field.center) < sys.field.radius + 200) fail(`${sys.id} landmark inside field buffer`);
-    if (sys.hub && dist3(p, sys.hub.position) < 300) fail(`${sys.id} landmark <300u from hub`);
+    if (Math.hypot(p[0], p[1], p[2]) > 2000) fail(`${sys.id} landmark beyond 2000u from origin`);
+    if (dist3(p, sys.station.position) < 800) fail(`${sys.id} landmark <800u from station`);
+    for (const g of sys.gates) if (dist3(p, g.position) < 600) fail(`${sys.id} landmark <600u from gate to ${g.to}`);
+    if (dist3(p, sys.field.center) < sys.field.radius + 400) fail(`${sys.id} landmark inside field buffer`);
+    if (sys.hub && dist3(p, sys.hub.position) < 600) fail(`${sys.id} landmark <600u from hub`);
   }
 
   // wave 24: contact shape — exactly one { role: 'dockmaster', name } entry on
@@ -1455,6 +1503,7 @@ console.log(`  band histogram: ${JSON.stringify(bandHist)}`);
 console.log(`  chart min separation: ${minSep.toFixed(1)} units`);
 const lmCount = Object.values(out).reduce((n, s) => n + (s.landmarks?.length ?? 0), 0);
 console.log(`  landmarks: ${lmCount} (1 per generated system)`);
+console.log(`  landmark position fallbacks (authored y kept): ${lmFallbacks}`);
 const ctCount = Object.values(out).reduce((n, s) => n + (s.contacts?.length ?? 0), 0);
 console.log(`  contacts: ${ctCount} (1 dockmaster per non-hub generated system)`);
 console.log(`  wrote ${outPath}`);

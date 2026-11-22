@@ -62,7 +62,7 @@ const WAKE_G = 0x9f / 255;
 const WAKE_B = 0xd8 / 255;
 
 // Site discovery (§29 "the trail led to a wreck field").
-const WAKE_SITE_DISCOVERY = 120; // u — player proximity that finds a site
+const WAKE_SITE_DISCOVERY = 240; // u — player proximity that finds a site (issue #340: ×2 extent)
 const WAKE_SCAN_HZ = 4; // records-scan throttle
 const SITE_POD_SPREAD = 6; // u — salvage pods scattered around the site
 

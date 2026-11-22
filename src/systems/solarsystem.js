@@ -167,37 +167,40 @@ function makeOrbitRing(radius) {
 // Freehold reproduces the current system exactly; Veridian (planetCount 3)
 // fills the first three slots with a colder corporate palette.
 // Angular/spin speeds are derived at build (Kepler-ish: outer orbits slower).
+// Issue #340 (P5a): orbit radii are x2 with the playable system extent; planet
+// radii, tilts and band palettes are unchanged. ORBIT_K stays 1500, so orbital
+// periods lengthen by 2^1.5 (~2.83x) for every slot.
 const SLOTS = [
   {
-    radius: 9, orbitRadius: 250, tilt: 0.05,
+    radius: 9, orbitRadius: 500, tilt: 0.05,
     bands: {
       warm: ['#b08850', '#c9a06a', '#8a6a40'],
       cold: ['#9ab4c8', '#c2d4e2', '#6e8aa0'], // pale ice-stone
     },
   },
   {
-    radius: 14, orbitRadius: 420, tilt: 0.4,
+    radius: 14, orbitRadius: 840, tilt: 0.4,
     bands: {
       warm: ['#d8b078', '#e8c898', '#b89058'],
       cold: ['#7fb8c4', '#a8d4dc', '#54858f'], // Veridian teal-white
     },
   },
   {
-    radius: 16, orbitRadius: 640, tilt: 0.41,
+    radius: 16, orbitRadius: 1280, tilt: 0.41,
     bands: {
       warm: ['#3a6a9a', '#5a8aba', '#2a4a6a'],
       cold: ['#3a5a7a', '#5a7a9a', '#24384e'], // deep steel blue
     },
   },
   {
-    radius: 12, orbitRadius: 920, tilt: 0.44,
+    radius: 12, orbitRadius: 1840, tilt: 0.44,
     bands: {
       warm: ['#a04830', '#c06848', '#78301e'],
       cold: ['#8a9ab0', '#aab8cc', '#5c6a80'], // slate chrome
     },
   },
   {
-    radius: 30, orbitRadius: 1400, tilt: 0.1,
+    radius: 30, orbitRadius: 2800, tilt: 0.1,
     bands: {
       warm: ['#c8a878', '#e0c498', '#987848'],
       cold: ['#b8c8d8', '#d8e4ee', '#8898ac'], // glacial gas giant
@@ -267,8 +270,8 @@ export function initSolarSystem(ctx) {
 
     // --- Planets ---
     // Kepler-ish angular speed: omega ∝ R^-1.5. Constant chosen so the
-    // innermost planet (R=250) orbits in ~17 s and the outermost (R=1400)
-    // in ~3.5 min.
+    // innermost planet (R=500) orbits in ~48 s and the outermost (R=2800)
+    // in ~10 min: x2 radii at the same ORBIT_K lengthen periods by 2^1.5.
     const ORBIT_K = 1500;
     // Wave 37: per-faction band grading from FACTION_STYLE — the base
     // warm/cold slot palette is chosen by planetMood (veridian→cold,

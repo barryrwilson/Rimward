@@ -62,7 +62,8 @@ import {
 import { scaleFor } from '../src/game/ship-scale.js';
 
 const T = COURIER_SHADOW;
-const PLANET_ORBITS_RADII = [250, 420, 640, 920, 1400];
+// Issue #340 (P5a): orbit radii x2 with the playable extent.
+const PLANET_ORBITS_RADII = [500, 840, 1280, 1840, 2800];
 let pass = 0;
 const ok = (label) => { pass += 1; console.log('PASS ' + label); };
 

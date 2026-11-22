@@ -69,45 +69,77 @@ const nav = makeNavHelpers({ ctx, SYSTEMS: binds.SYSTEMS, tick, dispatchKey: dom
 assert.ok(nav.travelTo('veridian', 'stage obstacle setup'));
 const asteroidOwner = systems.find(([name]) => name === 'asteroids')[1];
 
-// Verify that this is the real moving asteroid from the independent rendered
-// impact, not a synthetic sphere with a test-only velocity property.
-ctx.world.time = 49.86329999995292;
-asteroidOwner.update(0);
-const rock = ctx.asteroids.list[2];
-assert.equal(rock.id, 2);
+// #340 doubled the playable x/z extent and, with it, the authored asteroid
+// field radius and orbit radii. The recorded trace is inherently pre-scale, so
+// the player poses below are the recorded x/z offsets scaled x2 (y is not part
+// of the playable extent and keeps its recorded value) and the recorded speed
+// is doubled. Asteroid angular rates go as radius^-1.5, so the same rock no
+// longer reaches the recorded impact pose at the recorded timestamp; the impact
+// frame is re-pinned from the live orbit instead of the old hardcoded time.
 const recordedRock = new THREE.Vector3(-300.71721229920485, 25.80231819473218, -633.1507513755353);
-assert.ok(rock.position.distanceTo(recordedRock) < 1e-6, 'real orbit matches recorded asteroid 2');
-assert.ok(Math.abs(rock.radius - 2.7193060560051037) < 1e-9);
-
-// The default is the actual t=48.860 recorded position/speed, with heading
-// estimated from its preceding sample because the original trace omitted q/v.
-// Later fresh-AP cold starts remain explicit failing diagnostic modes. They
-// omit the original motion/tangent history and are not continuous-flow claims.
+const recordedRockScaled = new THREE.Vector3(recordedRock.x * 2, recordedRock.y, recordedRock.z * 2);
 const caseName = process.env.STAGE_CASE || 'earliest';
 assert.ok(['earliest','earlier','late'].includes(caseName), 'known stage fixture');
 const earliest = caseName === 'earliest';
 const earlier = caseName === 'earlier' || earliest;
 const leadTime = earlier ? 0 : 0.25;
-const startTime = earliest ? 48.86000000000056 : earlier ? 49.36289999997673 : 49.86329999995292 - leadTime;
-ctx.world.time = startTime;
-asteroidOwner.update(0);
 const recordedPlayer = earliest ? new THREE.Vector3(-249.90618846734532, 22.318900890719572, -637.5886657657741)
   : earlier ? new THREE.Vector3(-264.7044129693938, 23.496568338426165, -639.1682517714866)
   : new THREE.Vector3(-279.3545371889788, 25.590539622213523, -637.7388260224202);
-const recordedSpeed = earliest ? 29.648080408664473 : earlier ? 29.80414213438594 : 29.747568027461554;
-const direction = recordedPlayer.clone()
-  .sub(earliest ? new THREE.Vector3(-235.63938888388992, 22.140603764931974, -633.0432711465635)
-    : earlier ? new THREE.Vector3(-249.90618846734532, 22.318900890719572, -637.5886657657741)
-    : new THREE.Vector3(-264.7044129693938, 23.496568338426165, -639.1682517714866)).normalize();
-ctx.ship.object.position.copy(recordedPlayer).addScaledVector(direction, -recordedSpeed * leadTime);
+const recordedSpeed = (earliest ? 29.648080408664473 : earlier ? 29.80414213438594 : 29.747568027461554) * 2;
+const playerStart = new THREE.Vector3(recordedPlayer.x * 2, recordedPlayer.y, recordedPlayer.z * 2);
+const recordedPrevious = earliest ? new THREE.Vector3(-235.63938888388992, 22.140603764931974, -633.0432711465635)
+  : earlier ? new THREE.Vector3(-249.90618846734532, 22.318900890719572, -637.5886657657741)
+  : new THREE.Vector3(-264.7044129693938, 23.496568338426165, -639.1682517714866);
+// Heading estimated from the preceding recorded sample (the original trace
+// omitted q/v), with x/z doubled to match the scaled extent.
+const direction = new THREE.Vector3(
+  (recordedPlayer.x - recordedPrevious.x) * 2,
+  recordedPlayer.y - recordedPrevious.y,
+  (recordedPlayer.z - recordedPrevious.z) * 2).normalize();
+
+// Verify that this is the real moving asteroid from the independent rendered
+// impact, not a synthetic sphere with a test-only velocity property.
+const rock = ctx.asteroids.list[2];
+assert.equal(rock.id, 2);
+assert.ok(Math.abs(rock.radius - 2.7193060560051037) < 1e-9,
+  'recorded asteroid 2 body survives the x2 extent');
+// The recorded impact frame is the late-case recorded pose (the frame where
+// asteroid 2 was recorded). Re-pin it from the live, owner-driven orbit: the
+// time the real rock passes nearest (x/z) the scaled impact pose.
+const recordedImpactPlayer = new THREE.Vector3(-279.3545371889788, 25.590539622213523, -637.7388260224202);
+const impactPose = new THREE.Vector3(recordedImpactPlayer.x * 2, recordedImpactPlayer.y, recordedImpactPlayer.z * 2);
+// The anchored poses sit in the hold region while the stage corridor clears.
+// (The non-default cold-start modes start further back along the recorded
+// heading and can meet unrelated doubled-field rocks there; they remain
+// diagnostic reconstructions, not continuous-flow claims.)
+let impactTime = 0, nearestXZ = Infinity;
+for (let t = 0; t < 400; t += 0.25) {
+  ctx.world.time = t; asteroidOwner.update(0);
+  const dxz = Math.hypot(rock.position.x - impactPose.x, rock.position.z - impactPose.z);
+  if (dxz < nearestXZ) { nearestXZ = dxz; impactTime = t; }
+}
+assert.ok(nearestXZ < 60, 'real orbit still crosses the recorded impact pose after the x2 extent');
+ctx.world.time = impactTime; asteroidOwner.update(0);
+// Anchor the recorded poses to the actual runtime rock by the recorded
+// player-minus-rock offset (x/z scaled), preserving the recorded near-miss.
+const delta = rock.position.clone().sub(recordedRockScaled);
+const caseLead = earliest ? 1.0033 : earlier ? 0.5004 : 0.25;
+const startTime = impactTime - caseLead;
+ctx.ship.object.position.copy(playerStart).add(delta);
+if (!earliest && !earlier) ctx.ship.object.position.addScaledVector(direction, -recordedSpeed * leadTime);
+ctx.world.time = startTime; asteroidOwner.update(0);
 ctx.ship.object.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), direction);
 ctx.ship.velocity.copy(direction).multiplyScalar(recordedSpeed);
 ctx.ship.speed = ctx.ship.velocity.length();
 ctx.input.throttle = 0; ctx.input.fullStop = false;
 ctx.flags.docked = false; ctx.station.inZone = false;
 events.length = 0; collisions.length = 0; ctx.events = []; ctx.lastEvents = [];
-const fixture = { caseName, trajectoryAuthority:'real asteroid and player owners after labeled initial reconstruction; no injected helm history',startTime, leadTime, position: ctx.ship.object.position.toArray(), velocity: ctx.ship.velocity.toArray(),
+const fixture = { caseName, trajectoryAuthority:'real asteroid and player owners after labeled initial reconstruction; no injected helm history',
+  impactTime, nearestXZ, delta: delta.toArray(), startTime, leadTime, caseLead,
+  position: ctx.ship.object.position.toArray(), velocity: ctx.ship.velocity.toArray(),
   quaternion: ctx.ship.object.quaternion.toArray(), rock: { id: rock.id, position: rock.position.toArray(), radius: rock.radius },
+  recordedRockScaled: recordedRockScaled.toArray(), playerStart: playerStart.toArray(),
   trafficCount: ctx.ships.length, asteroidCount: ctx.asteroids.list.length };
 const receipt = window.rimward.act({ v: 2, name: 'approachDock', args: {} });
 assert.equal(receipt.ok, true, JSON.stringify(receipt));

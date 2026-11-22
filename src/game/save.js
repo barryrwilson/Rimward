@@ -31,9 +31,19 @@ import { applyEscapeMotion, applyEscapeIntent } from '../systems/npc.js';
 import { disengage as disengageAutopilot } from './autopilot.js';
 import { normalizeMarketSupply } from './market-supply.js';
 import { normalizePriceMemory } from './price-memory.js';
+// Issue #340: the pure v1->v2 position migration (also imported by the live
+// probe and the focused test, so the fixture and the real upgrade share a walk).
+import { SAVE_VERSION, migrateSnapshotV1ToV2 } from './save-migrate.js';
 
 /**
- * Save system — localStorage 'rimward-save-v1', {v:1} envelope (doc §4.4).
+ * Save system — localStorage 'rimward-save-v1', {v:2} envelope (doc §4.4).
+ * Issue #340: the envelope is v:2. Historical v:1 blobs — and the berth mirror
+ * and manual slots below, which keep their 'rimward-save-v1*' key names — are
+ * accepted on load and upgraded ONCE through save-migrate.js before any
+ * sanitize/restore/heal: every persisted system-local absolute position is
+ * scaled x2 on x/z (authored y is unchanged). The envelope version is the
+ * migration signal and the only persisted field the upgrade adds, so a
+ * load -> re-save -> load cycle can never double-scale.
  *
  * - AUTOSAVE on 'docked'/'undocked' events, on 'systemLoaded' when
  *   JUMP.saveOnJump (gate travel is the dock/undock analog §4.4), and every
@@ -62,7 +72,7 @@ import { normalizePriceMemory } from './price-memory.js';
  *   'systemLoaded' emit) can't strand a record as never-re-instantiable.
  * - MANUAL SLOTS ("Berth Records", KeyL — SPACE ONLY): three manual slots
  *   beside the autosave, localStorage keys 'rimward-save-v1-slot-1..3' with
- *   the same {v:1} snapshot envelope. KeyL toggles the panel — opens only
+ *   the same v:2 snapshot envelope (a v:1 slot migrates on load). KeyL toggles the panel — opens only
  *   while flying (!docked, !paused, not dead). Session berthHold freezes
  *   player flight, AP steering, gate emit, jump charge, and player DPS.
  *   This is not KeyP pause. L/Escape close unless a gate charge, jump, or
@@ -105,14 +115,19 @@ import { normalizePriceMemory } from './price-memory.js';
  *
  * The snapshot is pure JSON: world.records/recordBanks/incidents/aftermath/
  * markets must stay JSON-plain (they are — world.js/market.js contract).
+ * The v1->v2 upgrade (save-migrate.js) rewrites only x/z of absolute positions
+ * and recomputes route legLens; it adds no persisted field beyond the envelope
+ * version.
  * update() performs no allocation beyond the rare serialize call.
  */
 
+// The storage KEY name is historical and unchanged: the envelope version is
+// the migration signal (issue #340), not the key name.
 const KEY = 'rimward-save-v1';
 // Issue #125: the last BERTH snapshot — the docked / launch checkpoint — kept
 // beside the rolling autosave so a death inside an encounter can return to
 // the berth instead of the open-space autosave the fight already reached.
-// Same {v:1} envelope; written only by the berth checkpoints below, never by
+// Same v:2 envelope (a v:1 mirror migrates on load); written only by the berth checkpoints below, never by
 // an idle or jump autosave. Boot load never reads it.
 export const BERTH_KEY = 'rimward-save-v1-berth';
 const SLOT_KEYS = ['rimward-save-v1-slot-1', 'rimward-save-v1-slot-2', 'rimward-save-v1-slot-3'];
@@ -1239,7 +1254,7 @@ export function snapshot(ctx) {
       : ctx.world[k];
   }
   return {
-    v: 1,
+    v: SAVE_VERSION,
     savedAt: Date.now(),
     world,
     cargo: sanitizeCargoList(ctx.cargo),
@@ -1260,7 +1275,18 @@ function loadSnapshot(key = KEY) {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const snap = JSON.parse(raw);
-    return snap && snap.v === 1 && snap.world ? snap : null;
+    if (!snap || typeof snap !== 'object' || Array.isArray(snap)
+      || !snap.world || typeof snap.world !== 'object' || Array.isArray(snap.world)) {
+      return null;
+    }
+    // Issue #340: v1->v2 runs HERE, before restore/sanitize/heal and for every
+    // storage read (boot autosave, berth mirror, manual slots), so old banks
+    // are transformed into the new layout exactly once. A v2 blob is returned
+    // untouched; a blob the upgrade could not transform stays v:1 and is
+    // accepted as-is rather than dropped (fail safe, never crash boot).
+    const migrated = migrateSnapshotV1ToV2(snap);
+    const v = migrated.v;
+    return v === SAVE_VERSION || v === 1 ? migrated : null;
   } catch {
     return null; // corrupt blob or storage unavailable → fresh start
   }
@@ -1643,6 +1669,10 @@ function healLiveRecords(ctx) {
 }
 
 export function restore(ctx, snap) {
+  // Every production caller (boot load, death recovery, manual berth/slot load)
+  // passes a snapshot already upgraded by loadSnapshot(). Do NOT migrate here:
+  // a raw v:1 in-memory fixture handed straight to restore() (tests, probes)
+  // keeps its positions as authored; the envelope version owns the decision.
   pendingAutosaves.delete(ctx);
   if (!snap || typeof snap !== 'object' || !snap.world || typeof snap.world !== 'object') return;
   // Issue #125: the restored timeline descends from the berth its blob names

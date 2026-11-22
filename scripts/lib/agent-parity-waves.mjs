@@ -1064,7 +1064,9 @@ export async function runAgentParityWave142(deps) {
         // the class cap and the lag closes; ease off only once the shot is
         // lined up inside gun range, where a slower pass keeps it there.
         const aimDist142 = Number.isFinite(aim.dist) ? aim.dist : 0;
-        const throttle142 = (aligned && aimDist142 > 0 && aimDist142 < 260) ? 0.25 : 1;
+        // Phase 3 (#340): gun envelope and ship speeds are x2; scale the
+        // easing distance with them so the merge policy stays equivalent.
+        const throttle142 = (aligned && aimDist142 > 0 && aimDist142 < 520) ? 0.25 : 1;
         const ctl142 = rw142.act({
           v: 2, name: 'setControl',
           args: { seq: ++seq142, ttl: 0.5, steerX: sx, steerY: sy, fireHeld: aligned, throttle: throttle142 },

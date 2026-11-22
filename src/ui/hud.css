@@ -2655,3 +2655,335 @@ body.rw-reduced-motion .rw-galaxy-chart * {
 }
 
 .rw-galaxy-hover-prices { max-height: 6em; overflow-y: auto; pointer-events: auto; }
+
+
+/* ---------- Issue #340: in-system chart view (Galaxy | System) ----------
+   Same dialog, same M/Escape keys. The switch is a pair of native buttons
+   inside the existing chart panel; the system view is pure DOM/SVG built by
+   systems/systemchart.js (no THREE object, no renderer work). Galaxy-only
+   controls are hidden with .is-view-hidden while the system view is open. */
+
+.rw-chart-views {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  flex-shrink: 0;
+}
+
+.rw-chart-viewtab {
+  background: transparent;
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px;
+  color: var(--dim);
+  font: inherit;
+  font-size: calc(10px * var(--rw-text-scale, 1));
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+  min-height: 24px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.rw-chart-viewtab.is-active {
+  border-color: var(--rw-accent);
+  color: var(--rw-accent);
+}
+
+.rw-chart-viewtab:hover,
+.rw-chart-viewtab:focus-visible {
+  border-color: var(--rw-accent);
+  color: var(--rw-accent);
+  outline: 2px solid var(--rw-accent);
+  outline-offset: 2px;
+}
+
+.rw-galaxy-chart .is-view-hidden { display: none !important; }
+
+.rw-system-chart-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rw-system-chart-host.is-hidden { display: none; }
+
+.rw-system-chart {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rw-system-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(111, 242, 224, 0.18);
+  padding-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.rw-system-chart-title {
+  margin: 0;
+  font-size: calc(11px * var(--rw-text-scale, 1));
+  font-weight: normal;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--rw-accent);
+}
+
+.rw-system-chart-scale {
+  color: var(--dim);
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.rw-system-svg {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Strokes stay legible at any fitted viewBox scale. */
+.rw-system-svg circle,
+.rw-system-svg rect,
+.rw-system-svg line,
+.rw-system-svg polygon {
+  vector-effect: non-scaling-stroke;
+}
+
+.rw-system-ring {
+  stroke: rgba(125, 147, 171, 0.22);
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
+}
+
+.rw-system-ring-edge {
+  stroke: rgba(111, 242, 224, 0.30);
+  stroke-dasharray: 4 8;
+}
+
+.rw-system-ring-label,
+.rw-system-scale-label {
+  fill: var(--dim);
+  letter-spacing: 0.06em;
+}
+
+.rw-system-sun {
+  fill: var(--rw-route);
+  stroke: rgba(255, 210, 122, 0.5);
+  stroke-width: 1;
+}
+
+.rw-system-label {
+  fill: var(--white);
+  letter-spacing: 0.08em;
+}
+
+.rw-system-orbit {
+  stroke: rgba(125, 147, 171, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4 5;
+}
+
+.rw-system-planet {
+  fill: #c9a06a;
+  stroke: rgba(2, 6, 13, 0.9);
+  stroke-width: 1.5;
+}
+
+.rw-system-field {
+  stroke: rgba(154, 167, 184, 0.5);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.rw-system-field-far {
+  stroke: rgba(154, 167, 184, 0.28);
+  stroke-dasharray: 1 6;
+}
+
+.rw-system-field-label { fill: var(--dim); }
+
+.rw-system-gate {
+  fill: rgba(2, 6, 13, 0.9);
+  stroke: rgba(125, 147, 171, 0.85);
+  stroke-width: 1.5;
+}
+
+.rw-system-gate-label {
+  fill: var(--white);
+  letter-spacing: 0.04em;
+}
+
+.rw-system-station {
+  fill: var(--rw-accent);
+  stroke: #02060d;
+  stroke-width: 1.5;
+}
+
+.rw-system-station-label { fill: var(--rw-accent); }
+
+.rw-system-hub {
+  stroke: var(--rw-route);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+.rw-system-hub-label { fill: var(--rw-route); }
+
+.rw-system-landmark,
+.rw-system-clue,
+.rw-system-site {
+  stroke: var(--white);
+  stroke-width: 1.4;
+}
+
+.rw-system-landmark.is-unknown,
+.rw-system-clue.is-unknown,
+.rw-system-site.is-unknown {
+  stroke: var(--dim);
+  stroke-dasharray: 2 3;
+  opacity: 0.55;
+}
+
+.rw-system-poi-label { fill: var(--white); }
+
+.rw-system-poi-label.is-unknown {
+  fill: var(--dim);
+  opacity: 0.7;
+}
+
+.rw-system-traffic { stroke: rgba(2, 6, 13, 0.9); stroke-width: 1; }
+.rw-system-traffic-near { fill: var(--rw-accent); }
+.rw-system-traffic-mid { fill: var(--rw-route); }
+.rw-system-traffic-far { fill: var(--dim); }
+
+.rw-system-player {
+  stroke: var(--white);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 3;
+}
+
+.rw-system-player-label { fill: var(--white); }
+
+.rw-system-scalebar {
+  stroke: var(--white);
+  stroke-width: 1.5;
+}
+
+.rw-system-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  border-top: 1px solid rgba(111, 242, 224, 0.18);
+  padding-top: 6px;
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  flex-shrink: 0;
+}
+
+.rw-system-legend-item::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border: 1px solid currentColor;
+}
+
+.rw-system-legend-near::before {
+  border-radius: 50%;
+  background: var(--rw-accent);
+  border-color: var(--rw-accent);
+}
+
+.rw-system-legend-mid::before {
+  background: var(--rw-route);
+  border-color: var(--rw-route);
+}
+
+.rw-system-legend-far::before {
+  background: var(--dim);
+  border-color: var(--dim);
+  border-radius: 1px;
+}
+
+.rw-system-legend-orbit::before {
+  border-radius: 50%;
+  border-style: dashed;
+  background: transparent;
+}
+
+.rw-system-legend-field::before {
+  border-radius: 50%;
+  border-style: dashed;
+  background: transparent;
+}
+
+.rw-system-legend-found::before {
+  border-radius: 50%;
+  background: var(--white);
+  border-color: var(--white);
+}
+
+.rw-system-legend-unknown::before {
+  border-radius: 50%;
+  border-style: dashed;
+  background: transparent;
+}
+
+.rw-system-chart-note {
+  margin: 0;
+  font-size: calc(9px * var(--rw-text-scale, 1));
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  flex-shrink: 0;
+}
+
+.rw-system-chart-empty {
+  margin: 0;
+  color: var(--dim);
+}
+
+/* Accessibility overrides follow the galaxy chart's body-class convention. */
+body.rw-contrast .rw-galaxy-chart .rw-system-ring {
+  stroke: rgba(174, 195, 216, 0.5);
+}
+
+body.rw-contrast .rw-galaxy-chart .rw-system-field {
+  stroke: rgba(174, 195, 216, 0.7);
+}
+
+body.rw-contrast .rw-galaxy-chart .rw-system-poi-label.is-unknown {
+  fill: var(--white);
+  opacity: 1;
+}
+
+body.rw-contrast .rw-galaxy-chart .rw-system-landmark.is-unknown,
+body.rw-contrast .rw-galaxy-chart .rw-system-clue.is-unknown,
+body.rw-contrast .rw-galaxy-chart .rw-system-site.is-unknown {
+  opacity: 1;
+}
+
+body.rw-colorblind .rw-galaxy-chart .rw-system-traffic-near {
+  fill: #56B4E9;
+}
+
+body.rw-colorblind .rw-galaxy-chart .rw-system-traffic-mid {
+  fill: #E69F00;
+}
+
+body.rw-colorblind .rw-galaxy-chart .rw-system-traffic-far {
+  fill: #999999;
+}

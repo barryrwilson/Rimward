@@ -6,8 +6,10 @@
  *
  * The fix: an active attack lease whose hull crosses the targeting ceiling
  * PURSUES on the same public HUD digest (hud.js publishes it at any range) —
- * full chase, fireBlocked 'range' — and re-arms to intercept the moment the
- * hull is inside 600 u again. A same-target renewal continues an authorized
+ * full chase, fireBlocked 'range' while the hull is beyond WEAPON reach — and
+ * re-arms to intercept the moment the hull is inside 600 u again. (#340
+ * doubled the combat envelope, so the targeting ceiling now sits inside weapon
+ * reach; pursuit holds fire only past that reach.) A same-target renewal continues an authorized
  * pursuit past the ceiling; every acquisition refusal is unchanged.
  *
  * Fixture discipline: the issue-61 synthetic lease harness (controls.update
@@ -30,6 +32,10 @@ import { initShip } from '../src/systems/ship.js';
 
 let checks = 0;
 function test(name, run) { run(); console.log('PASS', name); checks++; }
+
+// Beyond both the targeting ceiling (600 u) and the doubled weapon envelope
+// (WEAPONS.cannon.range * 0.95): pursuit is a chase with fire blocked by range.
+const BEYOND_REACH = Math.max(U.TARGET_RANGE + 200, WEAPONS.cannon.range * 0.95 + 100);
 
 function fixture() {
   const dom = installDomStubs(), docEvents = {};
@@ -77,13 +83,13 @@ test('acquisition beyond the ceiling still refuses no-sample with the same detai
   assert.equal(f.status().owner, 'none');
 });
 
-test('a lease whose hull crosses the ceiling pursues instead of dying', () => {
+test('a lease whose hull crosses the ceiling pursues instead of dying (fire held beyond weapon reach)', () => {
   const f = fixture();
   assert.equal(f.start().ok, true);
   f.tick();
   assert.equal(f.status().owner, 'combat');
   // The hull crosses the ceiling mid-lease, digest still fresh and identity-bound.
-  f.target.object.position.z = -(U.TARGET_RANGE + 200);
+  f.target.object.position.z = -BEYOND_REACH;
   f.tick();
   const s = f.status();
   assert.equal(s.owner, 'combat', 'the lease survives the range exit');
@@ -106,7 +112,7 @@ test('pursuit steering flies toward the published bearing', () => {
 
 test('fire stays blocked by range during pursuit and re-arms on re-entry', () => {
   const f = fixture();
-  f.target.object.position.set(0, 0, -(U.TARGET_RANGE + 150));
+  f.target.object.position.set(0, 0, -BEYOND_REACH);
   assert.equal(f.start().ok, true);
   f.tick();
   assert.equal(f.status().combat.phase, 'pursuit');
@@ -123,7 +129,7 @@ test('fire stays blocked by range during pursuit and re-arms on re-entry', () =>
 
 test('a stale digest during pursuit still ends the lease target-lost', () => {
   const f = fixture();
-  f.target.object.position.set(0, 0, -(U.TARGET_RANGE + 150));
+  f.target.object.position.set(0, 0, -BEYOND_REACH);
   assert.equal(f.start({ ttl: 10 }).ok, true);
   f.tick();
   assert.equal(f.status().combat.phase, 'pursuit');
@@ -179,7 +185,7 @@ test('withdrawal intents keep the old range-exit endings', () => {
 
 test('a live pursuit may be renewed past the ceiling; a fresh grant may not', () => {
   const f = fixture();
-  f.target.object.position.set(0, 0, -(U.TARGET_RANGE + 150));
+  f.target.object.position.set(0, 0, -BEYOND_REACH);
   assert.equal(f.start({ ttl: 3 }).ok, true);
   f.tick();
   assert.equal(f.status().combat.phase, 'pursuit');

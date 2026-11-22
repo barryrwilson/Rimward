@@ -28,22 +28,24 @@ const DRIFT_SPEED = 0.0005; // rad/s around Y — barely-there parallax life
 // Issue #338: tie the starfield shell radius to the system's authored physical
 // extent. "Extent" is the furthest authored content radius in the SYSTEM def
 // (station, gates, hub, field edge, landmarks, clues) — the same physical
-// bubble the galaxy generator validates (1,000 u) and the Phase-0 baseline
-// measured at ~1,100 u average. Planet orbit slots are deliberately excluded:
-// they are a fixed 250–1,400 u table, so including them would pin every system
-// to the same clamp and make the tie meaningless.
+// bubble the galaxy generator validates (2,000 u after issue #340 P5a) and the
+// Phase-0 baseline measured at ~1,100 u average. Planet orbit slots are
+// deliberately excluded: they are a fixed 500–2,800 u table, so including them
+// would pin every system to the same clamp and make the tie meaningless.
+// Issue #340 (P5a): authored extents are uniformly x2 on x/z, so the reference
+// doubles with them (2,200) and the 0.9–1.15 clamp still maps the same way.
 //
 // The 0.9–1.15 clamp keeps the backdrop stable: the inner shell never drops
-// below 7,200 u (still far beyond the ~1,400 u content edge) and the outer
+// below 7,200 u (still far beyond the ~2,800 u content edge) and the outer
 // shell never exceeds 18,400 u (inside the 20,000 u camera far plane).
 //
 // Overlap decision: at the 0.9 clamp the inner shell (7,200 u) sits inside the
-// deep-field band (1,800–8,000 u). That is intentional and harmless — the
+// deep-field band (3,200–8,000 u). That is intentional and harmless — the
 // stars are additive, sizeAttenuation:false specks whose pixel size does not
 // change with the scale; deep-field silhouettes are opaque and depth-write, so
 // a star behind one is occluded, and a star in front reads as a faint mote.
 // Starfield positions are never read by gameplay, collision, or save code.
-const EXTENT_REFERENCE = 1100;
+const EXTENT_REFERENCE = 2200;
 const SCALE_MIN = 0.9;
 const SCALE_MAX = 1.15;
 
