@@ -541,7 +541,7 @@ export function updateShipAsset(object, elapsed, reducedMotion = false, camera, 
     updateDistanceBands(object, camera);
     object.userData.lod?.update(camera);
   }
-  updateThruster(object, speed, elapsed, reducedMotion); // built hulls only (no-op otherwise)
+  updateThruster(object, speed, elapsed, reducedMotion, camera); // built hulls only (no-op otherwise)
   const uniforms = object.userData.swimUniforms;
   if (!uniforms) return;
   const spd = Number.isFinite(speed) ? Math.max(speed, 0) : 0;

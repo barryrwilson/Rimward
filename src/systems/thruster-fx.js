@@ -18,6 +18,13 @@ import { styleFor } from '../game/faction-style.js';
  *           a burn-speed NPC reads hotter than cruise without a mile-long cone.
  *   plume  length = radius-scaled max × level; width breathes with level;
  *           opacity rises with level; hidden entirely below LEVEL_SHOW.
+ *           Issue #351: the halo stretch is capped at PLUME_LEN_CAP world
+ *           units (a freighter bounding radius otherwise reaches ~54 u and
+ *           reads as a glowing cone the size of a gate pylon), and past
+ *           FADE_START the cones fade with camera distance, reaching zero at
+ *           FADE_END so gate-lane traffic never glows at landmark scale. The
+ *           flare bead stays lit: up close it is the drive, far away it reads
+ *           as a distant drive light on the lane.
  *   bead   the flare itself swells up to +60% at cruise.
  *   flicker a small two-sine shimmer on length/width, OFF under reducedMotion
  *           (the plume then scales with speed only — still, no motion).
@@ -48,6 +55,16 @@ const LEVEL_RATE = 6; // 1/s — ease toward the speed target
 const DT_MAX = 0.1; // clamp a stalled frame so the ease cannot jump
 const CORE_LEN = 0.45; // × hull bounding radius at level 1
 const HALO_LEN = 0.85;
+// Issue #351: a freighter hull (bounding radius ≈ 40 u) at LEVEL_MAX used to
+// stretch the halo to ~54 u — a glowing cone on gate-lane traffic that reads
+// as landmark structure from a few hundred units out. PLUME_LEN_CAP bounds
+// the halo length in absolute world units (the core keeps its CORE_LEN:HALO_LEN
+// ratio); FADE_START..FADE_END fade the plume cones out with camera distance.
+// Both leave small-hull plumes byte-identical: the cap binds only when the
+// radius-scaled stretch exceeds it, and the fade is 1 inside FADE_START.
+export const PLUME_LEN_CAP = 26;
+export const FADE_START = 300;
+export const FADE_END = 750;
 const WIDTH_FLOOR = 0.07; // plume base half-width ≥ this × hull bounding radius
 const CORE_WIDTH = 0.75; // × plume width at level 1
 const HALO_WIDTH = 1.9;
@@ -210,9 +227,11 @@ export function attachThruster(root, faction, classKey, glowGroup, bead) {
 
 /**
  * Drive the plume from `speed` (world units per second). `elapsed` is the
- * caller's monotonic clock; the ease derives its own dt from it.
+ * caller's monotonic clock; the ease derives its own dt from it. `camera`,
+ * when given, drives the issue #351 distance fade (null = no fade, the
+ * node-test path); `root.position` must be the hull's world position.
  */
-export function updateThruster(root, speed, elapsed, reducedMotion = false) {
+export function updateThruster(root, speed, elapsed, reducedMotion = false, camera = null) {
   const th = root && root.userData && root.userData.thruster;
   if (!th) return;
   const spd = Number.isFinite(speed) && speed > 0 ? speed : 0;
@@ -227,7 +246,15 @@ export function updateThruster(root, speed, elapsed, reducedMotion = false) {
   const lit = Math.min(level, 1);
   th.bead.scale.copy(th.restScale).multiplyScalar(1 + BEAD_SWELL * lit);
 
-  if (level < LEVEL_SHOW) {
+  // Issue #351 distance fade: the cones fade out with camera distance so
+  // gate-lane traffic never glows at landmark scale. The bead is untouched —
+  // a lit drive point at range is traffic, a 50 u cone is an artifact.
+  const cam = camera && camera.isPerspectiveCamera ? camera : null;
+  const fade = cam
+    ? 1 - clamp((cam.position.distanceTo(root.position) - FADE_START) / (FADE_END - FADE_START), 0, 1)
+    : 1;
+
+  if (level < LEVEL_SHOW || fade <= 0) {
     th.core.visible = false;
     th.halo.visible = false;
     return;
@@ -236,13 +263,16 @@ export function updateThruster(root, speed, elapsed, reducedMotion = false) {
     ? 1
     : 1 + FLICKER_AMP * Math.sin(t * 37 + th.phase) * Math.sin(t * 23.3 + th.phase * 0.7);
   const w = th.plumeWidth * (0.6 + 0.4 * lit) * flicker;
-  const len = th.hullRadius * level * flicker;
+  // Issue #351: cap the absolute stretch. The cap is expressed on the halo
+  // length (PLUME_LEN_CAP), so len saturates at CAP / HALO_LEN and the core
+  // keeps its authored CORE_LEN:HALO_LEN proportion under the cap.
+  const len = Math.min(th.hullRadius * level * flicker, PLUME_LEN_CAP / HALO_LEN);
   th.core.visible = true;
   th.halo.visible = true;
   th.core.scale.set(w * CORE_WIDTH, w * CORE_WIDTH, len * CORE_LEN);
   th.halo.scale.set(w * HALO_WIDTH, w * HALO_WIDTH, len * HALO_LEN);
-  th.core.material.uniforms.uOpacity.value = CORE_OPACITY * (0.35 + 0.65 * lit);
-  th.halo.material.uniforms.uOpacity.value = HALO_OPACITY * (0.3 + 0.7 * lit);
+  th.core.material.uniforms.uOpacity.value = CORE_OPACITY * (0.35 + 0.65 * lit) * fade;
+  th.halo.material.uniforms.uOpacity.value = HALO_OPACITY * (0.3 + 0.7 * lit) * fade;
 }
 
 /** Dispose the instance-owned plume materials. Geometry is shared; keep it. */
