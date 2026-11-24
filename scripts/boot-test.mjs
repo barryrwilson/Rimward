@@ -27985,6 +27985,34 @@ removeLiveShip(w42indyCtx, w42indy);
     checks.organicSwims = organic.userData.swimUniforms.uSwimHz.value > 0.5;
     // Player built rig passes ship.speed into animateShipMesh.
     checks.playerWired = /animateShipMesh\(rig\.plated, t, ctx\.settings\?\.reducedMotion === true, camera, ship\.speed\)/.test(thrSrcShip);
+    // Issue #351: freighter-scale halos cap at PLUME_LEN_CAP world units, and
+    // the cones fade with camera distance (bead stays lit at any range).
+    const { PLUME_LEN_CAP: thrCap, FADE_START: thrFadeStart, FADE_END: thrFadeEnd } = await import('../src/systems/thruster-fx.js');
+    const heavyTh = heavy.userData.thruster;
+    t = settle(heavy, thrCruise('freighter') * 2, 0, 120);
+    checks.burnCap = heavyTh.halo.visible === true
+      && heavyTh.halo.scale.z <= thrCap
+      && heavyTh.core.scale.z <= thrCap * 0.45 / 0.85 + 1e-6
+      && heavyTh.halo.scale.z > 0.4 * heavy.userData.radius; // cap, not a blackout
+    // Settle fully (level snaps to target within 1e-3 well inside 600 steps)
+    // so the fade=1 opacity is a stable base for the equality comparisons.
+    t = settle(built, cruise, t, 600);
+    const fadeBase = th.halo.material.uniforms.uOpacity.value;
+    const camAt = (z) => ({ isPerspectiveCamera: true, position: new THREE.Vector3(0, 0, z) });
+    const near1 = (v) => Math.abs(v - fadeBase) < 1e-6;
+    thrUpdate(built, t + 1 / 60, false, camAt(thrFadeStart - 100), cruise);
+    checks.fadeNearFull = th.core.visible === true
+      && near1(th.halo.material.uniforms.uOpacity.value);
+    thrUpdate(built, t + 2 / 60, false, camAt((thrFadeStart + thrFadeEnd) / 2), cruise);
+    checks.fadeMidHalf = th.core.visible === true
+      && th.halo.material.uniforms.uOpacity.value > 0
+      && th.halo.material.uniforms.uOpacity.value < fadeBase - 0.05;
+    thrUpdate(built, t + 3 / 60, false, camAt(thrFadeEnd + 200), cruise);
+    checks.fadeFarHidden = th.core.visible === false && th.halo.visible === false
+      && th.bead.scale.x > th.restScale.x; // bead stays a distant drive light
+    thrUpdate(built, t + 4 / 60, false, null, cruise);
+    checks.fadeNullCameraUntouched = th.core.visible === true
+      && near1(th.halo.material.uniforms.uOpacity.value);
   } finally {
     const coreMat = th?.core.material;
     releaseShipAsset(built);
