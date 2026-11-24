@@ -72,7 +72,23 @@ pin('systems without regions carry no partial data', Object.values(SYSTEMS)
     const end = text.lastIndexOf('};');
     return JSON.parse(text.slice(start, end + 1));
   };
-  const baseText = execSync('git show ' + BASE_COMMIT + ':src/game/galaxy.generated.js', { encoding: 'utf8' });
+  // A shallow checkout (actions/checkout default depth 1) does not contain the
+  // base commit; degrade to a skip there exactly like issue-340-extent-test's
+  // haveBase convention instead of crashing the whole boot chain. The CI boot
+  // job fetches full history (ci.yml fetch-depth: 0) so the pin runs there.
+  const readBase = (path) => {
+    try {
+      return execSync('git show ' + BASE_COMMIT + ':' + path, { encoding: 'utf8' });
+    } catch {
+      return null;
+    }
+  };
+  const baseText = readBase('src/game/galaxy.generated.js');
+  const authoredText = readBase('src/game/authored-systems.js');
+  if (!baseText || !authoredText) {
+    console.log('SKIP additivity vs base commit ' + BASE_COMMIT.slice(0, 7)
+      + ' (not reachable in this checkout; run from a full-history clone)');
+  } else {
   const baseSys = parseGen(baseText);
   const gen = await import('../src/game/galaxy.generated.js');
   const curSys = gen.GENERATED_SYSTEMS;
@@ -91,9 +107,7 @@ pin('systems without regions carry no partial data', Object.values(SYSTEMS)
   pin('generated additivity: every pre-P5b field byte-identical, only regions/lanes added', diffs.length === 0, diffs.slice(0, 8));
 
   // Authored additivity: station/gates/landmarks/clues/field/hub positions.
-  const authoredText = execSync('git show ' + BASE_COMMIT + ':src/game/authored-systems.js', { encoding: 'utf8' });
-  const baseAuthored = (await import('data:text/javascript;base64,' + Buffer.from(authoredText.replace(/^export const AUTHORED_SYSTEMS = /, 'export default ').split('').map((ch) => ch === String.fromCharCode(92) + String.fromCharCode(39) ? "'" : ch).join(''))).catch(() => null));
-  // Simpler and robust: re-evaluate the module text in a blob import.
+  // Re-evaluate the module text in a blob import (authoredText came from the guarded readBase).
   const blob = 'data:text/javascript;base64,' + Buffer.from(authoredText, 'utf8').toString('base64');
   const mod = await import(blob);
   const baseA = mod.AUTHORED_SYSTEMS;
@@ -111,6 +125,7 @@ pin('systems without regions carry no partial data', Object.values(SYSTEMS)
     }
   }
   pin('authored additivity: every pre-P5b field byte-identical, only regions/lanes added', aDiffs.length === 0, aDiffs.slice(0, 8));
+  }
 }
 
 // ---- 3. Corridor speed bounds. ---------------------------------------------
