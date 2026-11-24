@@ -21,6 +21,7 @@ import { LIVING_GAIT, gaitFor } from '../game/living-gait.js';
 import { berthHeld } from './overlay-policy.js';
 import { registerBerthFlight } from '../game/launch-clearance.js';
 import { applyPadSpeedGovernor } from '../game/pad-speed-governor.js';
+import { corridorMultiplier } from '../game/regions.js';
 
 export { applyFlightEnvelope };
 
@@ -980,6 +981,12 @@ export function initShip(ctx) {
         }
         const burnMult = ship.burnerActive ? shipCfg.afterburner.multiplier : 1;
 
+        // Issue #355 (P5b): inside a transit-lane corridor volume the ship's
+        // existing cruise/burn envelope is multiplied (no new key, no SKU).
+        // The multiplier ramps in fast and decays back to 1 over ~1 s after
+        // leaving the corridor; state is session-only (see game/regions.js).
+        const corridorMult = corridorMultiplier(ctx, root.position, dt);
+
         // --- Vector-hold drift (§5.2): while held (and off cooldown) the
         // velocity vector is frozen while facing turns freely. On release
         // (or the 4 s cap) velocity re-aligns to facing over `realign` s.
@@ -1071,7 +1078,8 @@ export function initShip(ctx) {
               ? (input.fullStop || helmIdle ? 0 : arrivalFwd)
               : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
                 ctx.bio.speedFactor *
-                burnMult;
+                burnMult *
+                corridorMult;
             _targetVelocity
               .copy(_lockVel)
               .addScaledVector(_forward, relFwd)
@@ -1092,7 +1100,8 @@ export function initShip(ctx) {
                   ? arrivalFwd
                   : (shipCfg.creep + throttleEff * (shipCfg.maxSpeed - shipCfg.creep)) *
                   ctx.bio.speedFactor *
-                  burnMult;
+                  burnMult *
+                  corridorMult;
             }
             _targetVelocity
               .copy(_forward)

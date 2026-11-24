@@ -31,6 +31,7 @@ import { PLANET_ORBITS, shadowSeededPlanets } from '../game/courier-shadow.js';
 import { asteroidSceneryLayout } from '../game/asteroid-fields.js';
 import { recordPosition } from '../game/world.js';
 import { NEAR_RANGE, MID_RANGE } from '../game/traffic-tiers.js';
+import { regionsOf, lanesOf, lanePoints, regionAt } from '../game/regions.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const RING_RADII = Object.freeze([1000, 2000]);
@@ -38,8 +39,8 @@ const SCALE_BAR_UNITS = 400;
 const LABEL_CLIP = 34;
 const VIEW_PADDING = 80;
 
-/** Fit ceiling named by issue #340 / P5a (playable extent max ~2800 u). */
-export const SYSTEM_CHART_MAX_EXTENT = 2800;
+/** Fit ceiling named by issue #355 / P5b (regions reach the 8,000 u ceiling). */
+export const SYSTEM_CHART_MAX_EXTENT = 8000;
 
 /** Dynamic (planet phase / abstract traffic) refresh interval while open. */
 export const SYSTEM_CHART_REFRESH_SECONDS = 0.5;
@@ -218,6 +219,9 @@ export function buildSystemChartModel(ctx) {
     landmarks: [],
     clues: [],
     sites: [],
+    regions: [],
+    lanes: [],
+    currentRegion: null,
     traffic: [],
     counts: { near: 0, mid: 0, far: 0 },
     player: readPlayer(ctx),
@@ -347,6 +351,33 @@ export function buildSystemChartModel(ctx) {
     });
     grow(p.x, p.z);
   }
+
+  // ---------- sub-regions + transit lanes (issue #355 P5b) ----------
+  // Membership is derived from position at read time; nothing is persisted.
+  // The existing content disc is region 0 implicitly and has no record.
+  const regionDefs = regionsOf(def);
+  for (let i = 0; i < regionDefs.length; i++) {
+    const region = regionDefs[i];
+    const c = region && region.center;
+    if (!Array.isArray(c) || !fin(c[0]) || !fin(c[2])) continue;
+    const radius = fin(region.radius) ? Math.max(0, region.radius) : 0;
+    model.regions.push({
+      id: typeof region.id === 'string' ? region.id : '',
+      name: typeof region.name === 'string' ? region.name : '',
+      kind: typeof region.kind === 'string' ? region.kind : '',
+      x: c[0],
+      z: c[2],
+      radius,
+    });
+    grow(c[0], c[2], radius);
+  }
+  for (const lane of lanesOf(def)) {
+    const pts = lanePoints(def, lane);
+    if (!pts) continue;
+    model.lanes.push({ x1: pts.a[0], z1: pts.a[2], x2: pts.b[0], z2: pts.b[2] });
+  }
+  const current = regionAt(def, model.player.x, model.player.z);
+  if (current && typeof current.id === 'string') model.currentRegion = current.id;
 
   // ---------- hinted mystery sites ----------
   const siteDefs = [
@@ -539,7 +570,8 @@ export function renderSystemChart(host, ctx) {
     'aria-label': 'In-system chart of ' + model.systemName
       + ': sun, ' + model.planets.length + ' planet orbits, station, '
       + model.gates.length + ' gates, ' + model.fields.length + ' asteroid fields, '
-      + (model.landmarks.length + model.clues.length + model.sites.length) + ' landmarks/clues and '
+      + (model.landmarks.length + model.clues.length + model.sites.length) + ' landmarks/clues, '
+      + model.regions.length + ' sub-regions and '
       + model.traffic.length + ' abstract-traffic markers.',
   });
 
@@ -557,6 +589,8 @@ export function renderSystemChart(host, ctx) {
   const stationLayer = svgEl('g', { class: 'rw-system-station-layer' });
   const hubLayer = svgEl('g', { class: 'rw-system-hub-layer' });
   const poiLayer = svgEl('g', { class: 'rw-system-pois' });
+  const lanesLayer = svgEl('g', { class: 'rw-system-lanes' });
+  const regionsLayer = svgEl('g', { class: 'rw-system-regions' });
   const trafficLayer = svgEl('g', { class: 'rw-system-traffic-layer' });
   const playerLayer = svgEl('g', { class: 'rw-system-player-layer' });
   const labelLayer = svgEl('g', { class: 'rw-system-labels' });
@@ -632,6 +666,45 @@ export function renderSystemChart(host, ctx) {
       }, labelSize));
   }
 
+  // Transit lanes (drawn under the region rings).
+  for (let i = 0; i < model.lanes.length; i++) {
+    const lane = model.lanes[i];
+    lanesLayer.appendChild(svgEl('line', {
+      class: 'rw-system-lane',
+      x1: lane.x1,
+      y1: lane.z1,
+      x2: lane.x2,
+      y2: lane.z2,
+    }));
+  }
+
+  // Sub-region rings + names; the current region is highlighted. The element
+  // handles are kept so the 0.5 s update can refresh the highlight as the
+  // player crosses region boundaries while the chart is open.
+  const regionEls = [];
+  for (let i = 0; i < model.regions.length; i++) {
+    const region = model.regions[i];
+    const isCurrent = region.id === model.currentRegion;
+    const circle = svgEl('circle', {
+      class: 'rw-system-region' + (isCurrent ? ' is-current' : ''),
+      cx: region.x,
+      cy: region.z,
+      r: region.radius,
+      fill: 'none',
+      'data-region-id': region.id,
+    });
+    regionsLayer.appendChild(circle);
+    const label = textEl(
+      'rw-system-region-label' + (isCurrent ? ' is-current' : ''),
+      region.x, region.z - region.radius - minorSize * 0.4,
+      (isCurrent ? '\u25cf ' : '') + clipText(region.name, 26),
+      { 'text-anchor': 'middle' },
+      minorSize,
+    );
+    labelLayer.appendChild(label);
+    regionEls.push({ id: region.id, circle, label });
+  }
+
   // Landmarks / clues / hinted mystery sites.
   for (let i = 0; i < model.landmarks.length; i++) {
     addPoi(poiLayer, labelLayer, model.landmarks[i], 'rw-system-landmark', markerR, minorSize, model.landmarks[i].known, true);
@@ -693,6 +766,8 @@ export function renderSystemChart(host, ctx) {
   svg.appendChild(stationLayer);
   svg.appendChild(hubLayer);
   svg.appendChild(poiLayer);
+  svg.appendChild(lanesLayer);
+  svg.appendChild(regionsLayer);
   svg.appendChild(trafficLayer);
   svg.appendChild(playerLayer);
   svg.appendChild(scaleLayer);
@@ -707,11 +782,14 @@ export function renderSystemChart(host, ctx) {
   legend.appendChild(legendItem('rw-system-legend-field', 'field'));
   legend.appendChild(legendItem('rw-system-legend-found', 'found'));
   legend.appendChild(legendItem('rw-system-legend-unknown', 'uncharted'));
+  legend.appendChild(legendItem('rw-system-legend-region', 'region'));
+  legend.appendChild(legendItem('rw-system-legend-lane', 'transit lane'));
 
   const note = document.createElement('p');
   note.className = 'rw-system-chart-note';
   note.textContent = 'M or Escape closes. Traffic markers are abstract-record positions tiered by distance from your ship; '
-    + 'uncharted landmarks render faint until you visit them.';
+    + 'uncharted landmarks render faint until you visit them. Sub-regions sit beyond the old content disc; fly into a '
+    + 'lit transit lane to reach them fast.';
 
   paintTraffic(model.traffic, model.counts);
 
@@ -740,6 +818,23 @@ export function renderSystemChart(host, ctx) {
           if (!body || !fin(body.x) || !fin(body.z)) continue;
           dot.el.setAttribute('cx', String(body.x));
           dot.el.setAttribute('cy', String(body.z));
+        }
+      }
+      // Issue #355: the current-region highlight follows the player while the
+      // chart is open (membership is derived from position at render time).
+      const def = SYSTEMS[model.systemId];
+      const region = regionAt(def, player.x, player.z);
+      const currentId = region && typeof region.id === 'string' ? region.id : null;
+      if (currentId !== model.currentRegion) {
+        model.currentRegion = currentId;
+        for (const el of regionEls) {
+          const isCurrent = el.id === currentId;
+          el.circle.setAttribute('class', 'rw-system-region' + (isCurrent ? ' is-current' : ''));
+          el.label.setAttribute('class', 'rw-system-region-label' + (isCurrent ? ' is-current' : ''));
+          const raw = el.label.textContent || '';
+          el.label.textContent = isCurrent && !raw.startsWith('\u25cf ')
+            ? '\u25cf ' + raw
+            : (!isCurrent && raw.startsWith('\u25cf ') ? raw.slice(2) : raw);
         }
       }
       const fresh = collectTraffic(world, model.systemId, player);

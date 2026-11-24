@@ -99,7 +99,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.94,
       "rawOre": 1.01,
       "livingRock": 0.96
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_hearth_r1",
+        "name": "Hearth Claim",
+        "kind": "field",
+        "center": [
+          5831,
+          100,
+          29
+        ],
+        "radius": 303
+      },
+      {
+        "id": "fh_hearth_r2",
+        "name": "Hearth Pan",
+        "kind": "field",
+        "center": [
+          5205,
+          75,
+          1363
+        ],
+        "radius": 353
+      },
+      {
+        "id": "fh_hearth_r3",
+        "name": "Hearth Undertow",
+        "kind": "anomaly",
+        "center": [
+          2869,
+          -81,
+          2436
+        ],
+        "radius": 207
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_hearth_r1"
+      },
+      {
+        "from": "fh_hearth_r1",
+        "to": "fh_hearth_r2"
+      },
+      {
+        "from": "fh_hearth_r2",
+        "to": "fh_hearth_r3"
+      }
+    ]
   },
   "fh_haven": {
     "id": "fh_haven",
@@ -196,7 +245,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.04,
       "rawOre": 0.93,
       "livingRock": 0.92
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_haven_r1",
+        "name": "Haven Field",
+        "kind": "field",
+        "center": [
+          -4830,
+          -82,
+          -531
+        ],
+        "radius": 192
+      },
+      {
+        "id": "fh_haven_r2",
+        "name": "Haven Graveyard",
+        "kind": "wreck",
+        "center": [
+          -3494,
+          79,
+          209
+        ],
+        "radius": 353
+      },
+      {
+        "id": "fh_haven_r3",
+        "name": "Haven Claim",
+        "kind": "field",
+        "center": [
+          -3848,
+          51,
+          729
+        ],
+        "radius": 348
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_haven_r1"
+      },
+      {
+        "from": "fh_haven_r1",
+        "to": "fh_haven_r2"
+      },
+      {
+        "from": "fh_haven_r2",
+        "to": "fh_haven_r3"
+      }
+    ]
   },
   "fh_meridian": {
     "id": "fh_meridian",
@@ -285,7 +383,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.01,
       "rawOre": 0.96,
       "livingRock": 0.95
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_meridian_r1",
+        "name": "Meridian Boneyard",
+        "kind": "wreck",
+        "center": [
+          -4848,
+          -116,
+          2381
+        ],
+        "radius": 309
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_meridian_r1"
+      }
+    ]
   },
   "fh_alder": {
     "id": "fh_alder",
@@ -382,7 +499,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.06,
       "rawOre": 1.07,
       "livingRock": 0.84
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_alder_r1",
+        "name": "Alder's Rest Depot",
+        "kind": "outpost",
+        "center": [
+          -5297,
+          -34,
+          2363
+        ],
+        "radius": 288
+      },
+      {
+        "id": "fh_alder_r2",
+        "name": "Alder's Rest Hum",
+        "kind": "anomaly",
+        "center": [
+          -3880,
+          148,
+          575
+        ],
+        "radius": 209
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_alder_r1"
+      },
+      {
+        "from": "fh_alder_r1",
+        "to": "fh_alder_r2"
+      }
+    ]
   },
   "fh_mercy": {
     "id": "fh_mercy",
@@ -479,7 +630,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.98,
       "rawOre": 0.96,
       "livingRock": 0.95
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_mercy_r1",
+        "name": "Mercy Depot",
+        "kind": "outpost",
+        "center": [
+          2982,
+          39,
+          -3149
+        ],
+        "radius": 382
+      },
+      {
+        "id": "fh_mercy_r2",
+        "name": "Mercy Pan",
+        "kind": "field",
+        "center": [
+          5041,
+          70,
+          -3427
+        ],
+        "radius": 227
+      },
+      {
+        "id": "fh_mercy_r3",
+        "name": "Mercy Hulk Field",
+        "kind": "wreck",
+        "center": [
+          2614,
+          -85,
+          -7161
+        ],
+        "radius": 285
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_mercy_r1"
+      },
+      {
+        "from": "fh_mercy_r1",
+        "to": "fh_mercy_r2"
+      },
+      {
+        "from": "fh_mercy_r2",
+        "to": "fh_mercy_r3"
+      }
+    ]
   },
   "fh_longtable": {
     "id": "fh_longtable",
@@ -560,7 +760,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.07,
       "rawOre": 1.08,
       "livingRock": 0.93
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_longtable_r1",
+        "name": "Longtable Depot",
+        "kind": "outpost",
+        "center": [
+          -2344,
+          -94,
+          -5168
+        ],
+        "radius": 226
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_longtable_r1"
+      }
+    ]
   },
   "fh_sweetwater": {
     "id": "fh_sweetwater",
@@ -641,7 +860,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.99,
       "rawOre": 0.96,
       "livingRock": 0.85
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_sweetwater_r1",
+        "name": "Sweetwater Claim",
+        "kind": "field",
+        "center": [
+          -561,
+          90,
+          -4526
+        ],
+        "radius": 409
+      },
+      {
+        "id": "fh_sweetwater_r2",
+        "name": "Sweetwater Undertow",
+        "kind": "anomaly",
+        "center": [
+          2513,
+          118,
+          -5611
+        ],
+        "radius": 279
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_sweetwater_r1"
+      },
+      {
+        "from": "fh_sweetwater_r1",
+        "to": "fh_sweetwater_r2"
+      }
+    ]
   },
   "fh_granary": {
     "id": "fh_granary",
@@ -738,7 +991,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.06,
       "rawOre": 1,
       "livingRock": 0.83
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_granary_r1",
+        "name": "Granary Watch",
+        "kind": "outpost",
+        "center": [
+          2594,
+          106,
+          3712
+        ],
+        "radius": 191
+      },
+      {
+        "id": "fh_granary_r2",
+        "name": "Granary Boneyard",
+        "kind": "wreck",
+        "center": [
+          1454,
+          136,
+          3544
+        ],
+        "radius": 270
+      },
+      {
+        "id": "fh_granary_r3",
+        "name": "Granary Hulk Field",
+        "kind": "wreck",
+        "center": [
+          3131,
+          -124,
+          1565
+        ],
+        "radius": 198
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_granary_r1"
+      },
+      {
+        "from": "fh_granary_r1",
+        "to": "fh_granary_r2"
+      },
+      {
+        "from": "fh_granary_r2",
+        "to": "fh_granary_r3"
+      }
+    ]
   },
   "fh_kinhold": {
     "id": "fh_kinhold",
@@ -827,7 +1129,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.02,
       "rawOre": 1.08,
       "livingRock": 0.85
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_kinhold_r1",
+        "name": "Kinhold Undertow",
+        "kind": "anomaly",
+        "center": [
+          -3623,
+          59,
+          1870
+        ],
+        "radius": 394
+      },
+      {
+        "id": "fh_kinhold_r2",
+        "name": "Kinhold Boneyard",
+        "kind": "wreck",
+        "center": [
+          -1547,
+          -92,
+          3443
+        ],
+        "radius": 264
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_kinhold_r1"
+      },
+      {
+        "from": "fh_kinhold_r1",
+        "to": "fh_kinhold_r2"
+      }
+    ]
   },
   "fh_tallow": {
     "id": "fh_tallow",
@@ -924,7 +1260,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.03,
       "rawOre": 0.95,
       "livingRock": 0.96
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_tallow_r1",
+        "name": "Tallow Pan",
+        "kind": "field",
+        "center": [
+          -4096,
+          64,
+          3962
+        ],
+        "radius": 383
+      },
+      {
+        "id": "fh_tallow_r2",
+        "name": "Tallow Field",
+        "kind": "field",
+        "center": [
+          -5731,
+          118,
+          16
+        ],
+        "radius": 269
+      },
+      {
+        "id": "fh_tallow_r3",
+        "name": "Tallow Claim",
+        "kind": "field",
+        "center": [
+          -4375,
+          73,
+          780
+        ],
+        "radius": 402
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_tallow_r1"
+      },
+      {
+        "from": "fh_tallow_r1",
+        "to": "fh_tallow_r2"
+      },
+      {
+        "from": "fh_tallow_r2",
+        "to": "fh_tallow_r3"
+      }
+    ]
   },
   "fh_tamsin": {
     "id": "fh_tamsin",
@@ -1005,7 +1390,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.92,
       "rawOre": 1.04,
       "livingRock": 0.88
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_tamsin_r1",
+        "name": "Tamsin's Rest Depot",
+        "kind": "outpost",
+        "center": [
+          1502,
+          -11,
+          5641
+        ],
+        "radius": 207
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_tamsin_r1"
+      }
+    ]
   },
   "fh_cloverfield": {
     "id": "fh_cloverfield",
@@ -1086,7 +1490,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.93,
       "rawOre": 1.04,
       "livingRock": 0.9
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_cloverfield_r1",
+        "name": "Cloverfield Hum",
+        "kind": "anomaly",
+        "center": [
+          -4781,
+          116,
+          -120
+        ],
+        "radius": 392
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_cloverfield_r1"
+      }
+    ]
   },
   "fh_bramblehome": {
     "id": "fh_bramblehome",
@@ -1175,7 +1598,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.07,
       "rawOre": 1.05,
       "livingRock": 0.85
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_bramblehome_r1",
+        "name": "Bramblehome Watch",
+        "kind": "outpost",
+        "center": [
+          -5327,
+          9,
+          342
+        ],
+        "radius": 362
+      },
+      {
+        "id": "fh_bramblehome_r2",
+        "name": "Bramblehome Depot",
+        "kind": "outpost",
+        "center": [
+          -4287,
+          61,
+          3848
+        ],
+        "radius": 340
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_bramblehome_r1"
+      },
+      {
+        "from": "fh_bramblehome_r1",
+        "to": "fh_bramblehome_r2"
+      }
+    ]
   },
   "fh_meadowlark": {
     "id": "fh_meadowlark",
@@ -1272,7 +1729,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.93,
       "rawOre": 1.01,
       "livingRock": 0.94
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_meadowlark_r1",
+        "name": "Meadowlark Pan",
+        "kind": "field",
+        "center": [
+          2378,
+          52,
+          -3736
+        ],
+        "radius": 407
+      },
+      {
+        "id": "fh_meadowlark_r2",
+        "name": "Meadowlark Claim",
+        "kind": "field",
+        "center": [
+          459,
+          -86,
+          -4582
+        ],
+        "radius": 406
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_meadowlark_r1"
+      },
+      {
+        "from": "fh_meadowlark_r1",
+        "to": "fh_meadowlark_r2"
+      }
+    ]
   },
   "fh_harvest": {
     "id": "fh_harvest",
@@ -1369,7 +1860,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.07,
       "rawOre": 0.99,
       "livingRock": 0.84
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_harvest_r1",
+        "name": "Harvest Home Watch",
+        "kind": "outpost",
+        "center": [
+          -2551,
+          20,
+          4496
+        ],
+        "radius": 344
+      },
+      {
+        "id": "fh_harvest_r2",
+        "name": "Harvest Home Boneyard",
+        "kind": "wreck",
+        "center": [
+          -80,
+          -88,
+          4008
+        ],
+        "radius": 343
+      },
+      {
+        "id": "fh_harvest_r3",
+        "name": "Harvest Home Undertow",
+        "kind": "anomaly",
+        "center": [
+          3161,
+          60,
+          4068
+        ],
+        "radius": 276
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_harvest_r1"
+      },
+      {
+        "from": "fh_harvest_r1",
+        "to": "fh_harvest_r2"
+      },
+      {
+        "from": "fh_harvest_r2",
+        "to": "fh_harvest_r3"
+      }
+    ]
   },
   "fh_wellspring": {
     "id": "fh_wellspring",
@@ -1466,7 +2006,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.05,
       "rawOre": 0.99,
       "livingRock": 0.84
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_wellspring_r1",
+        "name": "Wellspring Claim",
+        "kind": "field",
+        "center": [
+          -1250,
+          156,
+          5842
+        ],
+        "radius": 276
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_wellspring_r1"
+      }
+    ]
   },
   "fh_saltbox": {
     "id": "fh_saltbox",
@@ -1563,7 +2122,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.92,
       "rawOre": 1,
       "livingRock": 0.91
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_saltbox_r1",
+        "name": "Saltbox Depot",
+        "kind": "outpost",
+        "center": [
+          228,
+          -112,
+          -5035
+        ],
+        "radius": 346
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_saltbox_r1"
+      }
+    ]
   },
   "fh_applebough": {
     "id": "fh_applebough",
@@ -1652,7 +2230,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.04,
       "rawOre": 1.04,
       "livingRock": 0.94
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_applebough_r1",
+        "name": "Applebough Graveyard",
+        "kind": "wreck",
+        "center": [
+          -4520,
+          135,
+          -2145
+        ],
+        "radius": 271
+      },
+      {
+        "id": "fh_applebough_r2",
+        "name": "Applebough Pan",
+        "kind": "field",
+        "center": [
+          -2245,
+          132,
+          -3534
+        ],
+        "radius": 253
+      },
+      {
+        "id": "fh_applebough_r3",
+        "name": "Applebough Claim",
+        "kind": "field",
+        "center": [
+          887,
+          158,
+          -4287
+        ],
+        "radius": 354
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_applebough_r1"
+      },
+      {
+        "from": "fh_applebough_r1",
+        "to": "fh_applebough_r2"
+      },
+      {
+        "from": "fh_applebough_r2",
+        "to": "fh_applebough_r3"
+      }
+    ]
   },
   "fh_goodrest": {
     "id": "fh_goodrest",
@@ -1749,7 +2376,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1,
       "rawOre": 0.97,
       "livingRock": 0.95
-    }
+    },
+    "regions": [
+      {
+        "id": "fh_goodrest_r1",
+        "name": "Goodrest Pan",
+        "kind": "field",
+        "center": [
+          -5103,
+          11,
+          -3063
+        ],
+        "radius": 268
+      },
+      {
+        "id": "fh_goodrest_r2",
+        "name": "Goodrest Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -898,
+          82,
+          -4839
+        ],
+        "radius": 228
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fh_goodrest_r1"
+      },
+      {
+        "from": "fh_goodrest_r1",
+        "to": "fh_goodrest_r2"
+      }
+    ]
   },
   "vd_survey": {
     "id": "vd_survey",
@@ -1846,7 +2507,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.23,
       "rawOre": 0.84,
       "livingRock": 1.28
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_survey_r1",
+        "name": "Survey Hum",
+        "kind": "anomaly",
+        "center": [
+          2673,
+          -39,
+          4976
+        ],
+        "radius": 386
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_survey_r1"
+      }
+    ]
   },
   "vd_prospect": {
     "id": "vd_prospect",
@@ -1935,7 +2615,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.19,
       "rawOre": 0.8,
       "livingRock": 1.18
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_prospect_r1",
+        "name": "Prospect Field",
+        "kind": "field",
+        "center": [
+          3027,
+          -3,
+          -4033
+        ],
+        "radius": 328
+      },
+      {
+        "id": "vd_prospect_r2",
+        "name": "Prospect Undertow",
+        "kind": "anomaly",
+        "center": [
+          2841,
+          -16,
+          -3180
+        ],
+        "radius": 300
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_prospect_r1"
+      },
+      {
+        "from": "vd_prospect_r1",
+        "to": "vd_prospect_r2"
+      }
+    ]
   },
   "vd_canaan": {
     "id": "vd_canaan",
@@ -2032,7 +2746,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.16,
       "rawOre": 0.9,
       "livingRock": 1.27
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_canaan_r1",
+        "name": "Canaan Hulk Field",
+        "kind": "wreck",
+        "center": [
+          574,
+          -99,
+          4733
+        ],
+        "radius": 384
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_canaan_r1"
+      }
+    ]
   },
   "vd_claim9": {
     "id": "vd_claim9",
@@ -2121,7 +2854,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.2,
       "rawOre": 0.8,
       "livingRock": 1.18
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_claim9_r1",
+        "name": "Claim Nine Reach",
+        "kind": "field",
+        "center": [
+          -3549,
+          -50,
+          -2289
+        ],
+        "radius": 197
+      },
+      {
+        "id": "vd_claim9_r2",
+        "name": "Claim Nine Depot",
+        "kind": "outpost",
+        "center": [
+          -1312,
+          -19,
+          -5761
+        ],
+        "radius": 191
+      },
+      {
+        "id": "vd_claim9_r3",
+        "name": "Claim Nine Hulk Field",
+        "kind": "wreck",
+        "center": [
+          3712,
+          6,
+          -5612
+        ],
+        "radius": 360
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_claim9_r1"
+      },
+      {
+        "from": "vd_claim9_r1",
+        "to": "vd_claim9_r2"
+      },
+      {
+        "from": "vd_claim9_r2",
+        "to": "vd_claim9_r3"
+      }
+    ]
   },
   "vd_filing7": {
     "id": "vd_filing7",
@@ -2218,7 +3000,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.19,
       "rawOre": 0.92,
       "livingRock": 1.17
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_filing7_r1",
+        "name": "Filing Seven Hulk Field",
+        "kind": "wreck",
+        "center": [
+          2829,
+          41,
+          -4925
+        ],
+        "radius": 255
+      },
+      {
+        "id": "vd_filing7_r2",
+        "name": "Filing Seven Graveyard",
+        "kind": "wreck",
+        "center": [
+          -1785,
+          -102,
+          -4590
+        ],
+        "radius": 345
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_filing7_r1"
+      },
+      {
+        "from": "vd_filing7_r1",
+        "to": "vd_filing7_r2"
+      }
+    ]
   },
   "vd_stakedown": {
     "id": "vd_stakedown",
@@ -2307,7 +3123,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.24,
       "rawOre": 0.87,
       "livingRock": 1.31
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_stakedown_r1",
+        "name": "Stakedown Glow",
+        "kind": "anomaly",
+        "center": [
+          -3505,
+          71,
+          4560
+        ],
+        "radius": 419
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_stakedown_r1"
+      }
+    ]
   },
   "vd_assay": {
     "id": "vd_assay",
@@ -2388,7 +3223,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.17,
       "rawOre": 0.89,
       "livingRock": 1.3
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_assay_r1",
+        "name": "Assay Shimmer",
+        "kind": "anomaly",
+        "center": [
+          5322,
+          -117,
+          75
+        ],
+        "radius": 414
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_assay_r1"
+      }
+    ]
   },
   "vd_gridmark": {
     "id": "vd_gridmark",
@@ -2477,7 +3331,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.25,
       "rawOre": 0.93,
       "livingRock": 1.25
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_gridmark_r1",
+        "name": "Gridmark Pan",
+        "kind": "field",
+        "center": [
+          -5851,
+          -105,
+          -1128
+        ],
+        "radius": 238
+      },
+      {
+        "id": "vd_gridmark_r2",
+        "name": "Gridmark Hum",
+        "kind": "anomaly",
+        "center": [
+          -4901,
+          -1,
+          -3715
+        ],
+        "radius": 217
+      },
+      {
+        "id": "vd_gridmark_r3",
+        "name": "Gridmark Field",
+        "kind": "field",
+        "center": [
+          -7304,
+          132,
+          -1664
+        ],
+        "radius": 258
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_gridmark_r1"
+      },
+      {
+        "from": "vd_gridmark_r1",
+        "to": "vd_gridmark_r2"
+      },
+      {
+        "from": "vd_gridmark_r2",
+        "to": "vd_gridmark_r3"
+      }
+    ]
   },
   "vd_plat12": {
     "id": "vd_plat12",
@@ -2574,7 +3477,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.26,
       "rawOre": 0.77,
       "livingRock": 1.27
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_plat12_r1",
+        "name": "Plat Twelve Post",
+        "kind": "outpost",
+        "center": [
+          -162,
+          -110,
+          -4207
+        ],
+        "radius": 238
+      },
+      {
+        "id": "vd_plat12_r2",
+        "name": "Plat Twelve Shimmer",
+        "kind": "anomaly",
+        "center": [
+          -3004,
+          117,
+          -2888
+        ],
+        "radius": 401
+      },
+      {
+        "id": "vd_plat12_r3",
+        "name": "Plat Twelve Watch",
+        "kind": "outpost",
+        "center": [
+          -4835,
+          146,
+          -1208
+        ],
+        "radius": 278
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_plat12_r1"
+      },
+      {
+        "from": "vd_plat12_r1",
+        "to": "vd_plat12_r2"
+      },
+      {
+        "from": "vd_plat12_r2",
+        "to": "vd_plat12_r3"
+      }
+    ]
   },
   "vd_motherlode": {
     "id": "vd_motherlode",
@@ -2671,7 +3623,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.23,
       "rawOre": 0.92,
       "livingRock": 1.29
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_motherlode_r1",
+        "name": "Motherlode Claim",
+        "kind": "field",
+        "center": [
+          3780,
+          20,
+          -2978
+        ],
+        "radius": 354
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_motherlode_r1"
+      }
+    ]
   },
   "vd_claim44": {
     "id": "vd_claim44",
@@ -2752,7 +3723,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.26,
       "rawOre": 0.92,
       "livingRock": 1.2
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_claim44_r1",
+        "name": "Claim 44 Graveyard",
+        "kind": "wreck",
+        "center": [
+          -4260,
+          49,
+          657
+        ],
+        "radius": 261
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_claim44_r1"
+      }
+    ]
   },
   "vd_surveyd": {
     "id": "vd_surveyd",
@@ -2849,7 +3839,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.26,
       "rawOre": 0.83,
       "livingRock": 1.22
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_surveyd_r1",
+        "name": "Survey Delta Shimmer",
+        "kind": "anomaly",
+        "center": [
+          -3432,
+          -99,
+          -2090
+        ],
+        "radius": 273
+      },
+      {
+        "id": "vd_surveyd_r2",
+        "name": "Survey Delta Anchorage",
+        "kind": "outpost",
+        "center": [
+          -5466,
+          -6,
+          497
+        ],
+        "radius": 408
+      },
+      {
+        "id": "vd_surveyd_r3",
+        "name": "Survey Delta Claim",
+        "kind": "field",
+        "center": [
+          -4575,
+          -137,
+          1020
+        ],
+        "radius": 381
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_surveyd_r1"
+      },
+      {
+        "from": "vd_surveyd_r1",
+        "to": "vd_surveyd_r2"
+      },
+      {
+        "from": "vd_surveyd_r2",
+        "to": "vd_surveyd_r3"
+      }
+    ]
   },
   "vd_filing12c": {
     "id": "vd_filing12c",
@@ -2946,7 +3985,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.15,
       "rawOre": 0.79,
       "livingRock": 1.18
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_filing12c_r1",
+        "name": "Filing 12-C Field",
+        "kind": "field",
+        "center": [
+          5139,
+          68,
+          -3053
+        ],
+        "radius": 297
+      },
+      {
+        "id": "vd_filing12c_r2",
+        "name": "Filing 12-C Reach",
+        "kind": "field",
+        "center": [
+          1325,
+          98,
+          -4391
+        ],
+        "radius": 375
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_filing12c_r1"
+      },
+      {
+        "from": "vd_filing12c_r1",
+        "to": "vd_filing12c_r2"
+      }
+    ]
   },
   "vd_coresample": {
     "id": "vd_coresample",
@@ -3043,7 +4116,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.2,
       "rawOre": 0.83,
       "livingRock": 1.29
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_coresample_r1",
+        "name": "Core Sample Undertow",
+        "kind": "anomaly",
+        "center": [
+          4508,
+          99,
+          213
+        ],
+        "radius": 267
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_coresample_r1"
+      }
+    ]
   },
   "vd_paydirt": {
     "id": "vd_paydirt",
@@ -3132,7 +4224,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.15,
       "rawOre": 0.84,
       "livingRock": 1.29
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_paydirt_r1",
+        "name": "Paydirt Shimmer",
+        "kind": "anomaly",
+        "center": [
+          -4893,
+          -8,
+          -500
+        ],
+        "radius": 343
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_paydirt_r1"
+      }
+    ]
   },
   "vd_stakeside": {
     "id": "vd_stakeside",
@@ -3221,7 +4332,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.17,
       "rawOre": 0.89,
       "livingRock": 1.31
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_stakeside_r1",
+        "name": "Stakeside Pan",
+        "kind": "field",
+        "center": [
+          -1429,
+          4,
+          4990
+        ],
+        "radius": 267
+      },
+      {
+        "id": "vd_stakeside_r2",
+        "name": "Stakeside Claim",
+        "kind": "field",
+        "center": [
+          613,
+          51,
+          6416
+        ],
+        "radius": 278
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_stakeside_r1"
+      },
+      {
+        "from": "vd_stakeside_r1",
+        "to": "vd_stakeside_r2"
+      }
+    ]
   },
   "vd_annexclaim": {
     "id": "vd_annexclaim",
@@ -3318,7 +4463,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.19,
       "rawOre": 0.81,
       "livingRock": 1.32
-    }
+    },
+    "regions": [
+      {
+        "id": "vd_annexclaim_r1",
+        "name": "Annex Claim Reach",
+        "kind": "field",
+        "center": [
+          -1514,
+          143,
+          -4744
+        ],
+        "radius": 369
+      },
+      {
+        "id": "vd_annexclaim_r2",
+        "name": "Annex Claim Claim",
+        "kind": "field",
+        "center": [
+          928,
+          -138,
+          -6468
+        ],
+        "radius": 276
+      },
+      {
+        "id": "vd_annexclaim_r3",
+        "name": "Annex Claim Undertow",
+        "kind": "anomaly",
+        "center": [
+          3526,
+          150,
+          -6023
+        ],
+        "radius": 285
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "vd_annexclaim_r1"
+      },
+      {
+        "from": "vd_annexclaim_r1",
+        "to": "vd_annexclaim_r2"
+      },
+      {
+        "from": "vd_annexclaim_r2",
+        "to": "vd_annexclaim_r3"
+      }
+    ]
   },
   "fx_bastion": {
     "id": "fx_bastion",
@@ -3421,7 +4615,41 @@ export const GENERATED_SYSTEMS = {
         "fx_oathkeep",
         "fx_liron"
       ]
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_bastion_r1",
+        "name": "Bastion Claim",
+        "kind": "field",
+        "center": [
+          -4159,
+          -85,
+          1128
+        ],
+        "radius": 181
+      },
+      {
+        "id": "fx_bastion_r2",
+        "name": "Bastion Boneyard",
+        "kind": "wreck",
+        "center": [
+          -3462,
+          62,
+          -515
+        ],
+        "radius": 374
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_bastion_r1"
+      },
+      {
+        "from": "fx_bastion_r1",
+        "to": "fx_bastion_r2"
+      }
+    ]
   },
   "fx_liron": {
     "id": "fx_liron",
@@ -3518,7 +4746,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.13,
       "rawOre": 0.81,
       "livingRock": 1.18
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_liron_r1",
+        "name": "Fort Liron Hum",
+        "kind": "anomaly",
+        "center": [
+          -4729,
+          -58,
+          1760
+        ],
+        "radius": 210
+      },
+      {
+        "id": "fx_liron_r2",
+        "name": "Fort Liron Reach",
+        "kind": "field",
+        "center": [
+          -2504,
+          39,
+          5178
+        ],
+        "radius": 390
+      },
+      {
+        "id": "fx_liron_r3",
+        "name": "Fort Liron Boneyard",
+        "kind": "wreck",
+        "center": [
+          -3680,
+          -102,
+          1229
+        ],
+        "radius": 341
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_liron_r1"
+      },
+      {
+        "from": "fx_liron_r1",
+        "to": "fx_liron_r2"
+      },
+      {
+        "from": "fx_liron_r2",
+        "to": "fx_liron_r3"
+      }
+    ]
   },
   "fx_shieldwall": {
     "id": "fx_shieldwall",
@@ -3615,7 +4892,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.12,
       "rawOre": 0.76,
       "livingRock": 1.17
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_shieldwall_r1",
+        "name": "Shieldwall Boneyard",
+        "kind": "wreck",
+        "center": [
+          385,
+          127,
+          5795
+        ],
+        "radius": 253
+      },
+      {
+        "id": "fx_shieldwall_r2",
+        "name": "Shieldwall Claim",
+        "kind": "field",
+        "center": [
+          3792,
+          -15,
+          5881
+        ],
+        "radius": 204
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_shieldwall_r1"
+      },
+      {
+        "from": "fx_shieldwall_r1",
+        "to": "fx_shieldwall_r2"
+      }
+    ]
   },
   "fx_honorhold": {
     "id": "fx_honorhold",
@@ -3712,7 +5023,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.13,
       "rawOre": 0.83,
       "livingRock": 1.08
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_honorhold_r1",
+        "name": "Honorhold Hulk Field",
+        "kind": "wreck",
+        "center": [
+          3437,
+          -101,
+          2693
+        ],
+        "radius": 265
+      },
+      {
+        "id": "fx_honorhold_r2",
+        "name": "Honorhold Depot",
+        "kind": "outpost",
+        "center": [
+          3638,
+          -70,
+          217
+        ],
+        "radius": 262
+      },
+      {
+        "id": "fx_honorhold_r3",
+        "name": "Honorhold Post",
+        "kind": "outpost",
+        "center": [
+          3201,
+          74,
+          -1416
+        ],
+        "radius": 313
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_honorhold_r1"
+      },
+      {
+        "from": "fx_honorhold_r1",
+        "to": "fx_honorhold_r2"
+      },
+      {
+        "from": "fx_honorhold_r2",
+        "to": "fx_honorhold_r3"
+      }
+    ]
   },
   "fx_rampart": {
     "id": "fx_rampart",
@@ -3809,7 +5169,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.03,
       "rawOre": 0.87,
       "livingRock": 1.12
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_rampart_r1",
+        "name": "Rampart Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -4595,
+          13,
+          -2308
+        ],
+        "radius": 361
+      },
+      {
+        "id": "fx_rampart_r2",
+        "name": "Rampart Field",
+        "kind": "field",
+        "center": [
+          -5132,
+          -5,
+          2179
+        ],
+        "radius": 386
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_rampart_r1"
+      },
+      {
+        "from": "fx_rampart_r1",
+        "to": "fx_rampart_r2"
+      }
+    ]
   },
   "fx_aegis": {
     "id": "fx_aegis",
@@ -3890,7 +5284,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.12,
       "rawOre": 0.73,
       "livingRock": 1.09
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_aegis_r1",
+        "name": "Aegis Field",
+        "kind": "field",
+        "center": [
+          853,
+          87,
+          5196
+        ],
+        "radius": 414
+      },
+      {
+        "id": "fx_aegis_r2",
+        "name": "Aegis Undertow",
+        "kind": "anomaly",
+        "center": [
+          3466,
+          -131,
+          4166
+        ],
+        "radius": 328
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_aegis_r1"
+      },
+      {
+        "from": "fx_aegis_r1",
+        "to": "fx_aegis_r2"
+      }
+    ]
   },
   "fx_ironhold": {
     "id": "fx_ironhold",
@@ -3971,7 +5399,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.99,
       "rawOre": 0.81,
       "livingRock": 1.17
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_ironhold_r1",
+        "name": "Ironhold Watch",
+        "kind": "outpost",
+        "center": [
+          -2396,
+          -110,
+          3301
+        ],
+        "radius": 202
+      },
+      {
+        "id": "fx_ironhold_r2",
+        "name": "Ironhold Boneyard",
+        "kind": "wreck",
+        "center": [
+          -3779,
+          61,
+          949
+        ],
+        "radius": 347
+      },
+      {
+        "id": "fx_ironhold_r3",
+        "name": "Ironhold Depot",
+        "kind": "outpost",
+        "center": [
+          -2197,
+          20,
+          3787
+        ],
+        "radius": 412
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_ironhold_r1"
+      },
+      {
+        "from": "fx_ironhold_r1",
+        "to": "fx_ironhold_r2"
+      },
+      {
+        "from": "fx_ironhold_r2",
+        "to": "fx_ironhold_r3"
+      }
+    ]
   },
   "fx_ward": {
     "id": "fx_ward",
@@ -4068,7 +5545,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.09,
       "rawOre": 0.78,
       "livingRock": 1.18
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_ward_r1",
+        "name": "The Ward Glow",
+        "kind": "anomaly",
+        "center": [
+          4607,
+          49,
+          2455
+        ],
+        "radius": 411
+      },
+      {
+        "id": "fx_ward_r2",
+        "name": "The Ward Pan",
+        "kind": "field",
+        "center": [
+          3307,
+          137,
+          1561
+        ],
+        "radius": 309
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_ward_r1"
+      },
+      {
+        "from": "fx_ward_r1",
+        "to": "fx_ward_r2"
+      }
+    ]
   },
   "fx_palisade": {
     "id": "fx_palisade",
@@ -4165,7 +5676,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.98,
       "rawOre": 0.77,
       "livingRock": 1.03
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_palisade_r1",
+        "name": "Palisade Watch",
+        "kind": "outpost",
+        "center": [
+          3848,
+          -80,
+          -2414
+        ],
+        "radius": 312
+      },
+      {
+        "id": "fx_palisade_r2",
+        "name": "Palisade Field",
+        "kind": "field",
+        "center": [
+          4517,
+          -122,
+          -173
+        ],
+        "radius": 306
+      },
+      {
+        "id": "fx_palisade_r3",
+        "name": "Palisade Boneyard",
+        "kind": "wreck",
+        "center": [
+          3599,
+          9,
+          1287
+        ],
+        "radius": 211
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_palisade_r1"
+      },
+      {
+        "from": "fx_palisade_r1",
+        "to": "fx_palisade_r2"
+      },
+      {
+        "from": "fx_palisade_r2",
+        "to": "fx_palisade_r3"
+      }
+    ]
   },
   "fx_vanguard": {
     "id": "fx_vanguard",
@@ -4246,7 +5806,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.02,
       "rawOre": 0.77,
       "livingRock": 1.07
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_vanguard_r1",
+        "name": "Vanguard Watch",
+        "kind": "outpost",
+        "center": [
+          -3443,
+          -52,
+          -2794
+        ],
+        "radius": 295
+      },
+      {
+        "id": "fx_vanguard_r2",
+        "name": "Vanguard Anchorage",
+        "kind": "outpost",
+        "center": [
+          -3332,
+          -117,
+          -2049
+        ],
+        "radius": 269
+      },
+      {
+        "id": "fx_vanguard_r3",
+        "name": "Vanguard Pan",
+        "kind": "field",
+        "center": [
+          -5193,
+          -136,
+          -1249
+        ],
+        "radius": 259
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_vanguard_r1"
+      },
+      {
+        "from": "fx_vanguard_r1",
+        "to": "fx_vanguard_r2"
+      },
+      {
+        "from": "fx_vanguard_r2",
+        "to": "fx_vanguard_r3"
+      }
+    ]
   },
   "fx_bulwark": {
     "id": "fx_bulwark",
@@ -4343,7 +5952,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.03,
       "rawOre": 0.88,
       "livingRock": 1.16
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_bulwark_r1",
+        "name": "Bulwark Post",
+        "kind": "outpost",
+        "center": [
+          -3382,
+          60,
+          2234
+        ],
+        "radius": 240
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_bulwark_r1"
+      }
+    ]
   },
   "fx_garrison9": {
     "id": "fx_garrison9",
@@ -4440,7 +6068,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.12,
       "rawOre": 0.87,
       "livingRock": 1.04
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_garrison9_r1",
+        "name": "Garrison Nine Watch",
+        "kind": "outpost",
+        "center": [
+          -5770,
+          -3,
+          58
+        ],
+        "radius": 342
+      },
+      {
+        "id": "fx_garrison9_r2",
+        "name": "Garrison Nine Depot",
+        "kind": "outpost",
+        "center": [
+          -5176,
+          -42,
+          875
+        ],
+        "radius": 350
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_garrison9_r1"
+      },
+      {
+        "from": "fx_garrison9_r1",
+        "to": "fx_garrison9_r2"
+      }
+    ]
   },
   "fx_citadel": {
     "id": "fx_citadel",
@@ -4529,7 +6191,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.09,
       "rawOre": 0.72,
       "livingRock": 1.09
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_citadel_r1",
+        "name": "Citadel Reach",
+        "kind": "field",
+        "center": [
+          4142,
+          -104,
+          3279
+        ],
+        "radius": 379
+      },
+      {
+        "id": "fx_citadel_r2",
+        "name": "Citadel Field",
+        "kind": "field",
+        "center": [
+          3327,
+          -70,
+          2412
+        ],
+        "radius": 364
+      },
+      {
+        "id": "fx_citadel_r3",
+        "name": "Citadel Pan",
+        "kind": "field",
+        "center": [
+          3994,
+          -36,
+          -779
+        ],
+        "radius": 257
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_citadel_r1"
+      },
+      {
+        "from": "fx_citadel_r1",
+        "to": "fx_citadel_r2"
+      },
+      {
+        "from": "fx_citadel_r2",
+        "to": "fx_citadel_r3"
+      }
+    ]
   },
   "fx_sentry": {
     "id": "fx_sentry",
@@ -4626,7 +6337,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.01,
       "rawOre": 0.79,
       "livingRock": 1.14
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_sentry_r1",
+        "name": "Sentry Shimmer",
+        "kind": "anomaly",
+        "center": [
+          -2362,
+          -89,
+          5159
+        ],
+        "radius": 239
+      },
+      {
+        "id": "fx_sentry_r2",
+        "name": "Sentry Boneyard",
+        "kind": "wreck",
+        "center": [
+          -416,
+          21,
+          5407
+        ],
+        "radius": 184
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_sentry_r1"
+      },
+      {
+        "from": "fx_sentry_r1",
+        "to": "fx_sentry_r2"
+      }
+    ]
   },
   "fx_oathkeep": {
     "id": "fx_oathkeep",
@@ -4723,7 +6468,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.06,
       "rawOre": 0.79,
       "livingRock": 1.18
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_oathkeep_r1",
+        "name": "Oathkeep Boneyard",
+        "kind": "wreck",
+        "center": [
+          -3392,
+          33,
+          3038
+        ],
+        "radius": 337
+      },
+      {
+        "id": "fx_oathkeep_r2",
+        "name": "Oathkeep Claim",
+        "kind": "field",
+        "center": [
+          -5479,
+          -4,
+          1651
+        ],
+        "radius": 235
+      },
+      {
+        "id": "fx_oathkeep_r3",
+        "name": "Oathkeep Undertow",
+        "kind": "anomaly",
+        "center": [
+          -4122,
+          17,
+          -1390
+        ],
+        "radius": 206
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_oathkeep_r1"
+      },
+      {
+        "from": "fx_oathkeep_r1",
+        "to": "fx_oathkeep_r2"
+      },
+      {
+        "from": "fx_oathkeep_r2",
+        "to": "fx_oathkeep_r3"
+      }
+    ]
   },
   "fx_merit": {
     "id": "fx_merit",
@@ -4820,7 +6614,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.02,
       "rawOre": 0.83,
       "livingRock": 1.1
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_merit_r1",
+        "name": "Fort Merit Hum",
+        "kind": "anomaly",
+        "center": [
+          -3657,
+          2,
+          -4358
+        ],
+        "radius": 218
+      },
+      {
+        "id": "fx_merit_r2",
+        "name": "Fort Merit Pan",
+        "kind": "field",
+        "center": [
+          -2114,
+          87,
+          -6522
+        ],
+        "radius": 407
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_merit_r1"
+      },
+      {
+        "from": "fx_merit_r1",
+        "to": "fx_merit_r2"
+      }
+    ]
   },
   "fx_steelhaven": {
     "id": "fx_steelhaven",
@@ -4917,7 +6745,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 1.11,
       "rawOre": 0.81,
       "livingRock": 1.13
-    }
+    },
+    "regions": [
+      {
+        "id": "fx_steelhaven_r1",
+        "name": "Steelhaven Field",
+        "kind": "field",
+        "center": [
+          -3465,
+          -62,
+          -3820
+        ],
+        "radius": 358
+      },
+      {
+        "id": "fx_steelhaven_r2",
+        "name": "Steelhaven Glow",
+        "kind": "anomaly",
+        "center": [
+          -5194,
+          0,
+          -3187
+        ],
+        "radius": 379
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "fx_steelhaven_r1"
+      },
+      {
+        "from": "fx_steelhaven_r1",
+        "to": "fx_steelhaven_r2"
+      }
+    ]
   },
   "rl_toll": {
     "id": "rl_toll",
@@ -5015,7 +6877,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.11,
       "livingRock": 1.12
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_toll_r1",
+        "name": "Toll Anchorage",
+        "kind": "outpost",
+        "center": [
+          4336,
+          27,
+          2560
+        ],
+        "radius": 317
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_toll_r1"
+      }
+    ]
   },
   "rl_reckoning": {
     "id": "rl_reckoning",
@@ -5105,7 +6986,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.05,
       "livingRock": 1.13
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_reckoning_r1",
+        "name": "Reckoning Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -1093,
+          0,
+          -4677
+        ],
+        "radius": 417
+      },
+      {
+        "id": "rl_reckoning_r2",
+        "name": "Reckoning Hum",
+        "kind": "anomaly",
+        "center": [
+          -2820,
+          -48,
+          -3042
+        ],
+        "radius": 382
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_reckoning_r1"
+      },
+      {
+        "from": "rl_reckoning_r1",
+        "to": "rl_reckoning_r2"
+      }
+    ]
   },
   "rl_cutter": {
     "id": "rl_cutter",
@@ -5203,7 +7118,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.09,
       "livingRock": 1.16
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_cutter_r1",
+        "name": "Cutter Undertow",
+        "kind": "anomaly",
+        "center": [
+          -3481,
+          -34,
+          2986
+        ],
+        "radius": 330
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_cutter_r1"
+      }
+    ]
   },
   "rl_interest": {
     "id": "rl_interest",
@@ -5285,7 +7219,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.14,
       "livingRock": 1.21
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_interest_r1",
+        "name": "Interest Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -2700,
+          -98,
+          -4056
+        ],
+        "radius": 373
+      },
+      {
+        "id": "rl_interest_r2",
+        "name": "Interest Boneyard",
+        "kind": "wreck",
+        "center": [
+          -4822,
+          66,
+          -2918
+        ],
+        "radius": 295
+      },
+      {
+        "id": "rl_interest_r3",
+        "name": "Interest Shimmer",
+        "kind": "anomaly",
+        "center": [
+          -4693,
+          68,
+          -2235
+        ],
+        "radius": 394
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_interest_r1"
+      },
+      {
+        "from": "rl_interest_r1",
+        "to": "rl_interest_r2"
+      },
+      {
+        "from": "rl_interest_r2",
+        "to": "rl_interest_r3"
+      }
+    ]
   },
   "rl_due": {
     "id": "rl_due",
@@ -5383,7 +7366,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.14,
       "livingRock": 1.1
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_due_r1",
+        "name": "Due Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -147,
+          41,
+          -4556
+        ],
+        "radius": 369
+      },
+      {
+        "id": "rl_due_r2",
+        "name": "Due Post",
+        "kind": "outpost",
+        "center": [
+          905,
+          -39,
+          -4168
+        ],
+        "radius": 300
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_due_r1"
+      },
+      {
+        "from": "rl_due_r1",
+        "to": "rl_due_r2"
+      }
+    ]
   },
   "rl_arrears": {
     "id": "rl_arrears",
@@ -5481,7 +7498,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.14,
       "livingRock": 1.13
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_arrears_r1",
+        "name": "Arrears Graveyard",
+        "kind": "wreck",
+        "center": [
+          -1959,
+          -87,
+          -5329
+        ],
+        "radius": 418
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_arrears_r1"
+      }
+    ]
   },
   "rl_principal": {
     "id": "rl_principal",
@@ -5579,7 +7615,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.11,
       "livingRock": 1.09
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_principal_r1",
+        "name": "Principal Boneyard",
+        "kind": "wreck",
+        "center": [
+          -3877,
+          -9,
+          2320
+        ],
+        "radius": 265
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_principal_r1"
+      }
+    ]
   },
   "rl_tithemark": {
     "id": "rl_tithemark",
@@ -5669,7 +7724,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.08,
       "livingRock": 1.15
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_tithemark_r1",
+        "name": "Tithemark Reach",
+        "kind": "field",
+        "center": [
+          -4044,
+          -112,
+          -2975
+        ],
+        "radius": 335
+      },
+      {
+        "id": "rl_tithemark_r2",
+        "name": "Tithemark Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -4666,
+          -128,
+          -3099
+        ],
+        "radius": 285
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_tithemark_r1"
+      },
+      {
+        "from": "rl_tithemark_r1",
+        "to": "rl_tithemark_r2"
+      }
+    ]
   },
   "rl_default": {
     "id": "rl_default",
@@ -5767,7 +7856,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.13,
       "livingRock": 1.16
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_default_r1",
+        "name": "Default Undertow",
+        "kind": "anomaly",
+        "center": [
+          -210,
+          135,
+          -5451
+        ],
+        "radius": 225
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_default_r1"
+      }
+    ]
   },
   "rl_margin": {
     "id": "rl_margin",
@@ -5865,7 +7973,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.14,
       "livingRock": 1.18
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_margin_r1",
+        "name": "Margin Call Boneyard",
+        "kind": "wreck",
+        "center": [
+          -4312,
+          -39,
+          -355
+        ],
+        "radius": 322
+      },
+      {
+        "id": "rl_margin_r2",
+        "name": "Margin Call Claim",
+        "kind": "field",
+        "center": [
+          -4260,
+          -48,
+          1587
+        ],
+        "radius": 193
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_margin_r1"
+      },
+      {
+        "from": "rl_margin_r1",
+        "to": "rl_margin_r2"
+      }
+    ]
   },
   "rl_compound": {
     "id": "rl_compound",
@@ -5947,7 +8089,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.06,
       "livingRock": 1.2
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "rl_compound_r1",
+        "name": "Compound Claim",
+        "kind": "field",
+        "center": [
+          2390,
+          56,
+          -3411
+        ],
+        "radius": 228
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "rl_compound_r1"
+      }
+    ]
   },
   "gc_auction": {
     "id": "gc_auction",
@@ -6051,7 +8212,56 @@ export const GENERATED_SYSTEMS = {
         "gc_hammerfall"
       ]
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "gc_auction_r1",
+        "name": "The Auction Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -4683,
+          -64,
+          1633
+        ],
+        "radius": 274
+      },
+      {
+        "id": "gc_auction_r2",
+        "name": "The Auction Field",
+        "kind": "field",
+        "center": [
+          -1753,
+          102,
+          3874
+        ],
+        "radius": 268
+      },
+      {
+        "id": "gc_auction_r3",
+        "name": "The Auction Pan",
+        "kind": "field",
+        "center": [
+          -769,
+          52,
+          5059
+        ],
+        "radius": 343
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "gc_auction_r1"
+      },
+      {
+        "from": "gc_auction_r1",
+        "to": "gc_auction_r2"
+      },
+      {
+        "from": "gc_auction_r2",
+        "to": "gc_auction_r3"
+      }
+    ]
   },
   "gc_gavel": {
     "id": "gc_gavel",
@@ -6149,7 +8359,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.02,
       "livingRock": 1.03
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "gc_gavel_r1",
+        "name": "Gavel Pan",
+        "kind": "field",
+        "center": [
+          -4160,
+          -88,
+          -2644
+        ],
+        "radius": 344
+      },
+      {
+        "id": "gc_gavel_r2",
+        "name": "Gavel Post",
+        "kind": "outpost",
+        "center": [
+          -2853,
+          -68,
+          -4428
+        ],
+        "radius": 228
+      },
+      {
+        "id": "gc_gavel_r3",
+        "name": "Gavel Field",
+        "kind": "field",
+        "center": [
+          -6544,
+          -98,
+          -1972
+        ],
+        "radius": 279
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "gc_gavel_r1"
+      },
+      {
+        "from": "gc_gavel_r1",
+        "to": "gc_gavel_r2"
+      },
+      {
+        "from": "gc_gavel_r2",
+        "to": "gc_gavel_r3"
+      }
+    ]
   },
   "gc_lot7": {
     "id": "gc_lot7",
@@ -6247,7 +8506,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1,
       "livingRock": 1.03
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "gc_lot7_r1",
+        "name": "Lot Seven Glow",
+        "kind": "anomaly",
+        "center": [
+          5069,
+          130,
+          -3051
+        ],
+        "radius": 286
+      },
+      {
+        "id": "gc_lot7_r2",
+        "name": "Lot Seven Hulk Field",
+        "kind": "wreck",
+        "center": [
+          2423,
+          127,
+          -6759
+        ],
+        "radius": 343
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "gc_lot7_r1"
+      },
+      {
+        "from": "gc_lot7_r1",
+        "to": "gc_lot7_r2"
+      }
+    ]
   },
   "gc_appraisal": {
     "id": "gc_appraisal",
@@ -6337,7 +8630,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.01,
       "livingRock": 1.03
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "gc_appraisal_r1",
+        "name": "Appraisal Undertow",
+        "kind": "anomaly",
+        "center": [
+          5942,
+          124,
+          399
+        ],
+        "radius": 275
+      },
+      {
+        "id": "gc_appraisal_r2",
+        "name": "Appraisal Shimmer",
+        "kind": "anomaly",
+        "center": [
+          5015,
+          -123,
+          3224
+        ],
+        "radius": 406
+      },
+      {
+        "id": "gc_appraisal_r3",
+        "name": "Appraisal Graveyard",
+        "kind": "wreck",
+        "center": [
+          7352,
+          -80,
+          2231
+        ],
+        "radius": 250
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "gc_appraisal_r1"
+      },
+      {
+        "from": "gc_appraisal_r1",
+        "to": "gc_appraisal_r2"
+      },
+      {
+        "from": "gc_appraisal_r2",
+        "to": "gc_appraisal_r3"
+      }
+    ]
   },
   "gc_reserve": {
     "id": "gc_reserve",
@@ -6427,7 +8769,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.02,
       "livingRock": 1.04
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "gc_reserve_r1",
+        "name": "Reserve Glow",
+        "kind": "anomaly",
+        "center": [
+          -2547,
+          14,
+          3201
+        ],
+        "radius": 369
+      },
+      {
+        "id": "gc_reserve_r2",
+        "name": "Reserve Undertow",
+        "kind": "anomaly",
+        "center": [
+          -2972,
+          30,
+          3992
+        ],
+        "radius": 301
+      },
+      {
+        "id": "gc_reserve_r3",
+        "name": "Reserve Watch",
+        "kind": "outpost",
+        "center": [
+          -3256,
+          4,
+          3135
+        ],
+        "radius": 347
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "gc_reserve_r1"
+      },
+      {
+        "from": "gc_reserve_r1",
+        "to": "gc_reserve_r2"
+      },
+      {
+        "from": "gc_reserve_r2",
+        "to": "gc_reserve_r3"
+      }
+    ]
   },
   "gc_provenance": {
     "id": "gc_provenance",
@@ -6525,7 +8916,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.12,
       "livingRock": 0.94
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "gc_provenance_r1",
+        "name": "Provenance Pan",
+        "kind": "field",
+        "center": [
+          4207,
+          98,
+          -515
+        ],
+        "radius": 324
+      },
+      {
+        "id": "gc_provenance_r2",
+        "name": "Provenance Claim",
+        "kind": "field",
+        "center": [
+          4144,
+          50,
+          2677
+        ],
+        "radius": 378
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "gc_provenance_r1"
+      },
+      {
+        "from": "gc_provenance_r1",
+        "to": "gc_provenance_r2"
+      }
+    ]
   },
   "gc_hammerfall": {
     "id": "gc_hammerfall",
@@ -6615,7 +9040,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.02,
       "livingRock": 0.96
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "gc_hammerfall_r1",
+        "name": "Hammerfall Claim",
+        "kind": "field",
+        "center": [
+          5100,
+          68,
+          -1684
+        ],
+        "radius": 320
+      },
+      {
+        "id": "gc_hammerfall_r2",
+        "name": "Hammerfall Boneyard",
+        "kind": "wreck",
+        "center": [
+          3439,
+          -19,
+          1400
+        ],
+        "radius": 197
+      },
+      {
+        "id": "gc_hammerfall_r3",
+        "name": "Hammerfall Pan",
+        "kind": "field",
+        "center": [
+          994,
+          -29,
+          3356
+        ],
+        "radius": 413
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "gc_hammerfall_r1"
+      },
+      {
+        "from": "gc_hammerfall_r1",
+        "to": "gc_hammerfall_r2"
+      },
+      {
+        "from": "gc_hammerfall_r2",
+        "to": "gc_hammerfall_r3"
+      }
+    ]
   },
   "gc_showcase": {
     "id": "gc_showcase",
@@ -6713,7 +9187,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 1.09,
       "livingRock": 0.93
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "gc_showcase_r1",
+        "name": "Showcase Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -2531,
+          7,
+          -4405
+        ],
+        "radius": 365
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "gc_showcase_r1"
+      }
+    ]
   },
   "bt_cradle": {
     "id": "bt_cradle",
@@ -6802,7 +9295,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.97,
       "rawOre": 1.05,
       "livingRock": 0.58
-    }
+    },
+    "regions": [
+      {
+        "id": "bt_cradle_r1",
+        "name": "Cradle Depot",
+        "kind": "outpost",
+        "center": [
+          -3879,
+          19,
+          -1621
+        ],
+        "radius": 420
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "bt_cradle_r1"
+      }
+    ]
   },
   "stolenwomb": {
     "id": "stolenwomb",
@@ -6891,7 +9403,41 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.89,
       "rawOre": 0.98,
       "livingRock": 0.54
-    }
+    },
+    "regions": [
+      {
+        "id": "stolenwomb_r1",
+        "name": "The Stolen Womb Anchorage",
+        "kind": "outpost",
+        "center": [
+          -608,
+          -138,
+          5311
+        ],
+        "radius": 384
+      },
+      {
+        "id": "stolenwomb_r2",
+        "name": "The Stolen Womb Post",
+        "kind": "outpost",
+        "center": [
+          3627,
+          -8,
+          3928
+        ],
+        "radius": 281
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "stolenwomb_r1"
+      },
+      {
+        "from": "stolenwomb_r1",
+        "to": "stolenwomb_r2"
+      }
+    ]
   },
   "bt_moss": {
     "id": "bt_moss",
@@ -6972,7 +9518,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.96,
       "rawOre": 1.03,
       "livingRock": 0.52
-    }
+    },
+    "regions": [
+      {
+        "id": "bt_moss_r1",
+        "name": "Moss Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -1112,
+          75,
+          -4348
+        ],
+        "radius": 335
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "bt_moss_r1"
+      }
+    ]
   },
   "cg_vigil": {
     "id": "cg_vigil",
@@ -7061,7 +9626,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.71,
       "rawOre": 0.85,
       "livingRock": 0.85
-    }
+    },
+    "regions": [
+      {
+        "id": "cg_vigil_r1",
+        "name": "Vigil Reach",
+        "kind": "field",
+        "center": [
+          -3153,
+          -89,
+          3354
+        ],
+        "radius": 411
+      },
+      {
+        "id": "cg_vigil_r2",
+        "name": "Vigil Shimmer",
+        "kind": "anomaly",
+        "center": [
+          -4455,
+          139,
+          1775
+        ],
+        "radius": 197
+      },
+      {
+        "id": "cg_vigil_r3",
+        "name": "Vigil Undertow",
+        "kind": "anomaly",
+        "center": [
+          -6106,
+          63,
+          -645
+        ],
+        "radius": 185
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "cg_vigil_r1"
+      },
+      {
+        "from": "cg_vigil_r1",
+        "to": "cg_vigil_r2"
+      },
+      {
+        "from": "cg_vigil_r2",
+        "to": "cg_vigil_r3"
+      }
+    ]
   },
   "cg_psalm": {
     "id": "cg_psalm",
@@ -7150,7 +9764,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.68,
       "rawOre": 0.82,
       "livingRock": 0.81
-    }
+    },
+    "regions": [
+      {
+        "id": "cg_psalm_r1",
+        "name": "Psalm Hum",
+        "kind": "anomaly",
+        "center": [
+          -4929,
+          48,
+          1329
+        ],
+        "radius": 182
+      },
+      {
+        "id": "cg_psalm_r2",
+        "name": "Psalm Claim",
+        "kind": "field",
+        "center": [
+          -6413,
+          -137,
+          -2240
+        ],
+        "radius": 328
+      },
+      {
+        "id": "cg_psalm_r3",
+        "name": "Psalm Glow",
+        "kind": "anomaly",
+        "center": [
+          -5094,
+          -91,
+          -6168
+        ],
+        "radius": 400
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "cg_psalm_r1"
+      },
+      {
+        "from": "cg_psalm_r1",
+        "to": "cg_psalm_r2"
+      },
+      {
+        "from": "cg_psalm_r2",
+        "to": "cg_psalm_r3"
+      }
+    ]
   },
   "cg_shore": {
     "id": "cg_shore",
@@ -7231,7 +9894,56 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.69,
       "rawOre": 0.98,
       "livingRock": 0.73
-    }
+    },
+    "regions": [
+      {
+        "id": "cg_shore_r1",
+        "name": "The Further Shore Hum",
+        "kind": "anomaly",
+        "center": [
+          -2161,
+          62,
+          -4018
+        ],
+        "radius": 367
+      },
+      {
+        "id": "cg_shore_r2",
+        "name": "The Further Shore Post",
+        "kind": "outpost",
+        "center": [
+          -6057,
+          150,
+          -1313
+        ],
+        "radius": 219
+      },
+      {
+        "id": "cg_shore_r3",
+        "name": "The Further Shore Shimmer",
+        "kind": "anomaly",
+        "center": [
+          -5084,
+          26,
+          -3814
+        ],
+        "radius": 197
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "cg_shore_r1"
+      },
+      {
+        "from": "cg_shore_r1",
+        "to": "cg_shore_r2"
+      },
+      {
+        "from": "cg_shore_r2",
+        "to": "cg_shore_r3"
+      }
+    ]
   },
   "as_census": {
     "id": "as_census",
@@ -7320,7 +10032,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.79,
       "rawOre": 0.97,
       "livingRock": 1.05
-    }
+    },
+    "regions": [
+      {
+        "id": "as_census_r1",
+        "name": "Census Boneyard",
+        "kind": "wreck",
+        "center": [
+          -30,
+          -131,
+          -4904
+        ],
+        "radius": 304
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "as_census_r1"
+      }
+    ]
   },
   "as_archive": {
     "id": "as_archive",
@@ -7401,7 +10132,26 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.75,
       "rawOre": 0.98,
       "livingRock": 1.02
-    }
+    },
+    "regions": [
+      {
+        "id": "as_archive_r1",
+        "name": "Archive Reach",
+        "kind": "field",
+        "center": [
+          -845,
+          70,
+          -4386
+        ],
+        "radius": 223
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "as_archive_r1"
+      }
+    ]
   },
   "blackstation": {
     "id": "blackstation",
@@ -7506,7 +10256,26 @@ export const GENERATED_SYSTEMS = {
         "uc_stray"
       ]
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "blackstation_r1",
+        "name": "The Black Station Claim",
+        "kind": "field",
+        "center": [
+          4083,
+          62,
+          1891
+        ],
+        "radius": 349
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "blackstation_r1"
+      }
+    ]
   },
   "uc_drift": {
     "id": "uc_drift",
@@ -7604,7 +10373,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.91,
       "livingRock": 0.83
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_drift_r1",
+        "name": "Drift Anchorage",
+        "kind": "outpost",
+        "center": [
+          -505,
+          -107,
+          -4789
+        ],
+        "radius": 365
+      },
+      {
+        "id": "uc_drift_r2",
+        "name": "Drift Post",
+        "kind": "outpost",
+        "center": [
+          -2246,
+          -82,
+          -2813
+        ],
+        "radius": 281
+      },
+      {
+        "id": "uc_drift_r3",
+        "name": "Drift Field",
+        "kind": "field",
+        "center": [
+          -5484,
+          9,
+          -571
+        ],
+        "radius": 206
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_drift_r1"
+      },
+      {
+        "from": "uc_drift_r1",
+        "to": "uc_drift_r2"
+      },
+      {
+        "from": "uc_drift_r2",
+        "to": "uc_drift_r3"
+      }
+    ]
   },
   "uc_sorrow": {
     "id": "uc_sorrow",
@@ -7702,7 +10520,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.86,
       "livingRock": 0.92
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_sorrow_r1",
+        "name": "Sorrow Claim",
+        "kind": "field",
+        "center": [
+          2376,
+          -105,
+          4297
+        ],
+        "radius": 241
+      },
+      {
+        "id": "uc_sorrow_r2",
+        "name": "Sorrow Post",
+        "kind": "outpost",
+        "center": [
+          642,
+          -112,
+          3441
+        ],
+        "radius": 339
+      },
+      {
+        "id": "uc_sorrow_r3",
+        "name": "Sorrow Anchorage",
+        "kind": "outpost",
+        "center": [
+          2910,
+          76,
+          3392
+        ],
+        "radius": 418
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_sorrow_r1"
+      },
+      {
+        "from": "uc_sorrow_r1",
+        "to": "uc_sorrow_r2"
+      },
+      {
+        "from": "uc_sorrow_r2",
+        "to": "uc_sorrow_r3"
+      }
+    ]
   },
   "uc_ashfall": {
     "id": "uc_ashfall",
@@ -7800,7 +10667,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.85,
       "livingRock": 0.96
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_ashfall_r1",
+        "name": "Ashfall Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -3037,
+          -138,
+          3638
+        ],
+        "radius": 294
+      },
+      {
+        "id": "uc_ashfall_r2",
+        "name": "Ashfall Undertow",
+        "kind": "anomaly",
+        "center": [
+          -4544,
+          -49,
+          2900
+        ],
+        "radius": 331
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_ashfall_r1"
+      },
+      {
+        "from": "uc_ashfall_r1",
+        "to": "uc_ashfall_r2"
+      }
+    ]
   },
   "uc_tumble": {
     "id": "uc_tumble",
@@ -7898,7 +10799,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.84,
       "livingRock": 0.84
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_tumble_r1",
+        "name": "Tumble Watch",
+        "kind": "outpost",
+        "center": [
+          220,
+          -73,
+          -5472
+        ],
+        "radius": 196
+      },
+      {
+        "id": "uc_tumble_r2",
+        "name": "Tumble Glow",
+        "kind": "anomaly",
+        "center": [
+          3843,
+          -105,
+          -4993
+        ],
+        "radius": 352
+      },
+      {
+        "id": "uc_tumble_r3",
+        "name": "Tumble Undertow",
+        "kind": "anomaly",
+        "center": [
+          -1544,
+          112,
+          -6332
+        ],
+        "radius": 328
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_tumble_r1"
+      },
+      {
+        "from": "uc_tumble_r1",
+        "to": "uc_tumble_r2"
+      },
+      {
+        "from": "uc_tumble_r2",
+        "to": "uc_tumble_r3"
+      }
+    ]
   },
   "uc_nowhere": {
     "id": "uc_nowhere",
@@ -7996,7 +10946,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.96,
       "livingRock": 0.91
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_nowhere_r1",
+        "name": "Nowhere Boneyard",
+        "kind": "wreck",
+        "center": [
+          4,
+          -57,
+          -4080
+        ],
+        "radius": 314
+      },
+      {
+        "id": "uc_nowhere_r2",
+        "name": "Nowhere Claim",
+        "kind": "field",
+        "center": [
+          3948,
+          65,
+          -3557
+        ],
+        "radius": 271
+      },
+      {
+        "id": "uc_nowhere_r3",
+        "name": "Nowhere Glow",
+        "kind": "anomaly",
+        "center": [
+          6982,
+          -104,
+          934
+        ],
+        "radius": 228
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_nowhere_r1"
+      },
+      {
+        "from": "uc_nowhere_r1",
+        "to": "uc_nowhere_r2"
+      },
+      {
+        "from": "uc_nowhere_r2",
+        "to": "uc_nowhere_r3"
+      }
+    ]
   },
   "uc_faint": {
     "id": "uc_faint",
@@ -8094,7 +11093,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.86,
       "livingRock": 0.94
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_faint_r1",
+        "name": "Faint Hum",
+        "kind": "anomaly",
+        "center": [
+          -4034,
+          79,
+          1339
+        ],
+        "radius": 183
+      },
+      {
+        "id": "uc_faint_r2",
+        "name": "Faint Graveyard",
+        "kind": "wreck",
+        "center": [
+          -4189,
+          -68,
+          736
+        ],
+        "radius": 189
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_faint_r1"
+      },
+      {
+        "from": "uc_faint_r1",
+        "to": "uc_faint_r2"
+      }
+    ]
   },
   "uc_wisp": {
     "id": "uc_wisp",
@@ -8192,7 +11225,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.9,
       "livingRock": 0.88
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_wisp_r1",
+        "name": "Wisp Anchorage",
+        "kind": "outpost",
+        "center": [
+          -147,
+          -82,
+          -4395
+        ],
+        "radius": 412
+      },
+      {
+        "id": "uc_wisp_r2",
+        "name": "Wisp Watch",
+        "kind": "outpost",
+        "center": [
+          -2283,
+          -28,
+          -2653
+        ],
+        "radius": 380
+      },
+      {
+        "id": "uc_wisp_r3",
+        "name": "Wisp Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -3527,
+          100,
+          -1348
+        ],
+        "radius": 267
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_wisp_r1"
+      },
+      {
+        "from": "uc_wisp_r1",
+        "to": "uc_wisp_r2"
+      },
+      {
+        "from": "uc_wisp_r2",
+        "to": "uc_wisp_r3"
+      }
+    ]
   },
   "uc_cinder": {
     "id": "uc_cinder",
@@ -8290,7 +11372,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.89,
       "livingRock": 0.83
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_cinder_r1",
+        "name": "Cinder Watch",
+        "kind": "outpost",
+        "center": [
+          2548,
+          42,
+          -3670
+        ],
+        "radius": 391
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_cinder_r1"
+      }
+    ]
   },
   "uc_stray": {
     "id": "uc_stray",
@@ -8380,7 +11481,41 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.85,
       "livingRock": 0.85
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_stray_r1",
+        "name": "Stray Boneyard",
+        "kind": "wreck",
+        "center": [
+          857,
+          6,
+          -5331
+        ],
+        "radius": 346
+      },
+      {
+        "id": "uc_stray_r2",
+        "name": "Stray Undertow",
+        "kind": "anomaly",
+        "center": [
+          671,
+          151,
+          -4680
+        ],
+        "radius": 403
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_stray_r1"
+      },
+      {
+        "from": "uc_stray_r1",
+        "to": "uc_stray_r2"
+      }
+    ]
   },
   "uc_husk": {
     "id": "uc_husk",
@@ -8478,7 +11613,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.94,
       "livingRock": 0.92
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_husk_r1",
+        "name": "Husk Anchorage",
+        "kind": "outpost",
+        "center": [
+          -1894,
+          -129,
+          3673
+        ],
+        "radius": 196
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_husk_r1"
+      }
+    ]
   },
   "uc_gone": {
     "id": "uc_gone",
@@ -8568,7 +11722,26 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.91,
       "livingRock": 0.84
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_gone_r1",
+        "name": "Gone Depot",
+        "kind": "outpost",
+        "center": [
+          4582,
+          47,
+          -407
+        ],
+        "radius": 388
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_gone_r1"
+      }
+    ]
   },
   "uc_ember": {
     "id": "uc_ember",
@@ -8666,7 +11839,56 @@ export const GENERATED_SYSTEMS = {
       "rawOre": 0.89,
       "livingRock": 0.87
     },
-    "tradesRestricted": true
+    "tradesRestricted": true,
+    "regions": [
+      {
+        "id": "uc_ember_r1",
+        "name": "Ember Hulk Field",
+        "kind": "wreck",
+        "center": [
+          -4615,
+          144,
+          3653
+        ],
+        "radius": 363
+      },
+      {
+        "id": "uc_ember_r2",
+        "name": "Ember Post",
+        "kind": "outpost",
+        "center": [
+          -2641,
+          -49,
+          6658
+        ],
+        "radius": 226
+      },
+      {
+        "id": "uc_ember_r3",
+        "name": "Ember Watch",
+        "kind": "outpost",
+        "center": [
+          2736,
+          51,
+          5071
+        ],
+        "radius": 239
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "uc_ember_r1"
+      },
+      {
+        "from": "uc_ember_r1",
+        "to": "uc_ember_r2"
+      },
+      {
+        "from": "uc_ember_r2",
+        "to": "uc_ember_r3"
+      }
+    ]
   },
   "lastbeacon": {
     "id": "lastbeacon",
@@ -8763,6 +11985,40 @@ export const GENERATED_SYSTEMS = {
       "restrictedComponents": 0.54,
       "rawOre": 0.94,
       "livingRock": 0.75
-    }
+    },
+    "regions": [
+      {
+        "id": "lastbeacon_r1",
+        "name": "The Last Beacon Field",
+        "kind": "field",
+        "center": [
+          4533,
+          146,
+          222
+        ],
+        "radius": 370
+      },
+      {
+        "id": "lastbeacon_r2",
+        "name": "The Last Beacon Reach",
+        "kind": "field",
+        "center": [
+          2776,
+          -54,
+          -2906
+        ],
+        "radius": 377
+      }
+    ],
+    "lanes": [
+      {
+        "from": "core",
+        "to": "lastbeacon_r1"
+      },
+      {
+        "from": "lastbeacon_r1",
+        "to": "lastbeacon_r2"
+      }
+    ]
   }
 };

@@ -56,8 +56,8 @@ assert.equal(trafficTierFor(NEAR_RANGE), 'near');
 assert.equal(trafficTierFor(NEAR_RANGE + 0.001), 'mid');
 assert.equal(trafficTierFor(MID_RANGE), 'mid');
 assert.equal(trafficTierFor(MID_RANGE + 0.001), 'far');
-assert.equal(SYSTEM_CHART_MAX_EXTENT, 2800);
-pass('traffic tiers derive from traffic-tiers.js constants; fit ceiling pinned');
+assert.equal(SYSTEM_CHART_MAX_EXTENT, 8000); // issue #355 (P5b): regions reach the 8,000 u ceiling
+pass('traffic tiers derive from traffic-tiers.js constants; fit ceiling pinned (issue-355 8,000 u)');
 
 const redmarch = SYSTEMS.redmarch;
 const redLandmark = (redmarch.landmarks ?? [])[0];
@@ -284,7 +284,7 @@ const viewRadius = Number(section.getAttribute('data-view-radius'));
 // scenery belts, which sit outside it (issue #340 doubled both); the ceiling
 // below is the farthest charted object, not the playable extent.
 const farMax = Math.max(0, ...scenery.map((s) => Math.hypot(s.center[0], s.center[2]) + s.radius));
-assert.ok(extent > 2000 && extent <= 5600, 'fit covers the x2 extent incl. far belts (got ' + extent + ' u)');
+assert.ok(extent > 2000 && extent <= SYSTEM_CHART_MAX_EXTENT, 'fit covers the x2 extent, far belts and regions (got ' + extent + ' u)');
 assert.ok(extent >= farMax, 'fit reaches the farthest far-scenery field (' + farMax + ' u)');
 assert.equal(viewRadius, extent + 80);
 pass('system view DOM: sun, orbits, station, named gates, fields incl far belt, unknown landmarks, rings/scale');

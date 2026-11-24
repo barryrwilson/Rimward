@@ -2409,6 +2409,31 @@ Goal doc: `rimward-game-elements-omp.md` (NOTE: file on disk is TRUNCATED — on
   still a separate small wave: it predates the pilot pipeline and has three
   hand-authored classes.
 
+## 2026-11-24 — P5b in-system sub-regions + fast transit lanes (#355)
+
+- Implemented on `dsh/issue-355-navigation-p5b-connected-in-system-sub-r`
+  (base master `46806ec`). Full outcome, pins and verification are recorded
+  in `docs/REMAINING-WORK.md` (#355) and
+  `docs/ProductionPerformanceBudget.md`; design input is
+  `docs/P5B-SUBREGIONS-DESIGN.md`.
+- Standing contract notes: system defs may now carry optional data-only
+  `regions`/`lanes` keys (validated shapes; the existing content disc is
+  region 0 implicitly and has NO record); `src/game/regions.js` owns region
+  membership (derived from position, never persisted), the corridor capsule
+  test and the session-only corridor envelope (×2.2, ~1 s decay, per-ctx
+  WeakMap — never a WORLD_FIELDS entry); `src/systems/regions.js` is the
+  deepfield-family scenery owner and must keep the systemLoaded rebuild +
+  full-disposal contract; the region generator stream is `SEED + 4`
+  (`SEED + 3` is taken by the #340 landmark-position fallback) — adding
+  another generated pass means the NEXT free slot, never a shared stream.
+  `SYSTEM_CHART_MAX_EXTENT` is 8,000 and the region pass must keep every
+  lane leg ≤ 8,000 u and every center ≥ 500 u clear of pre-P5b anchors.
+- Parked follow-ups (not scope creep, separate issues if wanted): region
+  guidance markers for nav-guidance (design §2.2 keeps them out of v1);
+  minable region belts (the 160-rock cap binds; region belts are Points
+  scenery in v1 by design); corridor flavor on the existing `commLine`
+  channel.
+
 ## Next round candidates (wave 48)
 - Wave 47 contract notes for future work: Phase 7 of
  docs/FactionVisualUpdatePlan.md is the ship detail pass, and it is CLOSED — all

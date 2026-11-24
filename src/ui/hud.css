@@ -2943,6 +2943,48 @@ body.rw-reduced-motion .rw-galaxy-chart * {
   background: transparent;
 }
 
+/* Issue #355 (P5b): sub-region rings, transit lanes, current-region highlight. */
+.rw-system-region {
+  stroke: rgba(127, 224, 168, 0.45);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+}
+
+.rw-system-region.is-current {
+  stroke: var(--rw-accent);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+
+.rw-system-region-label {
+  fill: var(--dim);
+  letter-spacing: 0.06em;
+}
+
+.rw-system-region-label.is-current {
+  fill: var(--rw-accent);
+}
+
+.rw-system-lane {
+  stroke: rgba(111, 242, 224, 0.5);
+  stroke-width: 1.5;
+  stroke-dasharray: 8 5;
+}
+
+.rw-system-legend-region::before {
+  border-radius: 50%;
+  border-style: dashed;
+  border-color: rgba(127, 224, 168, 0.9);
+  background: transparent;
+}
+
+.rw-system-legend-lane::before {
+  background: transparent;
+  border-color: rgba(111, 242, 224, 0.9);
+  height: 2px;
+  margin-top: 9px;
+}
+
 .rw-system-chart-note {
   margin: 0;
   font-size: calc(9px * var(--rw-text-scale, 1));
@@ -2968,6 +3010,14 @@ body.rw-contrast .rw-galaxy-chart .rw-system-field {
 body.rw-contrast .rw-galaxy-chart .rw-system-poi-label.is-unknown {
   fill: var(--white);
   opacity: 1;
+}
+
+body.rw-contrast .rw-galaxy-chart .rw-system-region {
+  stroke: rgba(160, 255, 210, 0.85);
+}
+
+body.rw-contrast .rw-galaxy-chart .rw-system-lane {
+  stroke: rgba(111, 242, 224, 0.9);
 }
 
 body.rw-contrast .rw-galaxy-chart .rw-system-landmark.is-unknown,
