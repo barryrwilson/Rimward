@@ -237,21 +237,25 @@ export function initDeepField(ctx) {
 
     // --- Beacon chain + distant station lights, ONE Points layer ----------
     // Beacon nodes and station lights share a single Points geometry/draw call
-    // (issue #338). A faint LineSegments chain connects the nodes so the chain
-    // still reads as a lane rather than a random scatter; it is one extra draw
-    // call and zero triangles.
+    // (issue #338). A faint LineSegments chain connects the collinear nodes so
+    // the chain reads as a straight navigation lane; issue #350 removed the
+    // sine serpentine (it read as a zig-zag constellation from shallow angles)
+    // and lifted the whole lane to a fixed elevation above the ecliptic so a
+    // plane-level camera sees it as a lane, never edge-on. One extra draw
+    // call, zero triangles.
     const beaconDir = new THREE.Vector3(
-      Math.cos(rng() * Math.PI * 2), (rng() - 0.5) * 0.2, Math.sin(rng() * Math.PI * 2),
+      Math.cos(rng() * Math.PI * 2), 0, Math.sin(rng() * Math.PI * 2),
     ).normalize();
     const beaconStart = 3600 + rng() * 600;
     const beaconEnd = 5800 + rng() * 1500;
     counts.beaconNodes = 8;
+    const laneElevation = 600 + rng() * 300; // issue 350: lane rides above the ecliptic
     const beaconPoints = [];
     for (let i = 0; i < counts.beaconNodes; i++) {
       const t = i / (counts.beaconNodes - 1);
       const dist = beaconStart + (beaconEnd - beaconStart) * t;
       const p = beaconDir.clone().multiplyScalar(dist);
-      p.y += Math.sin(t * Math.PI * 3) * 120;
+      p.y = laneElevation;
       beaconPoints.push(p);
     }
 
