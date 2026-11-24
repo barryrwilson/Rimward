@@ -35,9 +35,13 @@ import { NEAR_RANGE, MID_RANGE, MID_CAP } from '../game/traffic-tiers.js';
  *     (including <= NEAR_RANGE), and the record is neither live nor terminal
  *     (dead/captured/inTransit). Far-traffic keeps the > MID_RANGE band.
  *   - coarse steering: the proxy nose points at the record's next route
- *     waypoint; scale follows the class scale charter so the handoff at 900 u
- *     reads as the same hull. Per-instance faction colour from
- *     game/faction-style.js; per-system seed makes variation deterministic.
+ *     waypoint; scale keeps the class scale charter LENGTH so the handoff at
+ *     900 u reads as the same hull, but the cross-section is ship-like
+ *     (issue #349): beam ~0.22 and height ~0.08 of that length — the same
+ *     ratios the far-traffic impostor layer draws — instead of the flat
+ *     0.8/0.25 plate the first cut rendered. Per-instance colour mixes the
+ *     faction accent toward its hull tone and dims toward the mid-band edge;
+ *     per-system seed makes variation deterministic.
  *   - rebuilds/refreshes on a 'systemLoaded' event and on a record-bank swap;
  *     the old mesh is disposed so repeated jumps do not leak resources.
  *   - reducedMotion parity: nothing animates per frame; the only motion is the
@@ -53,6 +57,30 @@ import { NEAR_RANGE, MID_RANGE, MID_CAP } from '../game/traffic-tiers.js';
 const REFRESH_SECONDS = 1 / 8; // issue #339: mid band 5-10 Hz
 const MESH_NAME = 'mid-traffic-proxies';
 const PROXY_TRIANGLES = 8;
+
+// Issue #349: ship-like cross-section. The dart basis is 2 wide (x +-1),
+// 1 tall (y +-0.5) and 2 long (z +-1), so the per-axis multipliers below set
+// the WORLD proportions directly: beam 0.22*L, height 0.08*L, length L. That
+// matches the far-traffic impostor layer (beam/length 0.216, height/length
+// 0.082), so both proxy tiers read as the same kind of silhouette. The first
+// cut scaled 0.4/0.25/0.5 — a freighter proxy came out 0.8*L wide and
+// 0.25*L tall, a flat plate, not a hull. Length is unchanged: the charter
+// target still governs it and the 900 u handoff still reads as the same hull.
+const BEAM_OVER_LENGTH = 0.11;
+const HEIGHT_OVER_LENGTH = 0.08;
+const LENGTH_SCALE = 0.5;
+
+// Issue #349 colour treatment: full-saturation faction accent at opacity 0.9
+// read as glowing slabs. Mix the accent toward the faction's desaturated hull
+// tone, keep a narrower brightness variation, drop the material opacity, and
+// dim linearly from the near edge to the mid-band edge so the 2500 u pop-in is
+// soft. The shouldShowMidProxy boundaries are untouched — this only changes
+// how a drawn proxy reads, never whether it draws.
+const HULL_TONE_MIX = 0.65;
+const BRIGHTNESS_MIN = 0.9;
+const BRIGHTNESS_SPAN = 0.2;
+const MATERIAL_OPACITY = 0.6;
+const FAR_DIM_FACTOR = 0.6;
 const FORWARD = new THREE.Vector3(0, 0, 1);
 
 const _pos = new THREE.Vector3();
@@ -63,6 +91,7 @@ const _quat = new THREE.Quaternion();
 const _matrix = new THREE.Matrix4();
 const _hidden = new THREE.Matrix4().makeScale(0, 0, 0);
 const _color = new THREE.Color();
+const _hullColor = new THREE.Color();
 
 /** FNV-1a — stable string hash (no Math.random: rebuilds stay deterministic). */
 function hashString(text) {
@@ -235,12 +264,25 @@ export function initMidTraffic(ctx) {
         );
         _quat.setFromEuler(_euler);
       }
-      _scale.set(length * 0.4 * variation, length * 0.25 * variation, length * 0.5 * variation);
+      _scale.set(
+        length * BEAM_OVER_LENGTH * variation,
+        length * HEIGHT_OVER_LENGTH * variation,
+        length * LENGTH_SCALE * variation,
+      );
       _matrix.compose(_pos, _quat, _scale);
       mesh.setMatrixAt(slot, _matrix);
       const style = styleFor(rec.faction);
       _color.setHex(style.accent);
-      _color.multiplyScalar(0.8 + unit(seed, 'bright:' + key) * 0.35);
+      _hullColor.setHex(style.hull ?? style.accent);
+      _color.lerp(_hullColor, HULL_TONE_MIX);
+      _color.multiplyScalar(BRIGHTNESS_MIN + unit(seed, 'bright:' + key) * BRIGHTNESS_SPAN);
+      // Distance dim across the mid band (NEAR_RANGE -> MID_RANGE): near
+      // proxies keep full tone so approach lanes stay readable (#341), far
+      // ones fade toward the hull tone and stop popping in at 2500 u.
+      const bandT = THREE.MathUtils.clamp(
+        (c.distance - NEAR_RANGE) / (MID_RANGE - NEAR_RANGE), 0, 1,
+      );
+      _color.multiplyScalar(1 - bandT * (1 - FAR_DIM_FACTOR));
       mesh.setColorAt(slot, _color);
       const id = typeof rec.id === 'string' ? rec.id : null;
       ids[slot] = id;
@@ -334,7 +376,7 @@ export function initMidTraffic(ctx) {
         color: 0xffffff,
         vertexColors: true,
         transparent: true,
-        opacity: 0.9,
+        opacity: MATERIAL_OPACITY,
         depthWrite: false,
         side: THREE.DoubleSide,
         toneMapped: false,

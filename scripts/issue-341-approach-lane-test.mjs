@@ -200,19 +200,36 @@ const check = (name, fn) => {
     m.decompose(new THREE.Vector3(), new THREE.Quaternion(), scale);
     const target = scaleFor('cutter').target;
     assert.ok(scale.z >= target * 0.45 && scale.z <= target * 0.55, 'length scale ' + scale.z);
-    assert.ok(Math.abs(scale.x / scale.z - 0.8) < 1e-6, 'beam ratio');
-    assert.ok(Math.abs(scale.y / scale.z - 0.5) < 1e-6, 'height ratio');
+    // Issue #349 deliberate bounded pin update: the cross-section is ship-like
+    // now (beam 0.22 of length, height 0.16 on the dart basis), matching the
+    // far-traffic impostor layer. The old 0.8/0.5 ratios were the flat-plate
+    // defect #349 fixes; charter LENGTH and the 900 u handoff are unchanged.
+    assert.ok(Math.abs(scale.x / scale.z - 0.22) < 1e-6, 'beam ratio');
+    assert.ok(Math.abs(scale.y / scale.z - 0.16) < 1e-6, 'height ratio');
     // Route runs +X; the proxy nose (+Z local) must point +X.
     const dir = new THREE.Vector3(0, 0, 1)
       .applyMatrix4(new THREE.Matrix4().extractRotation(m));
     assert.ok(dir.x > 0.9, 'heading not toward next waypoint: ' + dir.x);
+    // Issue #349: the instance colour is the faction accent mixed toward its
+    // hull tone, then a bounded deterministic brightness (0.9..1.1). A near-
+    // bubble record has no mid-band dim. Per-channel hull-tone bounds replace
+    // the old uniform-multiplier check.
     const actual = new THREE.Color();
     mesh.getColorAt(slot, actual);
-    const base = new THREE.Color().setHex(styleFor('freehold').accent);
-    const ratio = actual.r / base.r;
-    assert.ok(ratio >= 0.79 && ratio <= 1.16, 'faction colour ratio ' + ratio);
-    assert.ok(Math.abs(actual.g / base.g - ratio) < 1e-6);
-    assert.ok(Math.abs(actual.b / base.b - ratio) < 1e-6);
+    const style = styleFor('freehold');
+    const accent = new THREE.Color().setHex(style.accent);
+    const hull = new THREE.Color().setHex(style.hull);
+    const mix = (a, b) => a + (b - a) * 0.65;
+    const lo = 0.9 - 1e-6;
+    const hi = 1.1 + 1e-6;
+    for (const [c, ac, hc, name] of [
+      [actual.r, accent.r, hull.r, 'r'],
+      [actual.g, accent.g, hull.g, 'g'],
+      [actual.b, accent.b, hull.b, 'b'],
+    ]) {
+      assert.ok(c >= mix(ac, hc) * lo && c <= mix(ac, hc) * hi,
+        'faction colour channel ' + name + ': ' + c);
+    }
   });
   check('approach: far (>2500 u) record is not drawn by mid', () => {
     assert.ok(!mesh.userData.visibleRecordIds.includes('far-lane'));
