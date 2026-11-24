@@ -574,3 +574,71 @@ duplicates, zero console errors/exceptions and a stable source hash
 Phase 3 (#340) above records the save-migration decision (v2 envelope, load-time
 ×2 transform, v1 accepted) and its own measurement.
 
+## Frame-time budget — P5b sub-regions (issue #355)
+
+Issue #355 ships the P5b follow-up to Phase 3: connected in-system sub-regions
+(1–3 per system at 3,500–8,000 u) joined by fast transit-lane corridors, a
+sub-region layer on the System chart, and a purely additive regions/lanes data
+pair on every authored/generated system def. It adds no persistent field, no
+save-format change (envelope stays v2), no HUD key and no aim-glass digit.
+
+### What is added
+
+- `src/game/regions.js` (pure): region membership derived from position at
+  read time, corridor capsule tests, the session-only corridor envelope
+  (×2.2 inside a lane, ~1 s decay on exit), and the region/lanes validator.
+- `src/systems/regions.js`: deepfield-family scenery — one far-scenery Points
+  layer per region, one LineSegments lane chain and one beacon Points layer
+  for all lanes (`≤5 draw calls, 0 triangles` measured at build time).
+  Rebuilt and disposed on `systemLoaded`; `reducedMotion` freezes drift.
+- `src/systems/ship.js`: the existing cruise/burn envelope is multiplied by
+  the corridor factor while inside a lane volume (no new key); pad governor,
+  docking and combat are untouched.
+- `src/systems/systemchart.js`: region rings + names, lane lines and a
+  current-region highlight on the existing System view (DOM/SVG only, 0.5 s
+  refresh extended to the highlight); `SYSTEM_CHART_MAX_EXTENT` 2,800 → 8,000.
+- Data: 192 regions/94 generated systems + 9 regions across 4 authored
+  systems, chained `core -> r1 -> ...` with every leg ≤ 8,000 u and every
+  center ≥ 500 u clear of pre-P5b anchors. Generator region pass rides its
+  own `SEED + 4` stream (the brief's `SEED + 3` slot was already taken by
+  the #340 landmark-position fallback); every pre-P5b field is byte-identical.
+
+### Measured after (2026-11-24, same machine/build/harness as the earlier phases)
+
+Both runs used the same probe (`npm run test:perf-live`, production `dist/`,
+`?agent=1&perf=1`, 60 one-second samples, fixed Greenhand → Veridian route),
+the same named machine and the same headless Chrome/ANGLE RTX 4090
+configuration. The before run served the branch base commit `46806ec` from a
+separate worktree; the after run served this branch. Evidence is untracked
+(`out/issue-337-live/perf-baseline/` after;
+`out/issue-337-live-base/perf-baseline/` before). The compositor paced both
+runs at ~32.5 ms (the slower cadence this harness alternates with ~18 ms), so
+the frame-time comparison is direct.
+
+| Measure | Base (46806ec) | P5b measured | Delta |
+|---|---:|---:|---:|
+| Frame p50 | 32.5 ms | 32.5 ms | 0.0 ms |
+| Frame p95 | 33.3 ms | 33.2 ms | −0.1 ms |
+| Draw calls | 58.5 median / 102 max | 58.5 median / 96 max | 0 / −6 |
+| Triangles | 133,240 median | 132,157 median | −1,083 |
+| Asteroid matrix writes | 70 median / 133 max | 58.5 median / 139 max | −11.5 / +6 |
+| Live NPCs | 10 max | 10 max | 0 |
+| Abstract records | current 47 / galaxy 89 | current 47 / galaxy 89 | 0 / 0 |
+| Console errors / exceptions | 0 / 0 | 0 / 0 | 0 |
+| Production JS | 2,053.14 KiB minified / 621.57 KiB gzip | 2,087.15 KiB minified / 629.37 KiB gzip | +34.0 KiB / +7.8 KiB |
+
+All P5b budgets pass: frame p50/p95 are unchanged (the region scenery is
+Points/lines at 3,500+ u and frustum-culled, so the median draw-call count is
+unchanged), draw-call max fell 6, triangles fell, the record bank is unchanged
+(regions are world data, not abstract records), CPU did not grow, and bundle
+growth (+34.0 KiB minified) is under the ≤50 KB per-phase budget. The probe
+verdict was PASS with zero console errors or exceptions.
+
+The live production probe (`scripts/issue-355-live-probe.mjs`,
+`out/issue-355-live/regions-lanes/`, untracked) verified the feel/motion
+change per AGENTS.md: a light hull flew the core → freehold_r1 corridor
+end-to-end in 14.8 s at a 528 u/s sustained envelope (pins: ≥500 u/s, ≤20 s),
+parked inside the region, and the System chart drew 3 region rings, 3 lane
+lines and the freehold_r1 current-region highlight with zero scene children
+added; a pre-P5b v2 save restored byte-identically (position delta 0.000 u, no
+double transform) and the save on disk stayed envelope v2.

@@ -72,6 +72,15 @@ const lmPosRint = (lo, hi) => lo + Math.floor(lmPosRng() * (hi - lo + 1));
 // above nor the lmRng sequence is ever advanced by contact generation.
 const ctRng = mulberry32(SEED + 2);
 const ctRint = (lo, hi) => lo + Math.floor(ctRng() * (hi - lo + 1));
+// Issue #355 (P5b) region stream: consumed ONLY by the region pass after the
+// contact loop. NOTE: the design brief's "third stream (SEED + 3)" slot is
+// already taken by the #340 lmPosRng landmark-position fallback stream above,
+// so this pass takes the next free slot (SEED + 4). Same discipline: separate
+// seed, fixed GENERATED_IDS order, no other stream advanced. The generated
+// diff stays purely additive (a regions/lanes key pair per record).
+const rgRng = mulberry32(SEED + 4);
+const rgRint = (lo, hi) => lo + Math.floor(rgRng() * (hi - lo + 1));
+const rgRf = (lo, hi) => lo + rgRng() * (hi - lo);
 // NOTE: no ctRf — an uncalled float helper here would be a silent stream-shift
 // hazard for all 91 names if ever called (review LOW, wave 24).
 const round2 = (v) => Math.round(v * 100) / 100;
@@ -1293,6 +1302,99 @@ for (const id of GENERATED_IDS) {
   out[id] = { id: _id, name: _name, faction: _faction, band: _band, chart: _chart, landmarks: _lm, contacts: [{ role: 'dockmaster', name }], ...rest };
 }
 
+
+// ------------------------------------------------- issue 355: generated regions
+// Every generated system gains 1-3 sub-regions at 3,500-8,000 u (x/z) chained
+// by fast transit lanes core -> r1 -> r2 -> r3 (the existing content disc is
+// region 0 implicitly and stays unnamed in data). Determinism discipline:
+// this section draws ONLY from rgRng (mulberry32(SEED + 4)), in GENERATED_IDS
+// order, AFTER the contact loop — every earlier stream is untouched, so the
+// diff is a purely additive regions/lanes key pair per record.
+//
+// Placement invariants (validated again below): every leg <= 8,000 u (the
+// freighter sustains 528 u/s in a corridor, so the longest leg reads as
+// <= ~16 s), centers >= 500 u clear of every pre-P5b anchor and of each
+// other, region discs 180-420 u, y near the ecliptic.
+const RG_KINDS = ['outpost', 'field', 'wreck', 'anomaly'];
+const RG_NOUNS = {
+  outpost: ['Post', 'Depot', 'Anchorage', 'Watch'],
+  field: ['Reach', 'Claim', 'Field', 'Pan'],
+  wreck: ['Boneyard', 'Graveyard', 'Hulk Field'],
+  anomaly: ['Shimmer', 'Undertow', 'Hum', 'Glow'],
+};
+const rgNameTaken = new Set();
+function rgNamePick(sysName, kind) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const nouns = RG_NOUNS[kind];
+    const name = sysName + ' ' + nouns[rgRint(0, nouns.length - 1)];
+    if (!rgNameTaken.has(name)) { rgNameTaken.add(name); return name; }
+  }
+  fail('region name: no unique candidate in 60 attempts');
+  return 'Unnamed Region'; // validate() bails before output on any error
+}
+function rgCenterOk(sys, regions, c) {
+  const anchors = [sys.station.position, sys.field.center,
+    ...sys.gates.map((g) => g.position),
+    ...(sys.hub ? [sys.hub.position] : []),
+    ...sys.landmarks.map((lm) => lm.position)];
+  for (const r of regions) {
+    if (Math.hypot(c[0] - r.center[0], c[1] - r.center[1], c[2] - r.center[2]) < 500) return false;
+  }
+  for (const p of anchors) {
+    if (Math.hypot(c[0] - p[0], c[1] - p[1], c[2] - p[2]) < 500) return false;
+  }
+  return true;
+}
+for (const id of GENERATED_IDS) {
+  const sys = out[id];
+  const regions = [];
+  const count = 1 + rgRint(0, 2); // 1-3 regions per system
+  for (let i = 0; i < count; i++) {
+    const kind = RG_KINDS[rgRint(0, RG_KINDS.length - 1)];
+    const name = rgNamePick(sys.name, kind);
+    const radius = Math.round(rgRf(180, 420));
+    const y = rgRint(-140, 160);
+    let placed = false;
+    if (i === 0) {
+      // First region: 4,000-6,000 u keeps the core leg inside 8,000 u even at
+      // the worst station offset (+/-1,300 box -> ~1,838 u radial).
+      for (let attempt = 0; attempt < 40 && !placed; attempt++) {
+        const ang = rgRf(0, Math.PI * 2);
+        const d = rgRf(4000, 6000);
+        const c = [Math.round(Math.cos(ang) * d), y, Math.round(Math.sin(ang) * d)];
+        if (rgCenterOk(sys, regions, c)) { regions.push({ id: id + '_r1', name, kind, center: c, radius }); placed = true; }
+      }
+    } else {
+      // Chained region: near the previous anchor so the leg stays <= 8,000 u.
+      const prev = regions[regions.length - 1].center;
+      const prevRad = Math.hypot(prev[0], prev[2]);
+      for (let attempt = 0; attempt < 40 && !placed; attempt++) {
+        const ang = Math.atan2(prev[2], prev[0]) + rgRf(-0.9, 0.9);
+        const d = Math.min(8000, Math.max(3500, prevRad + rgRf(-2000, 2000)));
+        const c = [Math.round(Math.cos(ang) * d), y, Math.round(Math.sin(ang) * d)];
+        // Component rounding can shave a unit off the drawn radius: re-check
+        // the ROUNDED candidate against the band, not the drawn distance.
+        const roundedRad = Math.hypot(c[0], c[2]);
+        if (roundedRad < 3500 || roundedRad > 8000) continue;
+        const leg = Math.hypot(c[0] - prev[0], c[1] - prev[1], c[2] - prev[2]);
+        if (leg > 8000) continue;
+        if (rgCenterOk(sys, regions, c)) {
+          regions.push({ id: id + '_r' + (i + 1), name, kind, center: c, radius });
+          placed = true;
+        }
+      }
+    }
+    if (!placed) fail(id + ': region ' + (i + 1) + ' placement: no valid candidate in 40 attempts');
+  }
+  const lanes = [];
+  for (let i = 0; i < regions.length; i++) {
+    lanes.push(i === 0 ? { from: 'core', to: regions[0].id } : { from: regions[i - 1].id, to: regions[i].id });
+  }
+  if (regions.length !== count) continue; // placement failed; validate() bails
+  // Purely additive: append the two new keys at the record end.
+  out[id] = { ...sys, regions, lanes };
+}
+
 // ---------------------------------------------------------------- validation
 function validate() {
   // count + authored collision
@@ -1391,6 +1493,58 @@ function validate() {
     seenCtNames.add(ct.name);
   }
   if (seenCtNames.size !== 91) fail(`expected 91 generated contact names, got ${seenCtNames.size}`);
+
+  // issue 355: region/lanes shape and placement invariants
+  const seenRegionIds = new Set();
+  for (const sys of Object.values(out)) {
+    if (!Array.isArray(sys.regions) || sys.regions.length < 1 || sys.regions.length > 3) {
+      fail(sys.id + ' region count outside 1-3');
+      continue;
+    }
+    if (!Array.isArray(sys.lanes) || sys.lanes.length !== sys.regions.length) {
+      fail(sys.id + ' lanes must chain core -> r1 -> ... (one per region)');
+    }
+    const anchors = [sys.station.position, sys.field.center,
+      ...sys.gates.map((g) => g.position),
+      ...(sys.hub ? [sys.hub.position] : []),
+      ...sys.landmarks.map((lm) => lm.position)];
+    sys.regions.forEach((r, i) => {
+      if (r.id !== sys.id + '_r' + (i + 1)) fail(sys.id + ' region id ' + r.id + ' != ' + sys.id + '_r' + (i + 1));
+      if (seenRegionIds.has(r.id)) fail(sys.id + ' region id collision: ' + r.id);
+      seenRegionIds.add(r.id);
+      if (!['outpost', 'field', 'wreck', 'anomaly'].includes(r.kind)) fail(sys.id + ' region kind invalid: ' + r.kind);
+      if (!r.name || typeof r.name !== 'string') fail(sys.id + ' region missing name');
+      const c = r.center;
+      if (!Array.isArray(c) || c.length !== 3 || c.some((v) => typeof v !== 'number')) {
+        fail(sys.id + ' region center malformed');
+        return;
+      }
+      const radial = Math.hypot(c[0], c[2]);
+      if (radial < 3500 || radial > 8000) fail(sys.id + ' region ' + r.id + ' center radius ' + Math.round(radial) + ' outside 3500-8000');
+      if (!(r.radius >= 180 && r.radius <= 420)) fail(sys.id + ' region ' + r.id + ' radius outside 180-420');
+      for (const p of anchors) {
+        if (Math.hypot(c[0] - p[0], c[1] - p[1], c[2] - p[2]) < 500) fail(sys.id + ' region ' + r.id + ' <500u from pre-P5b anchor');
+      }
+      for (const o of sys.regions) {
+        if (o === r || !Array.isArray(o.center)) continue;
+        if (Math.hypot(c[0] - o.center[0], c[1] - o.center[1], c[2] - o.center[2]) < 500) {
+          fail(sys.id + ' regions ' + r.id + '/' + o.id + ' <500u apart');
+        }
+      }
+    });
+    const regionIds = new Set(sys.regions.map((r) => r.id));
+    for (const lane of sys.lanes) {
+      if (typeof lane.from !== 'string' || typeof lane.to !== 'string') { fail(sys.id + ' malformed lane'); continue; }
+      for (const end of [lane.from, lane.to]) {
+        if (end !== 'core' && !regionIds.has(end)) fail(sys.id + ' lane endpoint unknown: ' + end);
+      }
+      const pa = lane.from === 'core' ? sys.station.position : sys.regions.find((r) => r.id === lane.from)?.center;
+      const pb = lane.to === 'core' ? sys.station.position : sys.regions.find((r) => r.id === lane.to)?.center;
+      if (!pa || !pb) { fail(sys.id + ' lane endpoint does not resolve'); continue; }
+      const leg = Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]);
+      if (leg > 8000) fail(sys.id + ' lane ' + lane.from + '->' + lane.to + ' leg ' + Math.round(leg) + ' > 8000');
+    }
+  }
 
   // hub routes: targets exist, have back-gates, hub has routes array
   for (const [h, list] of routes) {
@@ -1506,4 +1660,6 @@ console.log(`  landmarks: ${lmCount} (1 per generated system)`);
 console.log(`  landmark position fallbacks (authored y kept): ${lmFallbacks}`);
 const ctCount = Object.values(out).reduce((n, s) => n + (s.contacts?.length ?? 0), 0);
 console.log(`  contacts: ${ctCount} (1 dockmaster per non-hub generated system)`);
+const rgCount = Object.values(out).reduce((n, s2) => n + (s2.regions?.length ?? 0), 0);
+console.log(`  regions: ${rgCount} across ${Object.values(out).filter((s2) => s2.regions?.length).length} systems (issue 355)`);
 console.log(`  wrote ${outPath}`);

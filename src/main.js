@@ -6,6 +6,7 @@ import { initTitle } from './systems/title.js';
 import { initStarfield } from './systems/starfield.js';
 import { initSolarSystem } from './systems/solarsystem.js';
 import { initDeepField } from './systems/deepfield.js';
+import { initRegions } from './systems/regions.js';
 import { initAsteroids } from './systems/asteroids.js';
 import { initStation } from './systems/station.js';
 import { initLandmarks } from './systems/landmarks.js';
@@ -111,7 +112,9 @@ window.__ctx = ctx; // debug/test handle (read-only inspection + harness drives)
 // queue. wakes after npc + pods (reads ctx.ships flee modes, spawns discovery
 // pods), before HUD (consumes its events); title runs FIRST so its capture-phase
 // keydown listener registers before controls.js and origins.js, and it
-// pauses the sim until the player chooses Continue or New Game. deepfield sits
+// pauses the sim until the player chooses Continue or New Game. regions sits with the
+// deepfield family (issue #355 sub-region scenery, rebuilt on the same
+// systemLoaded consume); deepfield sits
 // right after solarSystem (distant scenery, rebuilt on the same systemLoaded
 // consume); midTraffic and farTraffic sit after npc so they read the frame's
 // live-record flags (a record promoted to a real hull must hide its proxy, and
@@ -123,6 +126,7 @@ const systemDefs = [
   ['starfield', initStarfield],
   ['solarSystem', initSolarSystem],
   ['deepfield', initDeepField],
+  ['regions', initRegions],
   ['asteroids', initAsteroids],
   ['station', initStation],
   ['landmarks', initLandmarks],

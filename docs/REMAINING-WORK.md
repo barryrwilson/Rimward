@@ -1,3 +1,70 @@
+## Navigation: P5b connected in-system sub-regions + fast transit lanes — #355
+
+Implemented on `dsh/issue-355-navigation-p5b-connected-in-system-sub-r`
+(base master `46806ec`, which includes Phase 3 #340 and Phase 4 #341).
+Follows the owner decision after #340 (P5b) and the design input in
+[P5B-SUBREGIONS-DESIGN.md](P5B-SUBREGIONS-DESIGN.md). No new persistent field,
+save-format change (envelope stays v2), player keybinding or aim-glass digit.
+
+- `src/game/authored-systems.js`, `scripts/generate-galaxy.mjs`,
+  `src/game/galaxy.generated.js`: data-only `regions` (1–3 per system,
+  ids `<sysId>_r<n>`, kinds outpost/field/wreck/anomaly, centers 3,500–8,000 u
+  on x/z, discs 180–420 u, ≥500 u clear of every pre-P5b anchor and each
+  other) and `lanes` (`core -> r1 -> ...` chains, every leg ≤ 8,000 u) on 4
+  authored + all 94 generated systems. The generated pass rides its own
+  `SEED + 4` stream (the brief's `SEED + 3` slot was already taken by the
+  #340 landmark-position fallback), consumed in `GENERATED_IDS` order after
+  the contact loop, so the diff is purely additive: every pre-P5b authored AND
+  generated field is byte-identical to the base commit, and generator
+  `validate()` gained the region/lanes invariants. The existing content disc
+  stays region 0 implicitly, unnamed in data.
+- `src/game/regions.js` (new, pure): region membership derived from position
+  at read time (never persisted), corridor capsule tests, the session-only
+  corridor envelope — the ship's existing cruise/burn envelope ×2.2 inside a
+  lane (freighter sustains 528 u/s, the ≥500 u/s pin; light 1,056 u/s), ~1 s
+  decay on exit, per-ctx WeakMap state — and the region/lanes validator.
+- `src/systems/regions.js` (new): deepfield-family scenery built from
+  existing builders only — one far-scenery Points layer per region, one
+  LineSegments lane chain, one beacon Points layer (≤5 draw calls, 0
+  triangles); rebuilt and disposed on `systemLoaded`, `reducedMotion`
+  parity. `src/main.js` slots it with the deepfield family; init order
+  otherwise untouched.
+- `src/systems/ship.js`: the only flight change — the corridor multiplier
+  rides the two forward-envelope computations (rock-match and normal path);
+  pad governor, docking, combat and drift are untouched.
+- `src/systems/systemchart.js`: the System view grows a layer — region rings
+  + names, lane lines, a current-region highlight refreshed on the 0.5 s
+  tick (DOM/SVG only, no THREE, no renderer-count change);
+  `SYSTEM_CHART_MAX_EXTENT` and the player clamp rise 2,800 → 8,000 u.
+  Galaxy chart, nav guidance, agent observe schemas, world.nav and the event
+  vocabulary are unchanged.
+- Pacing pins: region-to-region leg ≤ 20 s at corridor speed for the slowest
+  hull class (worst measured leg 15.0 s freighter / 7,916 u), station →
+  farthest region ≤ 60 s along the lane chain (worst 16.4 s light). The four
+  existing #340 pacing pins pass verbatim; the #340 extent/chart suite pins
+  were re-derived for the two new def keys without weakening the pre-P5b
+  field guarantees.
+- Focused suite wired into `test:boot`:
+  `scripts/issue-355-regions-test.mjs` (142 checks: placement invariants for
+  every system, byte-additivity vs the base commit, corridor speed bounds,
+  multiplier ramp/decay, chart model regions/lanes/current, rebuild+disposal,
+  asteroid id===index untouched, no WORLD_FIELDS entry, v2 snapshot restore).
+  Live probe `scripts/issue-355-live-probe.mjs`
+  (`test:issue-355-live`, production build): corridor flown end-to-end at
+  14.8 s / 528 u/s sustained, chart regions/lanes/highlight verified with
+  zero scene children added, pre-P5b v2 save restored byte-identically
+  (position delta 0), console 0 errors.
+- Verification: `npm run build` passes (2,087.15 KiB minified / 629.37 KiB
+  gzip; +34 KiB, inside the ≤50 KB phase budget) and the full
+  `npm run test:boot` chain passes. Perf evidence per
+  [ProductionPerformanceBudget.md](ProductionPerformanceBudget.md): frame
+  p50/p95 unchanged (32.5/33.2 ms vs base 32.5/33.3), draw calls 58.5 median
+  / 96 max (base 58.5 / 102), triangles −1,083, before/after table recorded.
+- Parked follow-ups: region guidance markers for nav-guidance (design §2.2
+  keeps them out of v1); region belt mining (the 160 asteroid cap binds, so
+  region belts are Points scenery in v1 per the design); corridor flavor on
+  the `commLine` channel.
+
 ## System scale/population Phase 3: ×2 playable extent + in-system chart — #340
 
 Implemented on `dsh/issue-340-navigation-expand-playable-system-extent` (base

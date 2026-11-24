@@ -67,6 +67,21 @@ export const AUTHORED_SYSTEMS = {
       { id: 'fh_shepherd', name: 'The Shepherd', kind: 'beacon', position: [1500, 90, -200], line: 'A navigation beacon, older than the charts that cite it. Still broadcasting a lane nobody flies.' },
     ],
     clues: [],
+    // Issue #355 (P5b): sub-regions at 3,500-8,000 u on x/z, chained by fast
+    // transit lanes core -> r1 -> r2 -> r3. Every leg is <= 8,000 u (the
+    // freighter crosses the longest at ~14.4 s at corridor speed) and every
+    // center keeps >= 500 u clear of every pre-P5b anchor. Purely additive:
+    // nothing above moves.
+    regions: [
+      { id: 'freehold_r1', name: 'The Long Acre', kind: 'field', center: [4100, 40, 2300], radius: 360 },
+      { id: 'freehold_r2', name: 'Hollows Claim', kind: 'outpost', center: [900, -30, -4600], radius: 300 },
+      { id: 'freehold_r3', name: 'The Salt Lick', kind: 'anomaly', center: [-4600, 80, -3200], radius: 260 },
+    ],
+    lanes: [
+      { from: 'core', to: 'freehold_r1' },
+      { from: 'freehold_r1', to: 'freehold_r2' },
+      { from: 'freehold_r2', to: 'freehold_r3' },
+    ],
   },
   veridian: {
     id: 'veridian',
@@ -99,6 +114,16 @@ export const AUTHORED_SYSTEMS = {
     ],
     clues: [
       { id: 'vd_c_shanty', position: [-1200, 100, -200], line: 'A hull plate etched with a work-song verse. The last line was scratched out by hand.' },
+    ],
+    // Issue #355 (P5b): sub-regions chained core -> r1 -> r2; legs <= 8,000 u,
+    // centers >= 500 u clear of every pre-P5b anchor. Purely additive.
+    regions: [
+      { id: 'veridian_r1', name: 'Filing Twelve Deep', kind: 'field', center: [5200, -20, -3800], radius: 340 },
+      { id: 'veridian_r2', name: 'The Retort', kind: 'outpost', center: [1400, 60, -6800], radius: 280 },
+    ],
+    lanes: [
+      { from: 'core', to: 'veridian_r1' },
+      { from: 'veridian_r1', to: 'veridian_r2' },
     ],
   },
   redmarch: {
@@ -133,7 +158,18 @@ export const AUTHORED_SYSTEMS = {
     clues: [
       { id: 'rm_c_tally', position: [-200, 140, 200], line: 'A drifter\'s tally-board, counting something in sevens. The count ends at a number no one round here will say aloud.' },
     ],
+    // Issue #355 (P5b): sub-regions chained core -> r1 -> r2; legs <= 8,000 u,
+    // centers >= 500 u clear of every pre-P5b anchor. Purely additive.
+    regions: [
+      { id: 'redmarch_r1', name: 'The Pawnshop', kind: 'outpost', center: [-3600, 50, -5300], radius: 300 },
+      { id: 'redmarch_r2', name: 'Quiet Ledger', kind: 'wreck', center: [-6800, -40, -800], radius: 260 },
+    ],
+    lanes: [
+      { from: 'core', to: 'redmarch_r1' },
+      { from: 'redmarch_r1', to: 'redmarch_r2' },
+    ],
   },
+
   hollowreach: {
     id: 'hollowreach',
     name: 'Hollow Reach',
@@ -167,6 +203,16 @@ export const AUTHORED_SYSTEMS = {
     clues: [
       { id: 'hr_c_answer', position: [300, -20, 300], line: 'Your ship\'s song went out ahead of you — and something here answered in the same key.' },
       { id: 'hr_c_garden', position: [-300, 200, -1200], line: 'A ring of stones arranged like a garden. Whatever was planted here was dug up and taken rimward.' },
+    ],
+    // Issue #355 (P5b): sub-regions chained core -> r1 -> r2; legs <= 8,000 u,
+    // centers >= 500 u clear of every pre-P5b anchor. Purely additive.
+    regions: [
+      { id: 'hollowreach_r1', name: 'The Undertow', kind: 'anomaly', center: [2900, 90, -6100], radius: 280 },
+      { id: 'hollowreach_r2', name: 'Marrow Drift', kind: 'field', center: [-3800, -60, -4900], radius: 360 },
+    ],
+    lanes: [
+      { from: 'core', to: 'hollowreach_r1' },
+      { from: 'hollowreach_r1', to: 'hollowreach_r2' },
     ],
   },
   // Wave 7: band 3. The convergence heading ends here. One keeper, no patrols,

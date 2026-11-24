@@ -189,6 +189,11 @@ function stripGeometry(def) {
   if (copy.hub) zero(copy.hub.position);
   for (const lm of copy.landmarks || []) zero(lm.position);
   for (const c of copy.clues || []) zero(c.position);
+  // Issue #355 (P5b): regions/lanes are new data keys on the def, validated
+  // by issue-355-regions-test.mjs. Excluding them here keeps this pin's
+  // contract — every field that existed before P5b is unchanged — intact.
+  delete copy.regions;
+  delete copy.lanes;
   return copy;
 }
 
@@ -342,13 +347,21 @@ if (haveBase) {
   skipBase();
 }
 
-// no new persistent field: top-level key sets unchanged.
+// no new persistent field beyond the two issue-355 (P5b) data keys: top-level
+// key sets unchanged apart from regions/lanes, which must be all-or-nothing.
 if (haveBase) {
   for (const [id, oldDef, newDef] of [
     ...generatedIds.map((id) => [id, baseGenerated[id], generated[id]]),
     ...Object.keys(baseAuthored).map((id) => [id, baseAuthored[id], authored[id]]),
   ]) {
-    check(JSON.stringify(Object.keys(oldDef).sort()) === JSON.stringify(Object.keys(newDef).sort()), id + ' persistent field set unchanged');
+    const oldKeys = Object.keys(oldDef).sort();
+    const newKeys = Object.keys(newDef).sort();
+    const added = newKeys.filter((k) => !oldKeys.includes(k));
+    const removed = oldKeys.filter((k) => !newKeys.includes(k));
+    check(removed.length === 0, id + ' persistent field set loses no key');
+    const p5bOnly = added.length === 0
+      || (added.length === 2 && added.includes('lanes') && added.includes('regions'));
+    check(p5bOnly, id + ' persistent field set gains only the issue-355 regions/lanes keys', added);
   }
 } else {
   skipBase();
