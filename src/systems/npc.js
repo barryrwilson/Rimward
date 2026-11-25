@@ -47,7 +47,7 @@ import { buildShipAsset, isShipAssetReady, releaseShipAsset, updateShipAsset } f
 import { epicEffects } from '../game/epics.js';
 import { spawnPod, spawnSurvivorPod, mergePodContents, podUnits, podCommodityKey } from '../game/pods.js';
 import { holdFree, holdHeavy } from '../game/pirate-haul.js';
-import { rollPrizeChoice, prizeEligible, captivesRowFor, takePrizeHull, owesPrizeFence, fencePrize, tasteOf, isHuntQuarry, isWarQuarry } from '../game/prize.js'; // issue #265/#325: a contract kill is lawful work
+import { rollPrizeChoice, prizeEligible, captivesRowFor, takePrizeHull, owesPrizeFence, fencePrize, tasteOf, isHuntQuarry, isKillContractQuarry } from '../game/prize.js'; // issue #265/#325: a contract kill is lawful work
 import { cargoValueSafe, isDataCommodity, maybeSpawnDataFromWreck } from '../game/data-trade.js';
 import { applyPlayerKillStanding } from '../game/kill-standing.js';
 import { maybeGrantPirateSeed } from '../game/bio-seed.js';
@@ -4126,9 +4126,11 @@ function handleDestroyed(ctx, live, burst, reducedMotion) {
   // hull keeps the full bump; the ace reward is untouched.
   // Issue #325, same #265 rationale: the bound quarry of an accepted war
   // contract is lawful work too — the +2 witnessed capitulation still counts,
-  // and a bystander keeps every consequence.
+  // and a bystander keeps every consequence. Issue #357: an accepted bounty
+  // row binds the same way (the settlement pays the witnessed kill of the
+  // row's name), so its quarry keeps the same exemption.
   if (live.state.surrendered) {
-    if (!isHuntQuarry(ctx, live.record) && !isWarQuarry(ctx, live.record)) bumpFear(ctx, ECON.fear.killedSurrendered);
+    if (!isHuntQuarry(ctx, live.record) && !isKillContractQuarry(ctx, live.record)) bumpFear(ctx, ECON.fear.killedSurrendered);
   } else if (live.role === 'ace') bumpFear(ctx, ECON.fear.aceDefeated);
 
   // Remaining manifest becomes scoopable pods. Salvage already emptied

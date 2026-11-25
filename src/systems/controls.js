@@ -15,7 +15,7 @@ import { COMMANDS, codeOf, conflictFor } from './bindings.js';
 import { registerBerthInput } from '../game/launch-clearance.js';
 import { defenseApplied } from '../game/agent-defense.js';
 import { combatWeapon, combatSample, createCombat, combatTick, combatView } from '../game/agent-combat.js';
-import { isWarQuarry } from '../game/prize.js';
+import { isKillContractQuarry } from '../game/prize.js';
 
 /**
  * Controls system — mouse/keyboard → ctx.input (design doc §5.1/§5.5).
@@ -608,10 +608,12 @@ export function agentCombatSet(ctx, spec) {
     if (target.state.destroyed) return 'target-destroyed';
     // Issue #325: an engage on the bound quarry of an ACCEPTED war contract is
     // accepted even when the hull is already disabled or surrendered — the
-    // lease keeps firing until the witnessed kill. A disable intent on that
-    // already-broken bound quarry still refuses target-disabled, and every
-    // other hull keeps its endings.
-    const finishKill = spec.intent === 'engage' && isWarQuarry(ctx, target.record);
+    // lease keeps firing until the witnessed kill. Issue #357: an accepted
+    // hunt or bounty row binds the same way (the pay reads the witnessed kill
+    // of the named record), so its quarry takes the same acceptance. A disable
+    // intent on that already-broken bound quarry still refuses target-disabled,
+    // and every other hull keeps its endings.
+    const finishKill = spec.intent === 'engage' && isKillContractQuarry(ctx, target.record);
     if (spec.intent === 'engage' || spec.intent === 'disable') {
       if (target.state.surrendered && !finishKill) return 'target-surrendered';
       if (target.state.disabled && !finishKill) return 'target-disabled';

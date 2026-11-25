@@ -120,6 +120,19 @@ Raw manual leases retain their existing hail interruption behavior.
   with the same detail, and a stale, re-locked or weapon-mismatched digest
   still ends the lease `target-lost`. A fleeing hull leads somewhere real
   (#68 refuges): pursuit follows it there, and the fight waits where it stops.
+- A blocked attack lease escalates instead of stalling (issue #357): the
+  strict fire cone cannot be held against a quarry that keeps its own
+  standoff and weaves, and nothing bounded the block before — the #331
+  playtest renewed one lease for 92 minutes with `fireBlocked: 'alignment'`
+  on a hull-1 bounty. After a bounded dwell of continuous alignment blocking
+  the lease spends the thrust that raises the turn rate and closes the
+  standoff, and after a longer dwell the fire gate falls back to the
+  documented contract for the block — the target is not astern — enforcing
+  HUD bearing local z ≤ −0.7 with the lead forward of the nose and dropping
+  only the lead-precision term. The block token still reads `alignment` while it holds; any hit kills
+  a broken quarry. An ENGAGE lease on the bound quarry of an accepted hunt or
+  bounty row finishes the kill the same way #325 grants the war bind, and
+  that kill is lawful work like a bound hunt.
 - `break-off`: never fire, turn away and finish `disengaged` after two seconds
   of increasing separation beyond the weapon-relative threshold.
 - `retreat`: never fire, turn away and finish `retreated` after five seconds of

@@ -144,6 +144,32 @@ export function isWarQuarry(ctx, rec) {
   return false;
 }
 
+/**
+ * Issue #357: is this record the bound quarry of an ACCEPTED contract whose
+ * settlement pays on THIS hull's death — war (#325, by recordId), hunt (by
+ * recordId) or bounty (by the settled name). An ENGAGE lease on such a quarry
+ * keeps firing through the broken states until the witnessed kill, exactly
+ * like the war bind, because the kill is the contract's only completion path.
+ * Hunt binds offered-or-accepted elsewhere (isHuntQuarry); a lease may only
+ * finish a row the pilot actually accepted. Bounty rows carry no recordId —
+ * the settlement itself binds by name (station.js bounty-ace resolves the
+ * living bearer; pirate rows name the reaver), so the lease reads the same
+ * bind the purse reads and a stuffed name cannot retarget the finish.
+ */
+export function isKillContractQuarry(ctx, rec) {
+  if (isWarQuarry(ctx, rec)) return true;
+  const jobs = ctx && ctx.world && ctx.world.jobs;
+  if (!Array.isArray(jobs) || !rec || typeof rec.id !== 'string') return false;
+  const name = typeof rec.name === 'string' && rec.name.length > 0 ? rec.name : '';
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i];
+    if (!j || j.state !== 'accepted') continue;
+    if (j.kind === 'hunt' && j.recordId === rec.id) return true;
+    if (j.kind === 'bounty' && name && j.target === name) return true;
+  }
+  return false;
+}
+
 /** True when any posted or accepted job names this record as its target. */
 export function isJobQuarry(ctx, rec) {
   const jobs = ctx && ctx.world && ctx.world.jobs;

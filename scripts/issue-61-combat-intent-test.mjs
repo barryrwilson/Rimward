@@ -146,7 +146,11 @@ test('weapon reach, alignment, heat and current fire output are enforced', () =>
   const f = fixture(); f.start(); f.tick(); assert.equal(f.ctx.input.fireHeld, true);
   f.tick(1/60, true, { bearing: [0.5,0,-Math.sqrt(0.75)] });
   assert.equal(f.ctx.input.fireHeld, false); assert.equal(f.status().combat.fireBlocked, 'alignment');
-  f.target.object.position.z = -550; f.tick();
+  // Issue #340 doubled combat range (cannon 500 -> 1000), so the stale
+  // pre-scale 550 u probe sat inside the 950 u fire envelope and fired. The
+  // pin is re-derived from the live owner: beyond cannon range * 0.95 the
+  // block names range; no assertion changed.
+  f.target.object.position.z = -(WEAPONS.cannon.range * 0.95 + 50); f.tick();
   assert.equal(f.ctx.input.fireHeld, false); assert.equal(f.status().combat.fireBlocked, 'range');
   f.target.object.position.z = -300; f.ctx.player.heat = 95; f.tick();
   assert.equal(f.ctx.input.fireHeld, false); assert.equal(f.status().combat.fireBlocked, 'heat');
