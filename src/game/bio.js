@@ -5,7 +5,7 @@
  * this system owns hunger drift, wound accrual/regen, mood, and bond growth.
  */
 
-import { isHuntQuarry, isWarQuarry } from './prize.js'; // issue #265/#325: a contract kill is not an atrocity
+import { isHuntQuarry, isKillContractQuarry } from './prize.js'; // issue #265/#325/#357: a contract kill is not an atrocity
 
 // --- Sustain (§14.5) ---
 const HUNGER_SECONDS = 90 * 60; // +1.0 hunger per ~90 min active (unpaused, undocked) play
@@ -95,8 +95,10 @@ export function initBio(ctx) {
             const rec = e.ship && e.ship.record;
             // Issue #325: the witnessed kill of an accepted war contract's
             // bound quarry is lawful work too, the same #265 decision already
-            // applied to a bound hunt.
-            if (st && (st.surrendered || st.disabled) && !isHuntQuarry(ctx, rec) && !isWarQuarry(ctx, rec)) {
+            // applied to a bound hunt. Issue #357: an accepted bounty row is
+            // the same bind — the #331 playtest lease that finishes a broken
+            // bounty will disable it on the way in, and the kill stays work.
+            if (st && (st.surrendered || st.disabled) && !isHuntQuarry(ctx, rec) && !isKillContractQuarry(ctx, rec)) {
               feralUntil = now + FERAL_SECONDS;
               ctx.emit('atrocity');
             }

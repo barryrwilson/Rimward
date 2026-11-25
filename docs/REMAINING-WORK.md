@@ -1,3 +1,62 @@
+## The engage lease finishes a broken contract quarry — #357
+
+Implemented on `dsh/issue-357-playtest-hunter-the-engage-lease-never-c`
+(base master `f4f0ab4`). The #331 hunter playtest finding was real: the
+engage lease locked the accepted `bounty-ace` (Carver Illyx) and renewed for
+92 minutes while the quarry sat at hull 1 — never disabled (disable needs a
+hit, and no hit ever landed), never surrendered (resolve stuck `shaken`) —
+with `fireBlocked: 'alignment'` in 1,702 of 1,740 engaged samples and zero
+shots fired; 0 of 2,500 UU paid and the fight consumed 61% of the run. The
+strict fire cone (HUD bearing local z ≤ −0.97 and lead error ≤ 0.20 rad)
+cannot be held against a quarry that keeps its own standoff and weaves, the
+ordinary throttle law clamps to its creep floor near reach × 0.35 — exactly
+the observed 250–340 u — and the speed-gated turn rate cannot track the
+weave at that range. Nothing bounded the block, so the driver renewed
+forever. The fix is three bounded pieces inside the lease, session-only
+state:
+
+- `src/game/prize.js` adds `isKillContractQuarry(ctx, rec)`: the accepted
+  kill-bind shared by war (#325, recordId), hunt (recordId) and bounty rows
+  (the settled name — the same bind the bounty settlement itself reads).
+  Offered/lapsed rows never bind; fails closed like its siblings.
+- `src/game/agent-combat.js` + `src/systems/controls.js`: `finishKill` and
+  the engage-acceptance gate read the shared bind, so an accepted hunt or
+  bounty quarry takes the #325 acceptance and endings (engage keeps firing
+  through disabled/surrendered until the witnessed kill; a disable intent
+  still refuses `target-disabled`). The lease also escalates a persistent
+  block: after `ALIGN_CLOSE_DWELL` (2 s) of continuous `alignment` it spends
+  the thrust that raises the turn rate and closes the standoff; after
+  `ALIGN_FIRE_DWELL` (8 s) the gate falls back to the documented contract
+  (`AgentCombatIntentDesign.md`: the target is not astern) — enforcing HUD
+  bearing local z ≤ −0.7 with the lead forward of the nose — and dropping
+  only the 0.20 rad lead-precision term.
+  Both timers are session-only combat-record fields (`alignSince`), cleared
+  the moment fire arms or any other block takes over.
+- `src/game/bio.js` + `src/systems/npc.js`: the accepted bounty row joins
+  the #265/#325 lawful-work exemption — no feral rage and no
+  `killedSurrendered` fear bump on the bound quarry's surrendered/disabled
+  kill (the lease that finishes a broken bounty will disable it on the way
+  in). The +2 witnessed capitulation still counts; a bystander keeps every
+  consequence.
+- `scripts/issue-357-broken-quarry-kill-test.mjs` (wired into `test:boot`)
+  pins the bind, the kill conversion, the bounded dwell (fire arms under a
+  persistent off-nose block inside 12 s) and the standoff thrust, plus the
+  guards (non-bound hulls keep every ending, offered rows never bind,
+  disable intent still refuses). `scripts/issue-357-broken-quarry-kill-live-probe.mjs`
+  (`test:broken-quarry-kill-live`) runs the real board→lease→witness→pay
+  loop in a disposable browser. `scripts/issue-61-combat-intent-test.mjs`
+  (NOT in the boot chain, separate `test:combat-intent` script) had one
+  stale pre-#340 range pin (550 u inside the doubled 950 u cannon envelope)
+  re-derived from the live owner; no assertion changed.
+- Disclosed pre-existing, out-of-scope: the same `test:combat-intent` suite
+  also fails at base on the frigate turning case (`normal flight turns
+  toward the observed contact`, deterministic on this machine, absent from
+  CI's boot gate) — disclosed here for a separate issue, not touched here.
+
+No new persisted field, event, key, SKU or `state.js` edit; the fire-block
+vocabulary is unchanged (`alignment` still reads while it holds). `VERSION`
+stays 2.
+
 ## Navigation: P5b connected in-system sub-regions + fast transit lanes — #355
 
 Implemented on `dsh/issue-355-navigation-p5b-connected-in-system-sub-r`

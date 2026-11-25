@@ -13,9 +13,18 @@ import { collectBodies } from './collision.js';
 import { PHY } from './physics.js';
 import { effectiveTurnRadius } from './ap-path.js';
 import { hoverTurnRateFor } from './flight-feel.js';
-import { isWarQuarry } from './prize.js';
+import { isKillContractQuarry } from './prize.js';
 
 const bodies = { count: 0, items: [] };
+/**
+ * Issue #357: bounded escalation for a persistent fireBlocked 'alignment'.
+ * ALIGN_CLOSE_DWELL starts spending thrust to close a mutual standoff;
+ * ALIGN_FIRE_DWELL relaxes the strict cone to the documented contract
+ * (AgentCombatIntentDesign.md: the target is not astern). Seconds of
+ * continuous block, session-only.
+ */
+const ALIGN_CLOSE_DWELL = 2;
+const ALIGN_FIRE_DWELL = 8;
 const clamp = (n, lo = -1, hi = 1) => Math.max(lo, Math.min(hi, n));
 const attack = intent => intent === 'engage' || intent === 'disable';
 const vector = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
@@ -65,6 +74,10 @@ export function createCombat(ctx, target, intent, stance = 'evade', burner = fal
     weapon: combatWeapon(ctx), phase: attack(intent) ? 'intercept' : intent,
     phaseAt: ctx.world.time, repositionAfter: 0, clearSince: null, side: 1,
     sampleAt: null, yaw: 0, pitch: 0, yawRate: 0, pitchRate: 0, motion: null,
+    // Issue #357: seconds the strict fire cone has been continuously
+    // alignment-blocked this lease. Session-only combat-record state, the
+    // same class as clearSince — never persisted.
+    alignSince: null,
     fireBlocked: 'alignment', movementBlocked: '', completedAt: null,
     // Issue #120: an explicit withdrawal burner permission. `requested` is
     // sticky for the session so a renewal can tell an owned burn from a
@@ -172,9 +185,12 @@ export function combatTick(ctx, lease) {
   if (!ctx.ships.includes(target) || target.record !== c.record || target.id !== c.targetId) return 'target-lost';
   // Issue #325: the bound quarry of an accepted war contract must die (the
   // strike pays on a witnessed kill; a patrol's yield has no capture path), so
-  // an ENGAGE lease keeps firing until target-destroyed. A disable intent keeps
-  // its state endings, and every non-quarry hull is unchanged.
-  const finishKill = c.intent === 'engage' && isWarQuarry(ctx, target.record);
+  // an ENGAGE lease keeps firing until target-destroyed. Issue #357: the same
+  // bind is true of an accepted hunt (the pay reads the witnessed kill) and
+  // bounty (the settlement binds the living bearer of the row's name), whose
+  // quarry may never transition to disabled/surrendered at all. A disable
+  // intent keeps its state endings, and every non-quarry hull is unchanged.
+  const finishKill = c.intent === 'engage' && isKillContractQuarry(ctx, target.record);
   if (attack(c.intent) && target.state?.surrendered && !finishKill) return 'target-surrendered';
   if (attack(c.intent) && target.state?.disabled && !finishKill) return 'target-disabled';
   if (ctx.input.weaponGroup !== c.weaponGroup) return 'weapon-changed';
@@ -304,6 +320,16 @@ export function combatTick(ctx, lease) {
   // Close inside the firing envelope instead of matching a receding target
   // just beyond it. This remains the existing ordinary throttle cap.
   if (attacking && !hardPass && a.dist > reach * 0.9) lease.throttle = 0.9;
+  // Issue #357: an alignment-blocked standoff never closes on its own — the
+  // ordinary law clamps to its creep floor near reach * 0.35, and a quarry
+  // holding its own standoff parks exactly there while the speed-gated turn
+  // rate cannot track its weave. After a bounded dwell of continuous
+  // alignment blocking, spend the thrust that raises the turn rate and
+  // closes inside the envelope instead of orbiting at the floor.
+  if (attacking && !hardPass && c.alignSince !== null
+      && now - c.alignSince >= ALIGN_CLOSE_DWELL && a.dist > minimum * 1.5) {
+    lease.throttle = 0.9;
+  }
   if (attacking && aimError > 0.5) {
     // The ordinary turn law slows at creep speed. Keep enough thrust for a
     // turn back, with lateral clearance while the pursuer crosses the side.
@@ -350,11 +376,29 @@ export function combatTick(ctx, lease) {
     const currentWeapon = combatWeapon(ctx);
     // Existing muzzle convergence is restricted to the direct forward cone;
     // require both a plausible lead correction and that ordinary cone.
+    // Issue #357: the strict cone cannot be held against a weaving quarry
+    // that keeps its own standoff, and nothing bounded it before — an engage
+    // lease read fireBlocked 'alignment' for 92 straight minutes in the #331
+    // playtest. After ALIGN_FIRE_DWELL of continuous blocking, fall back to
+    // the documented contract (AgentCombatIntentDesign.md: the target is not
+    // astern) — here the stricter HUD bearing local z <= -0.7 with the lead
+    // forward of the nose — and drop only the 0.20 rad lead-precision term.
+    // Any hit kills a hull-1 quarry; the convergence inside CONVERGE_DOT
+    // still steers the bolt.
+    const dwell = c.alignSince === null ? 0 : now - c.alignSince;
+    const alignBlock = dwell >= ALIGN_FIRE_DWELL
+      ? a.bearing[2] > -0.7 || b[2] >= 0
+      : a.bearing[2] > -0.97 || b[2] >= 0 || Math.hypot(yaw, pitch) > 0.20;
     c.fireBlocked = !currentWeapon || currentWeapon !== w ? 'weapon'
       : a.dist > w.range * 0.95 ? 'range'
       : ctx.player.overheated || ctx.player.heat + w.heatPerShot > HEAT.max - 8 ? 'heat'
-      : a.bearing[2] > -0.97 || b[2] >= 0 || Math.hypot(yaw, pitch) > 0.20 ? 'alignment' : '';
+      : alignBlock ? 'alignment' : '';
+    c.alignSince = c.fireBlocked === 'alignment' ? (c.alignSince ?? now) : null;
     lease.fire = c.fireBlocked === '';
+  } else {
+    // Blocked by the phase machine, an obstruction or the defense — the
+    // alignment dwell restarts when fire is considered again.
+    c.alignSince = null;
   }
   return '';
 }
