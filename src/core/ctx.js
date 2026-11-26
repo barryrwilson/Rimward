@@ -316,8 +316,11 @@ export function createCtx({ scene, camera, renderer }) {
     },
 
     // --- event queue. Frozen event types (payload documented at emit sites):
-    // 'playerHit' {damage,family,fromAft,attackerId?,attackerName?}   'npcHit' {ship,damage}
+    // 'playerHit' {damage,family,fromAft,attackerId?,attackerName?}   'npcHit' {ship,damage,attackerId?,attackerName?,attackerUnknown?}
     //   Issue #117: attacker primitives from the NPC shooter (cover name held)
+    //   Issue #360: npcHit names its shooter too ('player' for the player's
+    //   own shots); no known shooter publishes attackerUnknown. Milestones
+    //   carry cause 'player'|'ambient'.
     // 'npcDisabled' {ship}   'npcDestroyed' {ship}
     // 'npcSurrendered' { ship, outcome, causer:'player'|'world' }
     //   Issue #99: `causer` is decided by the EMITTER at the instant the hull

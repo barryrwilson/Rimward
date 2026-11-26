@@ -215,7 +215,7 @@ const EVENT_FIELDS = freeze({
   playerFire: freeze(['weapon', 'count']),
   shieldDown: freeze(['layer', 'player', 'actor', 'targetId']),
   engineOut: freeze(['player', 'targetId', 'targetName']),
-  npcHit: freeze(['targetId', 'targetName', 'damage', 'count']),
+  npcHit: freeze(['targetId', 'targetName', 'damage', 'count', 'attackerId', 'attackerName', 'attackerUnknown']),
   npcDisabled: freeze(['targetId', 'targetName']),
   npcDestroyed: freeze(['targetId', 'targetName']),
   npcSurrendered: freeze(['targetId', 'targetName', 'outcome']),
@@ -561,7 +561,11 @@ export function sanitizeEvent(raw) {
     if (pv !== undefined) out[key] = pv;
   }
   if (ESCAPE_RECEIPTS.has(type)) boundEscapeReceipt(out);
-  if (type === 'playerHit' || type === 'playerDestroyed') boundAttacker(out);
+  if (type === 'playerHit' || type === 'playerDestroyed' || type === 'npcHit') boundAttacker(out);
+  // Issue #360: the explicit unknown marker is boolean-true only, and a
+  // milestone cause is one of the two authored words.
+  if (type === 'npcHit' && out.attackerUnknown !== true) delete out.attackerUnknown;
+  if (type === 'milestone' && out.cause !== 'player' && out.cause !== 'ambient') delete out.cause;
   if (type === 'podCollected' || type === 'podBlocked') {
     // Finite non-negative unit counts only; a commodity must be a known key.
     for (const key of ['units', 'free']) {
@@ -688,12 +692,20 @@ export function pushRing(events, row, cap = EVENT_CAP) {
   } else if (collapseKey) {
     // Hit spam folds per target; newest row keeps the running count.
     const want = row[collapseKey];
+    // Issue #360: npcHit folds only within one attacker — folding across
+    // shooters would publish the newest attacker over the other's hits.
+    const sameAttacker = row.type !== 'npcHit'
+      ? () => true
+      : (e) => e.attackerId === row.attackerId
+        && e.attackerName === row.attackerName
+        && !!e.attackerUnknown === !!row.attackerUnknown;
     if (want !== undefined && want !== null) {
       let count = commCountOf(row);
       for (let i = events.length - 1; i >= 0; i--) {
         const e = events[i];
         if (!e || e.type !== row.type) continue;
         if (e[collapseKey] !== want) continue;
+        if (!sameAttacker(e)) continue;
         count += commCountOf(e);
         events.splice(i, 1);
       }
