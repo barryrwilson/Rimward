@@ -311,6 +311,19 @@ const SPY_EXPOSE_DELTA = -2;
 const WAR_TARGET_DELTA = -2;
 // Cite world.js WRECK_TTL (line 811). Do not import world.js.
 const MINING_DEADLINE = 600;
+// Issue #359: a standard hunt's window must survive one documented patrol
+// cycle from the posting station — undock, work the sighting lane out to the
+// quarry's authored far end, back — with the lock search and the kill inside
+// it. Measured in the natural playtest (#359: accepted t=7592, lapsed t=8192),
+// one undock -> patrol -> redock cycle consumed the entire old 600 s window
+// before the quarry ever crossed the ~600 u lock envelope, so the affordable
+// tier could never pay. The hunt window doubles to 1200 s: a find on the
+// SECOND patrol pass still finishes inside the deadline. Flight is a small
+// share of that (worst authored station–gate round trip, fx_liron 4093 u each
+// way at the starter light hull's 240 u/s cruise, is ~34 s); the window is
+// dominated by the measured operational cycle. Same persisted `deadline`
+// field, same lapse path — no new fields, no copy or event changes.
+const HUNT_DEADLINE = 1200;
 let miningSeq = 0;
 let tradeSeq = 0;
 let huntSeq = 0;
@@ -3371,7 +3384,9 @@ function makeHuntJob(ctx, sysId, slot, rec) {
     need: 1,
     progress: 0,
     state: 'offered',
-    deadline: ctx.world.time + MINING_DEADLINE,
+    // Issue #359: the hunt's own window (HUNT_DEADLINE), not the mining
+    // window — one patrol cycle from the posting station must fit inside it.
+    deadline: ctx.world.time + HUNT_DEADLINE,
   };
 }
 
@@ -7138,7 +7153,9 @@ export function initStation(ctx) {
         return;
       }
       job.payQuoted = pay;
-      job.deadline = ctx.world.time + MINING_DEADLINE;
+      // Issue #359: accept re-stamps the hunt's own window (HUNT_DEADLINE),
+      // so the full patrol cycle always starts from acceptance.
+      job.deadline = ctx.world.time + HUNT_DEADLINE;
       const name = huntDisplayName(rec.name);
       if (name) job.target = name;
     } else if (job.kind === 'passenger') {
