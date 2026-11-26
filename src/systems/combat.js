@@ -1567,7 +1567,7 @@ export function initCombat(ctx) {
       if (bestShip.ai && scareDamageTotal(bestShip.state) < scareBefore) {
         bestShip.ai.lastAttacker = 'player';
       }
-      ctx.emit('npcHit', { ship: bestShip, damage: dmg });
+      ctx.emit('npcHit', { ship: bestShip, damage: dmg, ...playerAttacker() });
       for (const ev of events) {
         if (ev.type === 'shieldDown') emitShieldDown(ev.layer, { ship: bestShip });
         else if (ev.type === 'engineOut') ctx.emit('engineOut', { ship: bestShip });
@@ -1753,7 +1753,11 @@ export function initCombat(ctx) {
       if (s.ai && scareDamageTotal(s.state) < scareBefore) {
         s.ai.lastAttacker = p.fromPlayer ? 'player' : (p.shooter || 'npc');
       }
-      ctx.emit('npcHit', { ship: s, damage: p.damage });
+      // Issue #360: name the shooter on npcHit as primitives, same masking
+      // law as playerHit; a projectile with no known shooter publishes the
+      // explicit unknown marker instead of a guess.
+      const npcWho = p.fromPlayer ? playerAttacker() : attackerIdentity(p.shooter);
+      ctx.emit('npcHit', { ship: s, damage: p.damage, ...(npcWho || { attackerUnknown: true }) });
       for (const ev of events) {
         if (ev.type === 'shieldDown') emitShieldDown(ev.layer, { ship: s });
         else if (ev.type === 'engineOut') ctx.emit('engineOut', { ship: s });
@@ -1786,6 +1790,11 @@ export function initCombat(ctx) {
       }
     }
     ctx.emit('shieldDown', payload);
+  }
+
+  /** Issue #360: the player as an npcHit attacker, primitives only. */
+  function playerAttacker() {
+    return { attackerId: 'player', attackerName: ctx.world.shipName ?? 'your ship' };
   }
 
   /**

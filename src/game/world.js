@@ -1739,10 +1739,13 @@ export function tickBank(bank, sysId, ctx) {
 }
 
 // ---------- Milestones §8.8 ----------
-function fireMilestone(ctx, id, line) {
+// Issue #360: `cause` separates player-caused milestones from ambient world
+// ones in the session ring. Every caller below is player-driven except the
+// three ambient sites that pass 'ambient' explicitly.
+function fireMilestone(ctx, id, line, cause = 'player') {
   if (ctx.world.milestones.includes(id)) return false;
   ctx.world.milestones.push(id);
-  ctx.emit('milestone', { id, line });
+  ctx.emit('milestone', { id, line, cause });
   return true;
 }
 
@@ -2525,7 +2528,7 @@ export function initWorld(ctx) {
       ctx.emit('worldEvent', { kind, phase: 'start' });
     }
     if (kind === 'strikeRush') {
-      fireMilestone(ctx, 'firstStrikeRush', 'Strike rush. Word spreads.');
+      fireMilestone(ctx, 'firstStrikeRush', 'Strike rush. Word spreads.', 'ambient');
     }
     if (kind === 'pirateBlockade') lastBlockadeKillAt = now;
   }
@@ -2563,7 +2566,7 @@ export function initWorld(ctx) {
       causer: 'world',
     });
     const entry = stageAftermath(ctx, incident);
-    if (entry) fireMilestone(ctx, 'theWorldDidThat', 'The world did that. You just found it.');
+    if (entry) fireMilestone(ctx, 'theWorldDidThat', 'The world did that. You just found it.', 'ambient');
   }
 
   function consumeIncidents(ctx) {
@@ -2633,7 +2636,7 @@ export function initWorld(ctx) {
           }
         }
         if (entry && causer !== 'player') {
-          fireMilestone(ctx, 'theWorldDidThat', 'The world did that. You just found it.');
+          fireMilestone(ctx, 'theWorldDidThat', 'The world did that. You just found it.', 'ambient');
         }
       } else if (ev.type === 'npcSurrendered' && ev.ship) {
         const ship = ev.ship;
