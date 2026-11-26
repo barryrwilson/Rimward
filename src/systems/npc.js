@@ -156,6 +156,15 @@ const RESOLVE_INTERVAL = 1; // s between resolve recomputes
 // near-only.
 const LOD_FAR_TICK_INTERVAL = 1 / 8; // 8 Hz
 const THREAT_MEMORY = 12; // s a ship stays wary after last combat
+// Issue #366: bargaining siege erosion. A slow siege pins a bargaining-band
+// quarry across the 40-resolve line (shaken <-> bargaining cycling) without
+// ever reaching the capitulate threshold, so a war strike absorbs hits for the
+// whole job window and the quarry yields only after the contract lapsed. Every
+// 1 Hz resolve sample that lands fresh player damage inside a broken band
+// bleeds the sampled resolve toward capitulate; the bleed is instance-scoped
+// and dies with the fight.
+const SIEGE_EROSION_PER_SEC = 2; // resolve lost per damaged bargaining/shaken sample
+const SIEGE_EROSION_CAP = 45; // max banked erosion; any sustained broken-band siege can reach capitulate
 const TRADER_FLEE_HIT = 10; // s a graze keeps a trader in flee after lastHitAt
 const FIRE_FACE_DOT = 0.92; // must roughly face target to fire
 const DEATH_CHIP_COUNT = 8; // chips emitted per kill
@@ -351,6 +360,7 @@ function makeAi(ctx, record, startPos) {
     demandExpiresAt: 0, // session deadline; not persisted
     demandAmount: 0, // session finite UU; not persisted
     resolveBoost: 0, // wave 30: failed-bluff sting (hail.js showTeeth); see updateResolve for lifecycle
+    siegeErosion: 0, // issue #366: banked bargaining siege erosion; session only, capped
     playerRolled: false, // wave 32: the interest decision is made once per instantiation
     playerInterested: false,
     scratched: false, // hull or screen dipped this instance (trader/patrol memory)
@@ -2365,8 +2375,34 @@ function updateResolve(ctx, live, now) {
   // the stand-down gate above, so a paid-off or bluffed-into-flight pirate
   // never carries it — one that fights on keeps it for the encounter.
   st.resolve = Math.min(95, st.resolve + (ai.resolveBoost ?? 0));
-  awardFirstScare(ctx, live, previousResolve, scareReceipt, now, THREAT_MEMORY);
+  const preBand = resolveBand(st.resolve);
+  // Issue #366: sustained player damage inside a broken band erodes resolve.
+  // The recompute above is a pure function of the instant, so a slow siege
+  // (screen/shell recharging between hits) hovers across the 40 line forever
+  // and never reaches the capitulate threshold inside a war job's window. The
+  // scare receipt is the per-sample damage trail the loop already consumes:
+  // a fresh player-caused hit while the hull stands at bargaining or shaken
+  // bleeds the sample toward capitulate. The bleed banks across the samples
+  // between hits — the 1 Hz loop samples far more often than a siege lands
+  // blows — and clears only when the siege has lifted: the hull left the
+  // threat window or fought its band back above shaken. The bank is capped
+  // and dies with the instance, so nothing persists and no save record
+  // gains a field.
+  const brokenBand = preBand === 'bargaining' || preBand === 'shaken';
+  const freshPlayerDamage = !!scareReceipt?.player && !scareReceipt?.contested;
+  if (brokenBand && freshPlayerDamage) {
+    ai.siegeErosion = Math.min(
+      SIEGE_EROSION_CAP,
+      (ai.siegeErosion ?? 0) + SIEGE_EROSION_PER_SEC * RESOLVE_INTERVAL,
+    );
+    st.resolve = Math.max(0, st.resolve - ai.siegeErosion);
+  } else if (!threatened || !brokenBand) {
+    ai.siegeErosion = 0;
+  }
+  // The post-erosion resolve decides the transition, so an eroded sample can
+  // reach capitulate this pass and the branch below yields the hull.
   const band = resolveBand(st.resolve);
+  awardFirstScare(ctx, live, previousResolve, scareReceipt, now, THREAT_MEMORY);
   if (band === ai.band) return;
   ai.band = band;
   // Issue #99: proximity is not authorship. A break the player did not cause
