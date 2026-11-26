@@ -37,10 +37,23 @@ passenger, explore, espionage and war jobs. Dock and open Jobs first. It works
 at any dock, charges exactly -1 standing to the posting faction, returns the
 named faction/cost notice, and records one `jobState` outcome `abandoned`.
 It grants no completion rewards and leaves player cargo unchanged. Ferry,
-legacy haul, recovery, chain, bounty and patrol explicitly refuse. Unknown IDs,
+legacy haul, recovery, chain and patrol explicitly refuse. Unknown IDs,
 non-accepted rows and invalid origins refuse without world mutation. Observe
 live IDs after reload; cached IDs are only stable within a loaded session.
 The visible board action uses the same station owner and displays the cost.
+
+## Bounty forfeit — #358
+
+`abandonJob { id }` is also the documented way out of an accepted bounty
+(`bounty-ace`, `bounty-pirate-*`). Same service terms: dock, Jobs open. The
+forfeit charges exactly -1 standing to the faction that posted the bounty (a
+pirate row's home board, else the current dock; the ace contract answers to the
+ace home's bounty office), records one `jobState` outcome `abandoned`, and
+returns the SAME posting to the board as offered — the row re-appears in
+`observe().jobs.offers` and can be accepted again. No quarry state changes and
+no reward is granted. A bounty-shaped row that names no valid posting faction
+still refuses with token `unavailable` and copy naming the missing posting
+faction, and refuses again without mutation.
 
 
 | Field | Value |

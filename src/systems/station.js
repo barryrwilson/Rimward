@@ -7913,7 +7913,7 @@ export function initStation(ctx) {
           stateLine = 'ACCEPTED';
         }
         h('div', 'job-state job-accepted', card, stateLine);
-        const abandonment = abandonPolicy(job);
+        const abandonment = abandonPolicy(ctx, job);
         if (abandonment.faction) btn(card, abandonment.label, () => abandonJobDesk(job.id, job));
         else h('div', 'screen-note', card, abandonment.notice);
       } else {
@@ -9660,7 +9660,36 @@ export function initStation(ctx) {
     espionage: replaceEspionageJob, war: replaceWarJob,
   });
 
-  function abandonPolicy(job) {
+  /**
+   * Issue #358: the faction a bounty post answers to — the dock that posted
+   * it. A pirate row names its home board (`system`, falling back to the
+   * current dock the way #292/#301 read it); the ace contract answers to the
+   * ace home's bounty office. Null fails the abandon closed.
+   */
+  function bountyPosterFaction(ctx, job) {
+    const id = typeof job?.id === 'string' ? job.id : '';
+    let sysId = null;
+    if (id === 'bounty-ace') {
+      const ace = liveAceRecord(ctx);
+      sysId = ace?.system ?? aceHomeSystem(ctx);
+    } else if (id.startsWith('bounty-pirate-')) {
+      sysId = typeof job.system === 'string' && Object.hasOwn(SYSTEMS, job.system)
+        ? job.system : ctx.world.currentSystem;
+    }
+    return sysId != null && Object.hasOwn(SYSTEMS, sysId) ? SYSTEMS[sysId].faction : null;
+  }
+
+  function abandonPolicy(ctx, job) {
+    // Issue #358: a bounty row is escapable — walk away, eat the standing
+    // hit, and the same posting goes back on the board. Anything that is
+    // not a bounty-shaped row keeps the ordinary #207 rules below.
+    if (job && job.kind === 'bounty') {
+      const faction = bountyPosterFaction(ctx, job);
+      if (typeof faction !== 'string' || !Object.hasOwn(FACTIONS, faction)) {
+        return { notice: 'Abandon unavailable: this bounty names no valid posting faction to charge.' };
+      }
+      return { faction, label: `Abandon (${ABANDON_STANDING} ${factionDisplayName(faction)} standing)` };
+    }
     if (!job || !Object.hasOwn(abandonReplacements, job.kind)) {
       return { notice: 'Abandon unavailable: this contract has special cargo, recovery, or progression obligations. Finish its existing terms.' };
     }
@@ -9686,15 +9715,27 @@ export function initStation(ctx) {
     if (!job || job.state !== 'accepted' || (expectedRow && job !== expectedRow)) {
       return refuse('not-accepted', 'That accepted posting is no longer on the board.');
     }
-    const policy = abandonPolicy(job);
+    const policy = abandonPolicy(ctx, job);
     if (!policy.faction) return refuse('unavailable', policy.notice);
     if (!writeFactionStanding(ctx, policy.faction, ABANDON_STANDING)) {
       return refuse('unavailable', 'Cannot apply the posting faction standing cost.');
     }
-    job.state = 'failed';
-    noteJobOutcome(ctx, job, 'abandoned', 0);
-    abandonReplacements[job.kind](ctx, job);
-    ui.notice = `Job abandoned — ${ABANDON_STANDING} ${factionDisplayName(policy.faction)} standing.`;
+    if (job.kind === 'bounty') {
+      // Issue #358: an abandoned bounty is a forfeit, not a voided post — the
+      // standing hit is the cost and the SAME row returns to the board as
+      // offered (the ace contract keeps its unique persist row, so a
+      // successor can still be taken; a pirate row re-lists on its home
+      // board). No quarry state changes: nothing was collected.
+      job.state = 'offered';
+      job.progress = 0;
+      noteJobOutcome(ctx, job, 'abandoned', 0);
+      ui.notice = `Bounty abandoned — the posting returns to the board — ${ABANDON_STANDING} ${factionDisplayName(policy.faction)} standing.`;
+    } else {
+      job.state = 'failed';
+      noteJobOutcome(ctx, job, 'abandoned', 0);
+      abandonReplacements[job.kind](ctx, job);
+      ui.notice = `Job abandoned — ${ABANDON_STANDING} ${factionDisplayName(policy.faction)} standing.`;
+    }
     const notice = ui.notice;
     render();
     return { ok: true, notice };
