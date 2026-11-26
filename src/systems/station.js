@@ -114,6 +114,7 @@ import {
   findShadowCourier,
   releaseShadowCourier,
   shadowBankReady,
+  requestWarReplenish, // issue #367: the war slot refill asks world.js for one bounded replenish pick
 } from '../game/world.js';
 import { requestAutosave, stripControlChars, NAME_MAX } from '../game/save.js';
 import {
@@ -4992,7 +4993,17 @@ function replaceWarJob(ctx, job) {
   const dest = warDestId(origin);
   if (!dest) return;
   const bound = warBoundRecordIds(jobs, origin, null);
-  const rec = pickWarQuarry(ctx, origin, dest, bound);
+  let rec = pickWarQuarry(ctx, origin, dest, bound);
+  if (!rec) {
+    // Issue #367: the banks can be genuinely dry — every authored patrol in
+    // both war systems is dead after a few strikes. Ask world.js's war
+    // replenish for ONE bounded pick (it owns the cadence, the authored
+    // patrol-cast cap, name uniqueness and the never-generate rule; it only
+    // ever ADDS, so a kill stays a kill) and bind the fresh hull immediately,
+    // so a completed strike refills its card inside the same dock cycle.
+    // Null (banks at cap, no pick) leaves the slot empty for the world tick.
+    rec = requestWarReplenish(ctx);
+  }
   if (!rec) return;
   const next = makeWarJob(ctx, origin, slot, rec);
   if (next) jobs.push(next);
