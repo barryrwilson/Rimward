@@ -1,3 +1,49 @@
+## Renewable war-quarry supply — #367
+
+Implemented on `dsh/issue-367-playtest-war-war-card-supply-collapses-8`
+(base master `ff54e71`). The #332 playtest measured 87 wall-minutes of
+`war:0` across 109 board snapshots: war quarry draws ONLY from the two
+war-linked systems' featured patrol banks (station.js `pickWarQuarry`), a
+war kill settles the record `dead` forever, and nothing ever added patrol
+records — so after ~5 strikes both faction boards starved permanently and
+the war career had no income spine past the authored casts (freehold 2,
+veridian 3 patrols).
+
+The fix mirrors the #272 hunt-supply design, bounded and additive only:
+
+- `src/game/world.js` adds `tickWarReplenish` beside `tickReaverReplenish`:
+one hull per pick on a band-scaled cadence (`WAR_REPLENISH.interval` 180 s,
+`firstDelay` 120 s, stretched by the current system band `eventGapMult`
+like the reaver picks). It tops up an EXISTING war-linked bank (a dock
+whose gate reaches a different faction dock — the same walk station.js
+`warDestId` runs) whose living war-quarry patrols fell below the authored
+`cast.patrols`, furthest-below first, current system on a tie. It never
+generates a bank, never exceeds the authored cast, never touches an
+unvisited bank, and never resurrects a dead record — replenish only ADDS.
+Fresh hulls are `makeRecord` output: authored patrol shape (heavy,
+station hold → gate → planet), home-faction flag (issue #125), JSON-plain,
+a fresh `rec-N` id, no new persisted fields and no state.js change.
+- Names come from the same #270 generated patrol space, probed past every
+name any bank has ever carried (war cards key on the name) and past every
+Named Gun (the generator space is small enough to draw Ash Bell), then
+sanitized through the same strip/trim/cap `warDisplayName` applies.
+- `src/systems/station.js` `replaceWarJob` asks the live world closure for
+ONE bounded replenish pick (`requestWarReplenish`, a module forwarder —
+station.js already imports world.js, no new edge) when its slot refill
+finds the banks dry, so a completed strike refills its card inside the
+same dock cycle; a null pick leaves the slot to the world tick.
+- `scripts/issue-367-war-supply-test.mjs` (wired into `test:boot`,
+issue-272 style) pins: disclosed kills empty both boards to `war:0`; the
+cadence drifts fresh patrols into the visited banks; names stay unique
+galaxy-wide and Named-Gun-free; the authored cast caps every bank; banks
+stay bounded; unreachable banks stay ungenerated; dead records never
+resurrect; both faction boards refill (~1 card per station per cycle); a
+completed kill refills its slot with a fresh eligible quarry through the
+real delivery tick; records and jobs stay JSON-plain.
+
+Parked follow-up: the pick cadence is session-only closure state, so a save
+restored mid-drought restarts the clock — the first pick lands
+`firstDelay` (120 s) after restore, which is acceptable drift for now.
 ## The engage lease finishes a broken contract quarry — #357
 
 Implemented on `dsh/issue-357-playtest-hunter-the-engage-lease-never-c`

@@ -1,8 +1,13 @@
 import * as THREE from 'three';
-import { COMMODITIES, SHIP_CLASSES, SYSTEMS, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW, JUMP, ESCAPE, DEFENSE } from './state.js';
+import { COMMODITIES, SHIP_CLASSES, SYSTEMS, BANDS, ACES, ORIGIN_ARCS, NAMED_GUNS, CALLOW, JUMP, ESCAPE, DEFENSE, FACTIONS } from './state.js'; // FACTIONS: issue #367 war-linked dock walk
 import { initPrices, tickPrices, applyEventPressure } from './market.js';
 import { writeStationHold } from './traffic-feel.js';
 import { tickDerelicts, writeDerelictPosition } from './derelict.js';
+// Issue #367: the war-quarry replenish sanitizes generated names exactly the
+// way station.js's warDisplayName does. stripControlChars is a hoisted
+// function declaration read only at tick time, so this edge never fires at
+// module init (the same runtime-only discipline save.js documents for npc.js).
+import { stripControlChars, NAME_MAX } from './save.js';
 import {
   shadowJobForRecordId, shadowRoute, isShadowRecordId,
   certifyShadowSystem, shadowPlanetsClear, shadowHullExtent,
@@ -1041,6 +1046,33 @@ const REAVER_TIERS = [
   { key: 'standard', weight: 0.7, bountyMult: 1, resolve: null }, // record keeps the makeRecord seed
   { key: 'veteran', weight: 0.3, bountyMult: 2, resolve: 70 }, // studied the lanes; yields late
 ];
+
+// Issue #367 — war supply. The war boards draw their quarry ONLY from the two
+// war-linked systems' featured patrol banks (station.js pickWarQuarry), and a
+// war kill settles the record 'dead' forever, so the authored patrol casts
+// (freehold 2, veridian 3) were a one-shot pool: after ~5 kills both faction
+// boards went to war:0 permanently (87 wall-minutes of war:0 across 109
+// snapshots in the #332 playtest). War patrols drift in over time, mirroring
+// the #272 reaver replenish: an EXISTING bank whose living war-quarry patrol
+// count fell below its authored cast.patrols slowly tops back up with fresh
+// eligible hulls. Never generates a bank (unvisited systems stay
+// ungenerated), never exceeds the authored patrol cast, never reuses a name,
+// and never touches a dead record — replenish only ADDS, so a kill stays a
+// kill. The pick cadence is stretched by the current system's band like the
+// reaver picks, so the deep rim replenishes slower than the core. Session-
+// only timer in this closure: no persisted field, no state.js change.
+const WAR_REPLENISH = {
+  interval: 180, // world-seconds between top-up picks (band-scaled, then jittered)
+  firstDelay: 120, // first pick early in a session, like the reaver first pick
+};
+// Issue #367: session forwarder — station.js's replaceWarJob asks the LIVE
+// world closure for one bounded replenish pick (the tick itself is nested
+// beside tickReaverReplenish, sharing this module's boot state). Installed by
+// initWorld; null before boot and fail-closed on any stray early request.
+let activeWarReplenish = null;
+export function requestWarReplenish(ctx) {
+  return activeWarReplenish ? activeWarReplenish(ctx) : null;
+}
 
 const PAD_HOME_EPS = 0.5;
 
@@ -2236,6 +2268,7 @@ export function initWorld(ctx) {
   let convoyFirstPending = true;
   let nextMigrationAt = MIGRATION_INTERVAL * (0.5 + Math.random() * 0.5); // first pick ~45–90s in
   let nextReaverAt = REAVER_REPLENISH.firstDelay; // issue #272: first hunt-supply pick
+  let nextWarReplenishAt = WAR_REPLENISH.firstDelay; // issue #367: first war-supply pick
   let lastBlockadeKillAt = 0;
   // Issue #341 distant-traffic comms: session-only timer/counter in this
   // closure; no ctx field, no record mutation, no persisted state.
@@ -2395,6 +2428,178 @@ export function initWorld(ctx) {
       return; // one hull per pick: arrivals read as drift, not a wave
     }
   }
+
+  // ---------- Issue #367: war supply — war-quarry patrols drift back in ----------
+
+  // Same record-id shape station.js's HUNT_RECORD_ID enforces for a war
+  // quarry. Duplicated as a literal because station.js imports world.js —
+  // the reverse edge must not exist (world.js initializes first and is
+  // load-bearing for that order).
+  const WAR_RECORD_ID = /^rec-(0|[1-9][0-9]*)$/;
+
+  /**
+   * True when `name` is carried by ANY record in ANY existing bank. War job
+   * bindings and strike cards key on the name, so a replenished patrol must
+   * never take a name any bank — living or dead — has already carried.
+   */
+  function warNameTaken(name) {
+    for (const bank of Object.values(ctx.world.recordBanks ?? {})) {
+      if (!Array.isArray(bank)) continue;
+      for (const r of bank) if (r && r.name === name) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The war board display gate station.js applies (warDisplayName): control
+   * chars stripped, trimmed, NAME_MAX capped. A replenished name must survive
+   * the same sanitizer the card will run it through.
+   */
+  function warSanitizeName(raw) {
+    if (typeof raw !== 'string') return '';
+    return stripControlChars(raw).trim().slice(0, NAME_MAX);
+  }
+
+  /**
+   * Named-Gun name guard, mirroring station.js isNamedGunName (station.js
+   * imports world.js, so the check cannot be imported from there). The
+   * generated #270 name space is small enough to collide with a Named Gun
+   * aspirant — 'Ash Bell' is one generator draw away — and a war card must
+   * never post a Named Gun as contract quarry.
+   */
+  function isWarNamedGunName(name) {
+    if (typeof name !== 'string' || !name) return false;
+    if (name === ACES.hunter.name || name === ACES.illyx.name) return true;
+    const names = NAMED_GUNS.aspirants?.names;
+    if (!Array.isArray(names)) return false;
+    for (let i = 0; i < names.length; i++) if (names[i] === name) return true;
+    return false;
+  }
+
+  /**
+   * Every authored dock whose gate reaches a DIFFERENT faction's dock — the
+   * same walk station.js warDestId runs per job. These are the systems whose
+   * boards post war cards; replenish serves only their banks.
+   */
+  function warLinkedSystemIds() {
+    const ids = [];
+    for (const id of Object.keys(SYSTEMS)) {
+      const def = SYSTEMS[id];
+      if (!def || def.station == null || typeof def.faction !== 'string'
+        || !Object.hasOwn(FACTIONS, def.faction)) continue;
+      if (!Array.isArray(def.gates)) continue;
+      for (const gate of def.gates) {
+        const to = gate?.to;
+        if (typeof to !== 'string' || to === id || !Object.hasOwn(SYSTEMS, to)) continue;
+        const far = SYSTEMS[to];
+        if (!far || far.station == null || typeof far.faction !== 'string'
+          || !Object.hasOwn(FACTIONS, far.faction) || far.faction === def.faction) continue;
+        ids.push(id);
+        break;
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Living war-quarry patrols already in `bank`: role patrol, the system's
+   * own faction, no ace shape, not dead/captured, a real rec-N id and a
+   * board-displayable name — the same quarry gate station.js's
+   * isEligibleWarQuarry applies, so the cap counts only hulls a war board
+   * can actually post.
+   */
+  function livingWarQuarries(bank, faction) {
+    let n = 0;
+    for (const r of bank) {
+      if (!r || r.role !== 'patrol') continue;
+      if (r.classKey === 'ace' || r.role === 'ace') continue;
+      if (r.state === 'dead' || r.state === 'captured') continue;
+      if (r.faction !== faction) continue;
+      if (typeof r.id !== 'string' || !WAR_RECORD_ID.test(r.id)) continue;
+      if (!warSanitizeName(r.name)) continue;
+      n++;
+    }
+    return n;
+  }
+
+  /**
+   * A fresh war-quarry patrol record for the war-linked system `sysId`: the
+   * system's own faction flag (issue #125 — patrols fly their home flag),
+   * the authored patrol shape (heavy, station hold → gate → planet route,
+   * the same route the authored cast flies), and a generated #270 name that
+   * is unique across every bank and clear of every Named Gun. The record is
+   * makeRecord output: JSON-plain, a fresh rec-N id, no new fields.
+   */
+  function makeWarPatrolRecord(ctx, sysId) {
+    const def = SYSTEMS[sysId];
+    const faction = def?.faction;
+    if (typeof faction !== 'string' || !Object.hasOwn(FACTIONS, faction)) return null;
+    const station = stationPoint(def);
+    const gate = gatePoint(def);
+    const planet = planetPoint(def);
+    let name = null;
+    for (let attempt = 0; attempt < 40 && !name; attempt++) {
+      const candidate = generatedName(sysId, 'Patrol', (Math.random() * GEN_NAME_SPACE) | 0);
+      if (warNameTaken(candidate)) continue;
+      if (warSanitizeName(candidate) !== candidate) continue;
+      if (isWarNamedGunName(candidate)) continue;
+      name = candidate;
+    }
+    if (!name) return null; // 40 collisions: give up this pick, try next tick
+    return makeRecord(ctx, {
+      name,
+      classKey: 'heavy',
+      faction,
+      role: 'patrol',
+      route: [writeStationHold(new THREE.Vector3(), station, 'heavy', gate), jitter(gate.clone(), 50), jitter(planet.clone(), 60)],
+      cargo: [],
+      system: sysId,
+    });
+  }
+
+  /**
+   * Top up ONE war-linked bank per pick: whichever linked system is furthest
+   * below its authored patrol cast, current system first on a tie — the
+   * player watches the board refill where they fly. A system without an
+   * EXISTING bank is never generated; its dock posts nothing until the
+   * player first visits. One hull per pick: arrivals read as drift, not a
+   * wave. Emits a plain commLine only when the pick lands in the current
+   * system, like the reaver line.
+   */
+  function tickWarReplenish(ctx) {
+    const banks = ctx.world.recordBanks;
+    if (!banks || typeof banks !== 'object') return;
+    const cur = ctx.world.currentSystem;
+    const linkIds = warLinkedSystemIds();
+    if (linkIds.length === 0) return;
+    const open = [];
+    for (const sysId of linkIds) {
+      const bank = banks[sysId];
+      if (!Array.isArray(bank)) continue; // never generate a bank
+      const cast = SYSTEMS[sysId]?.cast;
+      const want = cast && Number.isFinite(cast.patrols) ? cast.patrols : 0;
+      if (want <= 0) continue;
+      const faction = SYSTEMS[sysId].faction;
+      const living = livingWarQuarries(bank, faction);
+      if (living >= want) continue;
+      open.push({ sysId, bank, room: want - living, cur: sysId === cur });
+    }
+    if (open.length === 0) return;
+    open.sort((a, b) => (b.room - a.room) || ((b.cur ? 1 : 0) - (a.cur ? 1 : 0)));
+    const pick = open[0];
+    const rec = makeWarPatrolRecord(ctx, pick.sysId);
+    if (!rec) return null;
+    pick.bank.push(rec);
+    if (pick.cur) {
+      const sysName = ctx.systems?.[pick.sysId]?.name ?? pick.sysId;
+      ctx.emit('commLine', { text: `A new patrol — ${rec.name} — is working the lanes of ${sysName}.` });
+    }
+    return rec;
+  }
+
+  // Issue #367: expose this closure's replenish pick to station.js's
+  // replaceWarJob slot refill (module forwarder above).
+  activeWarReplenish = (c) => tickWarReplenish(c);
 
   // ---------- Inter-system migration §8.2 ----------
   function pickMigrant(ctx) {
@@ -2838,6 +3043,15 @@ export function initWorld(ctx) {
           * (BANDS[ctx.systems[ctx.world.currentSystem].band ?? 0].eventGapMult || 1)
           * (0.75 + Math.random() * 0.5);
         tickReaverReplenish(ctx);
+      }
+      // Issue #367 war supply: dead war quarries are replaced over time so
+      // the faction war boards keep ~1 card per dock per cycle past the
+      // authored patrol pool.
+      if (now >= nextWarReplenishAt) {
+        nextWarReplenishAt = now + WAR_REPLENISH.interval
+          * (BANDS[ctx.systems[ctx.world.currentSystem].band ?? 0].eventGapMult || 1)
+          * (0.75 + Math.random() * 0.5);
+        tickWarReplenish(ctx);
       }
       // Same-system save restores swap ctx.world.recordBanks wholesale but
       // emit NO 'systemLoaded' (save.js only emits when the system changes)
