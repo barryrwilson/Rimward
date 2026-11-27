@@ -993,6 +993,20 @@ export const FACTION_SERVICES = {
   lamplighter: { buyMult: 0.85, line: 'The Guild keeps the lights; no traveler pays full fare at the Last Beacon.' },
 };
 
+// Issue #375: hazard-aware recovery pay. A measured pirate ambush at starter
+// gear cost 143 UU in repairs — 48% of the flat 300 UU recovery payout — so the
+// payout scales with the ORIGIN system's pirate stock (SYSTEMS[id].cast.pirates,
+// the bounty-bearing stock world.js spawns; bounty-0 crowd pirates are ambient
+// traffic and stay out of the measure). Tier table maps cast.pirates -> pay
+// multiplier, first matching band wins (highest minPirates first). JSON-plain
+// and additive: a system with no cast reads as 0 pirates -> 1.0 (unchanged pay).
+export const RECOVERY_HAZARD_TIERS = [
+  { minPirates: 5, mult: 1.5 },
+  { minPirates: 3, mult: 1.25 },
+  { minPirates: 1, mult: 1.1 },
+  { minPirates: 0, mult: 1.0 },
+];
+
 // Wave 25: generated-faction dockmaster voice (generated-system depth, part 3).
 // One recognition greeting + one rumor preface per faction flown by the 94
 // generated systems — contacts.js reads them behind AUTHORED_SYSTEMS by-id

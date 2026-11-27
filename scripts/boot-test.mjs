@@ -1050,12 +1050,19 @@ tick(30, 'post-scoop settle'); // let the job's event scan see podCollected
 const creditsAtRecoveryRedock = ctx.world.credits;
 dockAtCurrentStation('redock veridian (recovery)');
 tick(90, 'recovery payout tick');
+// Issue #375: recovery pay is hazard-derived from the ORIGIN system's pirate
+// stock. Veridian cast.pirates = 3 -> tier 1.25 -> base 375; veridian is
+// authored, so no FACTION_SERVICES mult applies: the stamped agreement is 375.
+const { RECOVERY_HAZARD_TIERS: rht4 } = await import('../src/game/state.js');
+const pirates4 = SYSTEMS.veridian?.cast?.pirates ?? 0;
+const recoveryPay4 = Math.round(300 * (rht4.find((t) => pirates4 >= t.minPirates)?.mult ?? 1));
 const recoveryDoneChecks = {
   podScooped,
   jobCollected: recoveryJob?.collected === true,
   redockedAtVeridian: ctx.flags.docked === true && ctx.world.currentSystem === 'veridian',
   jobDone: recoveryJob?.state === 'done',
-  paidExactly300: ctx.world.credits - creditsAtRecoveryRedock === 300,
+  paidExactly: ctx.world.credits - creditsAtRecoveryRedock === recoveryPay4,
+  payIsHazard375: recoveryPay4 === 375,
 };
 console.log('wave4 recovery delivery:', JSON.stringify(recoveryDoneChecks));
 if (!Object.values(recoveryDoneChecks).every(Boolean)) { console.log('WAVE4 RECOVERY DELIVERY FAIL'); errors++; }
@@ -5141,8 +5148,13 @@ ctx.world.aftermath.push({
 dispatchKey('Digit2'); // jobs board (DOCK_KEY_SERVICES[1]) — renderJobs → syncRecoveryJob posts the card
 const cgFx24 = epicEffects(ctx, 'congregation'); // no EPICS entry — neutral
 const recoveryJob24 = ctx.world.jobs.find((j) => j.kind === 'recovery' && j.wreckId === 'aft-w24') ?? null;
+// Issue #375: hazard-derived base (cg_vigil cast.pirates = 4 -> 1.25 -> 375),
+// then the congregation service mult: 375 x 1.2 = 450.
+const { RECOVERY_HAZARD_TIERS: rht24 } = await import('../src/game/state.js');
+const pirates24 = SYSTEMS.cg_vigil?.cast?.pirates ?? 0;
+const recoveryBase24 = Math.round(300 * (rht24.find((t) => pirates24 >= t.minPirates)?.mult ?? 1));
 const expectedPay24 = recoveryJob24
-  ? Math.round(recoveryJob24.reward * (cgFx24.jobPayMult ?? 1) * FACTION_SERVICES.congregation.jobPayMult)
+  ? Math.round(recoveryBase24 * (cgFx24.jobPayMult ?? 1) * FACTION_SERVICES.congregation.jobPayMult)
   : NaN;
 const cgNoteShown24 = w24NoteShown(stationOverlay(), FACTION_SERVICES.congregation.line);
 const rewardLineShown24 = [...walkDom(stationOverlay() ?? { children: [] })]

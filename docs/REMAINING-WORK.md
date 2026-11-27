@@ -1,3 +1,50 @@
+## Hazard-aware recovery pay — #375
+
+Implemented on `dsh/issue-375-recovery-pay-balance` (base master `1162e4b`).
+The #375 playtest measured a pirate ambush at starter gear costing 143 UU in
+repairs — 48% of the flat `RECOVERY_REWARD` 300 UU payout — so recovery pay now
+scales with the ORIGIN system's pirate stock. Recovery is single-system (the
+job carries no `destSystem`), so hazard — not the job-distance hop ladder — is
+the correct pay axis.
+
+- `src/game/state.js` adds `RECOVERY_HAZARD_TIERS` (tuning/data home,
+  JSON-plain, additive): `cast.pirates` 5+ → ×1.5, 3–4 → ×1.25, 1–2 → ×1.1,
+  0 → ×1.0. Only bounty-bearing cast pirates count; bounty-0 crowd pirates are
+  ambient traffic and stay out of the measure. Systems with no `cast` read as
+  0 pirates → unchanged flat pay.
+- `src/systems/station.js` adds `recoveryHazardMult` / `recoveryPayBase`
+  beside `explorePayBase` (derived, never persisted — the job-distance.js
+  derived-not-persisted doctrine) and follows the #326 explore-quote pattern:
+  `peekJobReward` gains a recovery branch (offered: live hazard-derived
+  origin quote; accepted: stamped `payQuoted`; accepted without a stamp —
+  pre-#375 saves — reports exactly the old `jobPay(reward)` settlement
+  fallback), the Jobs card routes its reward line through that same source,
+  `acceptJob` stamps `job.payQuoted = clampJobPay(jobPayFor(origin,
+  recoveryPayBase(origin)))` beside the existing deadline stamp, and the
+  dock-credit path pays the stamped agreement (clamped) with the old derived
+  fallback for legacy rows. Persisted `reward` stays `RECOVERY_REWARD = 300`.
+- Values: freehold (cast 4) 375 UU, veridian/redmarch-tier (3–4) 375 UU,
+  redmarch (7) 450 UU, calm systems (0) 300 UU, all before faction/epic
+  `jobPayMult` (congregation's 1.2 lifts a 375 base to 450).
+- `scripts/issue-375-recovery-hazard-pay-test.mjs` (`npm run
+  test:recovery-hazard-pay`, wired into `test:boot`) pins: redmarch 450 >
+  veil 300; freehold 375 across offered card === peekJobReward ===
+  accept-stamped payQuoted === one-time settlement credit; persisted reward
+  stays 300; a restore-shaped accepted row WITHOUT `payQuoted` settles at the
+  old 300 fallback; zero update/console errors.
+- `scripts/issue-74-recovery-policy-test.mjs` updated for the new quote
+  (hazard-derived issuing-dock quote, not raw `reward × rate`) and its
+  flood-prune cap formula refreshed to the current save.js
+  `JOBS_SANITIZE_MAX` shape (`27 + (14 + shadow slots) × N`, stale since the
+  #236 shadow-slot room); `scripts/boot-test.mjs` wave-4 (veridian 375) and
+  wave-24 (cg_vigil 450) recovery payout expectations updated to the
+  hazard-derived values.
+
+Parked follow-ups (out of #375 scope): escort/insurance mechanics, wreck TTL
+and deadline window, explore/mining pay, and any per-system threat scalar
+beyond the static `cast.pirates` stock (dynamic event pressure such as
+pirateBlockade does not move the multiplier).
+
 ## Renewable war-quarry supply — #367
 
 Implemented on `dsh/issue-367-playtest-war-war-card-supply-collapses-8`
