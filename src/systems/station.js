@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { rememberMarket, bestRememberedPrices } from '../game/price-memory.js';
 import '../ui/screens.css';
-import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX, REPAIR_RATES, repairClassMultiplier } from '../game/state.js';
+import { U, COMMODITIES, ECON, RESCUE, FACTIONS, EPICS, RANK_LADDER, rankFor, createShipState, SHIP_CLASSES, HERMIT, FACTION_SERVICES, FACTION_COMP, HIDDEN_MOUNTS, MINING_LASERS, miningLaserFor, SYSTEMS, ORE_TYPES, ACES, NAMED_GUNS, cargoHoldFor, HOLD_RACK_STEP, HOLD_RACK_MAX, REPAIR_RATES, repairClassMultiplier, RECOVERY_HAZARD_TIERS } from '../game/state.js'; // #375 hazard pay
 import { claimedHullsOf } from '../game/derelict.js';
 import { dockFactionOf, yardStockFor } from '../game/shipyard.js'; // issue #186: the outfitter names the yard that sells a bigger hold
 import * as pods from '../game/pods.js';
@@ -3833,6 +3833,28 @@ function explorePayBase() {
   return Math.round(RECOVERY_REWARD * HAUL_MARGIN);
 }
 
+// Issue #375: hazard-aware recovery pay. Recovery is single-system — the job
+// carries no destSystem, so the job-distance.js hop ladder (postingHops /
+// hopPayMult, src/game/job-distance.js:149-159) does not apply; hazard — the
+// origin system's pirate stock — is the correct distance axis. Per the
+// job-distance.js:15-17 derived-not-persisted doctrine the multiplier is
+// DERIVED here, never saved; only the clamped payQuoted agreement is stamped.
+function recoveryHazardMult(ctx, sysId) {
+  const cast = SYSTEMS[sysId]?.cast;
+  const pirates = Number.isFinite(cast?.pirates) ? cast.pirates : 0;
+  const n = Math.max(0, Math.floor(pirates));
+  for (const tier of RECOVERY_HAZARD_TIERS) {
+    if (Number.isFinite(tier?.minPirates) && n >= tier.minPirates) {
+      return Number.isFinite(tier?.mult) && tier.mult > 0 ? tier.mult : 1;
+    }
+  }
+  return 1;
+}
+
+function recoveryPayBase(ctx, sysId) {
+  return Math.round(RECOVERY_REWARD * recoveryHazardMult(ctx, sysId));
+}
+
 function nextExploreId(jobs, sysId) {
   if (!Object.hasOwn(SYSTEMS, sysId)) return null;
   const prefix = `explore-${sysId}-`;
@@ -6086,7 +6108,11 @@ function tickDeliveryJobs(ctx, ui, render) {
       // job.collected is set per frame by tickRecoveryCollect (lastEvents is
       // single-frame; this throttled tick would miss it ~29 frames in 30).
       if (job.collected && ctx.flags.docked && ctx.world.currentSystem === job.originSystem) {
-        const salvagePay = jobPay(ctx, job.reward);
+        // Issue #375: the stamped hazard-derived agreement pays when present;
+        // the old derived fallback keeps pre-#375 accepted rows payable.
+        const salvagePay = Number.isFinite(job.payQuoted)
+          ? clampJobPay(job.payQuoted)
+          : jobPay(ctx, job.reward);
         ctx.world.credits += salvagePay;
         completeJob(ctx, job, `Salvage accounted — ${salvagePay} UU from the yard.`);
         settled = true;
@@ -7085,6 +7111,9 @@ export function initStation(ctx) {
         ui.notice = 'Cannot accept recovery: free 2 hold units first.'; render(); return;
       }
       job.deadline = Math.min(ctx.world.time + 300, entry.expiresAt);
+      // Issue #375: the hazard-derived quote IS the agreement — stamped like
+      // the ferry/mining/explore quotes. Persisted reward stays RECOVERY_REWARD.
+      job.payQuoted = clampJobPay(jobPayFor(ctx, job.originSystem, recoveryPayBase(ctx, job.originSystem)));
       job.collected = false;
     } else if (job.kind === 'mining') {
       if (!Object.hasOwn(SYSTEMS, job.originSystem)) job.originSystem = ctx.world.currentSystem;
@@ -7683,7 +7712,11 @@ export function initStation(ctx) {
           : clampJobPay(jobPayFor(ctx, destId, ferryBase));
         rewardLine = `Ferry ${FERRY_UNITS} fronted Provisions to ${destName} (${hopsLabel(ferryHopCount)}) — pays ${ferryEst} UU, no buy-in`;
       } else if (job.kind === 'recovery') {
-        rewardLine = `Scoop, then return to the issuing dock — pays ${jobPayFor(ctx, job.originSystem, job.reward)} UU`;
+        // Issue #375: one source of truth with the API row (peekJobReward) —
+        // offered cards quote the hazard-derived origin pay, accepted cards
+        // keep their stamped payQuoted (derived fallback matches settlement).
+        const est = peekJobReward(job, false, h === hDom);
+        rewardLine = `Scoop, then return to the issuing dock — pays ${est} UU`;
       } else if (job.kind === 'mining') {
         const commodity = Object.hasOwn(COMMODITIES, job.commodity) ? job.commodity : null;
         const oreName = commodity ? COMMODITIES[commodity].name : 'ore';
@@ -9378,6 +9411,20 @@ export function initStation(ctx) {
       const origin = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
       if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
       return clampJobPay(jobPayFor(ctx, origin, explorePayBase()));
+    }
+    // Issue #375: a recovery posting quotes the origin dock's hazard-derived
+    // pay — the same line the Jobs card prints — and an accepted contract
+    // reads its stamped payQuoted. An accepted row without a stamp is a
+    // pre-#375 agreement: it reports exactly what settlement would pay it,
+    // the old jobPay(reward) fallback, so the card can never promise more
+    // than the dock credits. The persisted reward stays RECOVERY_REWARD.
+    if (job.kind === 'recovery') {
+      if (job.state !== 'accepted') {
+        const origin = Object.hasOwn(SYSTEMS, job.originSystem) ? job.originSystem : currentId;
+        return clampJobPay(jobPayFor(ctx, origin, recoveryPayBase(ctx, origin)));
+      }
+      if (Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
+      return clampJobPay(jobPay(ctx, job.reward));
     }
     if (job.kind !== 'haul' && job.kind !== 'trade') return undefined;
     if (job.state === 'accepted' && Number.isFinite(job.payQuoted)) return clampJobPay(job.payQuoted);
