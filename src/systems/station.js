@@ -2261,13 +2261,16 @@ function isLiveRecord(rec) {
  * bank has never been generated. A dead, captured or derelict bearer is
  * skipped, so a defeated ace can never keep the posting.
  */
-function liveAceRecord(ctx) {
+function liveAceRecord(ctx, targetName = null) {
   const banks = ctx.world.recordBanks ?? {};
   const currentId = ctx.world.currentSystem;
   const homeId = aceHomeSystem(ctx);
   const firstLive = (bank) => {
     if (!Array.isArray(bank)) return null;
-    for (const r of bank) if (isAceRecord(r) && isLiveRecord(r)) return r;
+    for (const r of bank) {
+      if (isAceRecord(r) && isLiveRecord(r)
+        && (targetName === null || r.name === targetName)) return r;
+    }
     return null;
   };
   const current = firstLive(ctx.world.records);
@@ -3241,7 +3244,7 @@ function resolveBountyQuarry(ctx, job) {
   const target = typeof job.target === 'string' ? job.target : '';
   if (!target) return null;
   if (id === 'bounty-ace') {
-    const ace = liveAceRecord(ctx);
+    const ace = liveAceRecord(ctx, target);
     return ace && ace.name === target ? ace : null;
   }
   if (!id.startsWith('bounty-pirate-')) return null;

@@ -716,11 +716,9 @@ function rebuildTransitRegistry(ctx) {
 /**
  * Issue #68: is a bearer of `name` still flying BECAUSE IT FLED — in this
  * bank, mid-crossing, or in another system's bank? Dead and captured records
- * do not count, and neither does any other surrender alternative: a ransomed
- * or jettisoning ace keeps the pre-existing successor semantics exactly.
- * Only flight — the outcome this issue made survivable — stands a pending
- * timer down. Bounded scan over already-generated banks, run only when a
- * lineage timer comes due.
+ * do not count. Ransom and jettison enter the same escape flight as flee, so
+ * those living bearers also stand a pending successor timer down. Bounded
+ * scan over already-generated banks, run only when a lineage timer comes due.
  */
 function livingFledBearerExists(ctx, name) {
   const banks = ctx.world.recordBanks;
@@ -2886,13 +2884,11 @@ export function initWorld(ctx) {
           rivalry.defeats++;
           rivalry.lastOutcome = outcome; // 'flee' | 'jettison' | 'ransom' | ...
           fireMilestone(ctx, 'firstAceDefeated', `${ctx.world.shipName ?? 'your ship'} — your name in the dark now.`);
-          // Issue #68: a bearer that BROKE OFF and is still flying is a
-          // witnessed defeat — counted above, rematch ladder untouched — but
-          // it is not a death. Flight alone must not schedule a successor,
-          // break a line, or tell an ending story about a hull the player can
-          // still chase through a gate. Every other surrender alternative
-          // (ransom, jettison, capture, cut engines) keeps its old bookkeeping.
-          const survivedByFlight = outcome === 'flee'
+          // Issue #68/#380: every non-lethal surrender outcome that enters
+          // escape flight leaves a living bearer behind. It must not schedule
+          // a successor, break a line, or tell an ending story about a hull
+          // the player can still chase through a gate.
+          const survivedByFlight = ['flee', 'jettison', 'ransom'].includes(outcome)
             && rec.state !== 'dead' && rec.state !== 'captured';
           // Durable and JSON-plain: the pending-timer guard below (and after a
           // reload) has to know this bearer is alive because it RAN, not
