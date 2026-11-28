@@ -6307,7 +6307,14 @@ export function initStation(ctx) {
       return true;
     },
     feedRock() {
-      if (holdUnits(ctx, 'livingRock') < 1) { ui.notice = 'No living rock in the hold.'; render(); return false; }
+      if (holdUnits(ctx, 'livingRock') < 1) {
+        const rawOreUnits = holdUnits(ctx, 'rawOre');
+        ui.notice = rawOreUnits > 0
+          ? `No living rock in the hold (${rawOreUnits} Raw ore aboard — she will not take unworked ore). Buy Living rock at the Market or mine a Living rock asteroid in the belt, or use 1 — Feed biomass (${FEED_COST} UU).`
+          : `No living rock in the hold. Buy Living rock at the Market or mine a Living rock asteroid in the belt, or use 1 — Feed biomass (${FEED_COST} UU).`;
+        render();
+        return false;
+      }
       removeCargo(ctx, 'livingRock', 1);
       ctx.bio.hunger = 0;
       ctx.bio.bond = Math.min(1, ctx.bio.bond + 0.2);
@@ -8122,12 +8129,23 @@ export function initStation(ctx) {
 
   // ---- feed & tend (bio.js agreed: station writes hunger/bond on purchase) ----
   function renderFeed(panel) {
+    const rockHeld = holdUnits(ctx, 'livingRock');
+    const rawOreHeld = holdUnits(ctx, 'rawOre');
     h('div', 'screen-sub', panel, 'FEED & TEND — the living ship');
     h('div', 'screen-note', panel,
       `Hunger ${Math.round(ctx.bio.hunger * 100)}% · Wounds ${Math.round(ctx.bio.wounds * 100)}% · Bond ${Math.round(ctx.bio.bond * 100)}%. She heals faster berthed here.`);
+    const holdClause = rawOreHeld > 0 && rockHeld < 1
+      ? `Living rock in hold: 0 (${rawOreHeld} Raw ore aboard — Raw ore cannot feed her).`
+      : `Living rock in hold: ${rockHeld}.`;
+    const supplyNote = h('div', 'screen-note feed-supply-note', panel,
+      `${holdClause} Biomass costs ${FEED_COST} UU ( hunger → 0%, +5% bond ); Living rock consumes 1 Living rock from the hold ( hunger → 0%, +20% bond — buy at the Market or mine a Living rock bloom rock in the belt ); Tend wounds costs ${TEND_COST} UU ( −40% wounds, +3% bond ).`);
+    supplyNote.commodity = 'livingRock';
+    supplyNote.hold = rockHeld;
     const row = h('div', 'screen-btnrow', panel);
     btn(row, `1 — Feed biomass (${FEED_COST} UU)`, act.feedBiomass);
-    btn(row, '2 — Feed living rock (from hold)', act.feedRock);
+    const b2 = btn(row, `2 — Feed living rock (1 from hold · ${rockHeld} aboard)`, act.feedRock);
+    b2.commodity = 'livingRock';
+    b2.hold = rockHeld;
     btn(row, `3 — Tend wounds (${TEND_COST} UU)`, act.tendWounds);
   }
 
@@ -9003,6 +9021,8 @@ export function initStation(ctx) {
         actions.push({ n: i, label: viewText(node.text),
           ...(typeof node.commodity === 'string' && Object.hasOwn(COMMODITIES, node.commodity)
             ? { commodity: node.commodity } : {}),
+          ...(Number.isInteger(node.hold) && node.hold >= 0
+            ? { hold: node.hold } : {}),
         });
       }
       return {
