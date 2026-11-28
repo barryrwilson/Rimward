@@ -939,7 +939,7 @@ export const SERVICE_SPECS = freeze({
   market: svc('trade + desk buttons (+1/+5/-1/-5, seed/data papers)'),
   jobs: svc('acceptJob + abandonJob + board accept/abandon buttons'),
   bar: svc('buyRound'),
-  feed: svc('feedBiomass/feedRock/tendWounds'),
+  feed: svc('feedBiomass (60 UU)/feedRock (1 livingRock from hold; Market or belt, not rawOre)/tendWounds (25 UU)'),
   repair: svc('repairAll'),
   outfitting: svc('cargo rack, scanners, concealed mounts, mining heads, launcher/turret papers (arm/confirm/cancel)'),
   people: svc('rescue return, ask around, call in favor, sworn gift/Chain transfer/launder papers'),

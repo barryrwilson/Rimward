@@ -1,3 +1,39 @@
+## Feed & Tend living-rock supply path and refusal clarity — #374
+
+Implemented on `dsh/issue-374-feedrock-rejects-ore-supply-path-clarity` (base
+master `dd9a93a`). In the #333 salvager playtest with 20 `rawOre` in the hold,
+`feed { kind: 'rock' }` returned `ok: false, token: 'hold', "No living rock in
+the hold."` without distinguishing held `rawOre` from an empty hold or stating
+where `livingRock` comes from, and the Feed & Tend desk did not list what each
+action consumes or how many `livingRock` units are aboard.
+
+- `src/systems/station.js` (`act.feedRock`, `renderFeed`, `peekView`):
+  - `act.feedRock()` keeps the `No living rock in the hold` prefix (so
+    `deskNoticeToken` and `PERFORM_REFUSALS` continue to classify the refusal
+    as `token: 'hold'`), notes when unworked `rawOre` is aboard (`(<N> Raw ore
+    aboard — she will not take unworked ore)`), and points to buying Living
+    rock at the Market, mining a Living rock asteroid in the belt, or using
+    `1 — Feed biomass (60 UU)`. Still consumes 1 `livingRock`.
+  - `renderFeed(panel)` renders a `.screen-note.feed-supply-note` line below
+    the bio status summary showing `Living rock in hold: <N>` (with an explicit
+    `(<M> Raw ore aboard — Raw ore cannot feed her)` note when `rawOre > 0` and
+    `livingRock < 1`) and what all three buttons consume plus where Living rock
+    is acquired.
+  - Updates button 2 to `2 — Feed living rock (1 from hold · <N> aboard)` and
+    tags both the supply note and button 2 with `commodity = 'livingRock'` and
+    `hold = rockHeld` so `observe().station.view.rows` and `actions` publish
+    structured `commodity: 'livingRock'`, `hold`, and `units` metadata.
+- `src/game/agent-schema.js`: clarifies `SERVICE_SPECS.feed` to note biomass
+  (60 UU), livingRock (1 from hold; Market or belt, not rawOre), and tendWounds
+  (25 UU).
+- `scripts/issue-374-feed-rock-clarity-test.mjs` (`npm run
+  test:feed-rock-clarity`, wired into `test:boot`) and
+  `scripts/issue-374-feed-rock-clarity-live-probe.mjs` (`npm run
+  test:feed-rock-clarity-live`) verify the #333 20-`rawOre` refusal, empty-hold
+  refusal, Market `livingRock` purchase + feed consumption leaving `rawOre`
+  intact, live DOM `.feed-supply-note` and `.station-notice`, and
+  `station.view.rows` / `actions` metadata with zero console errors.
+
 ## Market pane shows buyer row and hold summary for held commodities — #373
 
 Implemented on `dsh/issue-373-ui-market-pane-shows-no-buyer-row-for-ho` (base
