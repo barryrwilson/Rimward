@@ -206,6 +206,27 @@
   padding-left: 6px;
 }
 
+/* Issue #373: held market goods get a visible buyer-row highlight and banner. */
+.market-row-held {
+  background: rgba(125, 216, 168, 0.07);
+}
+
+.market-row-sel.market-row-held {
+  background: rgba(111, 210, 224, 0.12);
+}
+
+.market-hold-active {
+  color: var(--rw-good);
+  font-weight: bold;
+}
+
+.market-hold-summary {
+  padding: 6px 10px;
+  border-left: 2px solid var(--rw-good);
+  background: rgba(125, 216, 168, 0.07);
+  color: #dfe9f4;
+}
+
 .market-illegal {
   color: #e06a5a;
   letter-spacing: 0.1em;
