@@ -6922,6 +6922,34 @@ export function initStation(ctx) {
       if (!panel.capture) rememberMarket(ctx, sellQuotes);
       h('div', 'screen-sub', panel, 'MARKET — buy price and sell price');
       renderSeedPapers(panel);
+      // Issue #373: surface held market goods at the top of the Market pane and
+      // tag every market row with its commodity key + held state so neither a
+      // human pilot nor an Agent API station.view reader can miss a buyer row
+      // for cargo in the hold (e.g. rawOre).
+      const heldSummaryParts = [];
+      for (const key of COMMODITY_KEYS) {
+        if (typeof key !== 'string' || !Object.hasOwn(COMMODITIES, key)) continue;
+        const com = COMMODITIES[key];
+        if (com == null || typeof com !== 'object' || !Object.hasOwn(sellQuotes, key)) continue;
+        const split = cargoSplit(ctx, key, holdUnits(ctx, key));
+        if (split.held < 1) continue;
+        const nameText = typeof com.name === 'string' && com.name ? com.name : key;
+        const allowed = com.legal || lockerAllowed();
+        const quoteText = allowed && split.owned > 0
+          ? `${sellQuotes[key]} UU/unit (${split.owned * sellQuotes[key]} UU)`
+          : !allowed
+            ? 'restricted locker closed'
+            : 'consigned';
+        const heldText = split.consigned > 0
+          ? `${split.held} (${splitLabel(split)})`
+          : String(split.held);
+        heldSummaryParts.push({ key, text: `${nameText} ×${heldText} — ${quoteText}` });
+      }
+      if (heldSummaryParts.length > 0) {
+        const heldBanner = h('div', 'screen-note market-hold-summary', panel,
+          `YOUR HOLD: ${heldSummaryParts.map((p) => p.text).join(' · ')}`);
+        if (heldSummaryParts.length === 1) heldBanner.commodity = heldSummaryParts[0].key;
+      }
       const table = h('div', 'market-table', panel);
       h('div', 'market-head', table, 'COMMODITY');
       h('div', 'market-head', table, 'STATUS / STOCK');
@@ -6933,42 +6961,52 @@ export function initStation(ctx) {
       // row says which event is holding it there. Owner decision: label the
       // spike, do not slow the reversion.
       const priceEvent = marketEventAt(currentId);
+      const tagRowCommodity = (node, key) => {
+        node.commodity = key;
+        if (!node.capture && node.dataset) node.dataset.commodity = key;
+        return node;
+      };
       COMMODITY_KEYS.forEach((key, i) => {
         if (typeof key !== 'string' || !Object.hasOwn(COMMODITIES, key)) return;
         const com = COMMODITIES[key];
         if (com == null || typeof com !== 'object' || !Object.hasOwn(sellQuotes, key)) return;
         try {
-          const sel = i === ui.marketSel ? ' market-row-sel' : '';
+          const split = cargoSplit(ctx, key, holdUnits(ctx, key));
+          const sel = (i === ui.marketSel ? ' market-row-sel' : '')
+            + (split.held > 0 ? ' market-row-held' : '');
           const buyUnit = tradeFillUnit(key, true);
           const sellUnit = sellQuotes[key];
-          const split = cargoSplit(ctx, key, holdUnits(ctx, key));
           const hold = split.consigned > 0
             ? `${split.held} (${splitLabel(split)})`
             : String(split.held);
           const nameText = typeof com.name === 'string' && com.name ? com.name : key;
-          h('div', 'market-cell' + sel, table, nameText);
-          const status = h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table);
-          h('div', '', status, com.legal ? 'Legal' : 'RESTRICTED');
+          const nameCell = tagRowCommodity(h('div', 'market-cell' + sel, table, nameText), key);
+          nameCell.hold = split.held;
+          nameCell.holdOwned = split.owned;
+          const status = tagRowCommodity(h('div', 'market-cell' + (com.legal ? '' : ' market-illegal') + sel, table), key);
+          tagRowCommodity(h('div', '', status, com.legal ? 'Legal' : 'RESTRICTED'), key);
           const stock = marketSupplyAt(ctx.world, currentId, key);
-          h('div', 'market-stock', status, `${stock.available}/${stock.capacity}`);
+          tagRowCommodity(h('div', 'market-stock', status, `${stock.available}/${stock.capacity}`), key);
           const pull = priceEvent && Object.hasOwn(priceEvent.keys, key) ? priceEvent.keys[key] : 0;
           if (pull) {
-            h('div', 'market-event', status,
-              `${priceEvent.label} ${pull > 0 ? 'up' : 'down'} — temporary`);
+            tagRowCommodity(h('div', 'market-event', status,
+              `${priceEvent.label} ${pull > 0 ? 'up' : 'down'} — temporary`), key);
           }
-          h('div', 'market-cell market-fill' + sel, table, `${buyUnit} UU`);
-          h('div', 'market-cell market-fill' + sel, table, `${sellUnit} UU`);
-          h('div', 'market-cell' + sel, table, hold);
-          const actions = h('div', 'market-cell market-actions' + sel, table);
+          tagRowCommodity(h('div', 'market-cell market-fill' + sel, table, `${buyUnit} UU`), key);
+          tagRowCommodity(h('div', 'market-cell market-fill' + sel, table, `${sellUnit} UU`), key);
+          const holdCell = tagRowCommodity(h('div', 'market-cell' + (split.held > 0 ? ' market-hold-active' : '') + sel, table, hold), key);
+          holdCell.hold = split.held;
+          holdCell.holdOwned = split.owned;
+          const actions = tagRowCommodity(h('div', 'market-cell market-actions' + sel, table), key);
           if (!com.legal && !lockerAllowed()) {
             // Issue #317: boot-test pins the exact 'trade refused' span, so it
             // stays; the reason is its own visible row text, and the full gate
             // line rides the status cell and span as titles.
             const gateLine = restrictedGateLine();
             status.title = gateLine;
-            const refusal = h('span', 'market-refusal', actions, 'trade refused');
+            const refusal = tagRowCommodity(h('span', 'market-refusal', actions, 'trade refused'), key);
             refusal.title = gateLine;
-            h('div', 'market-refusal-reason', status, `closed — ${restrictedGateShort()}`);
+            tagRowCommodity(h('div', 'market-refusal-reason', status, `closed — ${restrictedGateShort()}`), key);
           } else {
             btn(actions, '+1', () => { tryTrade(key, 1, true); render(); }).commodity = key;
             btn(actions, '+5', () => { tryTrade(key, 5, true); render(); }).commodity = key;
@@ -8936,6 +8974,12 @@ export function initStation(ctx) {
           cls: viewText(node.cls),
           text: viewText(node.text),
           action: Number.isInteger(node.actionIndex) ? node.actionIndex : null,
+          ...(typeof node.commodity === 'string' && Object.hasOwn(COMMODITIES, node.commodity)
+            ? { commodity: node.commodity } : {}),
+          ...(Number.isInteger(node.hold) && node.hold >= 0
+            ? { hold: node.hold, units: node.hold } : {}),
+          ...(Number.isInteger(node.holdOwned) && node.holdOwned >= 0
+            ? { holdOwned: node.holdOwned } : {}),
         });
       }
       const kids = node.children;

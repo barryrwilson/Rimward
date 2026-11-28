@@ -1,3 +1,36 @@
+## Market pane shows buyer row and hold summary for held commodities — #373
+
+Implemented on `dsh/issue-373-ui-market-pane-shows-no-buyer-row-for-ho` (base
+master `467deba`). In the #333 salvager playtest at Veridian Spire with 20
+`rawOre` in the hold, `trade { commodity: 'rawOre', qty: 20, side: 'sell' }`
+succeeded for +2,120 UU, but the Market pane neither surfaced a top-level hold
+summary nor tagged its rendered rows or `station.view.rows` / `actions` capture
+with the commodity key and held unit counts (`driver log 'MARKET: no matching
+row'`).
+
+- `src/systems/station.js` (`renderMarket`, `viewRows`, `peekView`):
+  - Renders a `YOUR HOLD:` summary banner (`.screen-note.market-hold-summary`)
+    above the market table whenever one or more market commodities are in the
+    hold (e.g. `YOUR HOLD: Raw ore ×20 — 106 UU/unit (2120 UU)`), with clear
+    status suffixes for consigned lots (`splitLabel`) and closed restricted
+    lockers (`restricted locker closed`). When a single commodity is held, the
+    banner node is tagged with `commodity`.
+  - Tags every market row cell and trade button with `commodity = key` (plus
+    DOM `data-commodity="<key>"`), adds `.market-row-held` to cells of held
+    commodities, and records `hold = split.held` and `holdOwned = split.owned`
+    on the commodity name and HOLD cells.
+  - Publishes `commodity`, `hold`, `units` (`=== hold`), and `holdOwned` on
+    `station.view.rows` entries and `commodity` on `station.view.actions`
+    entries so both human pilots and `station.view` readers can match held
+    cargo directly to its buyer row.
+- `src/ui/screens.css`: adds `.market-row-held`, `.market-row-sel.market-row-held`,
+  and `.market-hold-summary` styles.
+- `scripts/issue-373-market-hold-rows-test.mjs` (`npm run test:market-hold-rows`,
+  wired into `test:boot`) and `scripts/issue-373-market-hold-rows-live-probe.mjs`
+  verify the live DOM banner, row highlight, `data-commodity` attributes,
+  `station.view.rows` / `actions` metadata, and +2,120 UU `rawOre` sale at
+  Veridian Spire with zero console errors.
+
 ## Hazard-aware recovery pay — #375
 
 Implemented on `dsh/issue-375-recovery-pay-balance` (base master `1162e4b`).
